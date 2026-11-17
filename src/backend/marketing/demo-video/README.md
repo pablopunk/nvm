@@ -6,19 +6,22 @@ to `hyperframes@0.9.59`.
 
 ## What it shows
 
-About 22 seconds that loop with no visible seam. It follows the storyboard of the earlier v2 video. The first and last
-frames are plain black, so the video blends into the dark landing page, and the desktop stays black until the theme
-switcher sets a wallpaper.
+About 22 seconds that loop with no visible seam. It follows the storyboard and the camera of the earlier v2 video,
+with gentler zooms: in on the query while it is typed, a little in on lists, and on the Dock, Finder window or menu in
+use. The first and last frames are plain black, so the video blends into the dark landing page, and the desktop stays
+black until the theme switcher sets a wallpaper.
 
 1. On a black desktop, the palette is asked for a theme switcher. The `Automate` row opens the AI builder, which writes
    and installs the extension.
-2. **Theme Switcher** opens a grid of themes. Each click applies a theme's look (light or dark) and its wallpaper to
-   the palette, menu bar, Dock and desktop.
+2. **Theme Switcher** opens a grid of themes. Each click applies a theme's look (light or dark), its wallpaper, and
+   a tint of the wallpaper's hue that sweeps across the Dock icons, as the v2 video did. The black Midnight theme
+   leaves the icons grey.
 3. A list of pull requests.
 4. `cal` finds Calendar, Calculator and **Upcoming Events**, a list of events grouped by day.
-5. Three videos are selected in Finder. **Compress Videos** processes them and shows progress.
-6. The extension's menu bar item opens its menu. **Midnight** brings back the dark look and the black desktop, and
-   the film fades to black.
+5. Three videos are selected in Finder. **Compress Videos** processes them and shows progress. When the palette
+   closes, each compressed copy appears in the window next to its original.
+6. The extension's menu bar item opens its menu. **Midnight** brings back the dark look, the grey Dock and the
+   black desktop, and the film fades to black.
 
 The palette copies the Go app's components and tokens in `src/native/internal/design`, at the app's own sizes in
 points: a 720 × 470 pane on an 1100-point screen, scaled to the frame, so it keeps the proportions of the 2.x
@@ -31,7 +34,9 @@ screenshots. All repos, people, events and files in the video are made up.
 - `assets/views.js`: the palette's pages, built from the same parts as the Go components.
 - `assets/palette.css` and `assets/desktop.css`: the look.
 - `assets/icons.js`: Lucide icons for rows, and SF Symbols-style glyphs for the menu bar.
-- `assets/timeline.js`: the token sets and the GSAP timeline that HyperFrames seeks frame by frame.
+- `assets/themes.js`: the token sets of each appearance and the Dock tint of each theme.
+- `assets/motion.js`: the page set-up and the timeline helpers, including the camera.
+- `assets/timeline.js`: the scenes, on the GSAP timeline that HyperFrames seeks frame by frame.
 - `assets/apps/`: macOS app icons, converted from the system `.icns` files with `sips` and scaled to 128 px, and the
   Nevermind icon from `src/backend/public/icon.png`. They are used only in this video.
 - `assets/wallpapers/`: CC0 landscape photos, with sources in `CREDITS.md`.

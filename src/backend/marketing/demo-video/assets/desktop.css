@@ -7,6 +7,7 @@
 html, body { width: 1920px; height: 1080px; overflow: hidden; background: #000; }
 body { font-family: "Inter", sans-serif; -webkit-font-smoothing: antialiased; font-feature-settings: "cv11", "ss01"; }
 #root { position: absolute; inset: 0; overflow: hidden; background: #000; }
+#cam { position: absolute; left: 0; top: 0; width: 1920px; height: 1080px; transform-origin: 0 0; }
 #stage { position: absolute; left: 0; top: 0; width: 1100px; height: 619px; overflow: hidden; background: #000; transform: scale(1.7454545); transform-origin: 0 0; }
 .i { display: inline-flex; flex: none; }
 .i svg, .g svg { width: 100%; height: 100%; display: block; }
@@ -35,7 +36,12 @@ body { font-family: "Inter", sans-serif; -webkit-font-smoothing: antialiased; fo
   box-shadow: inset 0 1px 0 var(--dock-hi), 0 8px 24px rgba(0, 0, 0, 0.18); backdrop-filter: blur(24px) saturate(1.8);
 }
 .dk { position: relative; width: 46px; height: 46px; }
+.dk { isolation: isolate; }
 .dk img { width: 46px; height: 46px; display: block; }
+/* The Dock's tinted icons, as the theme switcher sets them: each icon keeps its own light and shade and takes the
+   theme's hue, and grey on the black Midnight theme. */
+.dk .tint { position: absolute; inset: 0; mix-blend-mode: color; background: rgb(128, 128, 128); -webkit-mask-size: 100% 100%; mask-size: 100% 100%; }
+.dk.nvm .tint { inset: 4.25px; border-radius: 9px; }
 .dk.run::after { content: ""; position: absolute; left: 50%; bottom: -5px; width: 3px; height: 3px; margin-left: -1.5px; border-radius: 50%; background: var(--bar-fg); opacity: 0.7; }
 .dk.nvm img { width: 37.5px; height: 37.5px; margin: 4.25px; border-radius: 9px; box-shadow: 0 0 0 0.5px rgba(255, 255, 255, 0.18), 0 1px 3px rgba(0, 0, 0, 0.35); }
 #dock .sep { width: 1px; height: 38px; margin: 0 5px; background: var(--dock-edge); }
@@ -60,11 +66,12 @@ body { font-family: "Inter", sans-serif; -webkit-font-smoothing: antialiased; fo
 #finder .pill .i { width: 15px; height: 15px; }
 #finder .pill .dim { opacity: 0.35; }
 #finder .ttl { font-size: 15px; font-weight: 700; margin-left: 4px; }
-#finder .icons { display: flex; gap: 14px; padding: 26px 0 0 6px; }
-#finder .fi { width: 136px; display: flex; flex-direction: column; align-items: center; gap: 6px; }
+#finder .icons { position: relative; margin: 26px 0 0 6px; }
+#finder .fi { position: absolute; left: 0; top: 0; width: 140px; display: flex; flex-direction: column; align-items: center; gap: 6px; }
 #finder .th { width: 128px; height: 72px; border-radius: 4px; background-size: cover; background-position: center; box-shadow: 0 0 0 4px transparent; }
 #finder .fi.sel .th { box-shadow: 0 0 0 4px rgba(0, 0, 0, 0.09); }
-#finder .fi span { font-size: 12px; padding: 1px 6px; border-radius: 5px; }
+#finder .nm { width: 136px; text-align: center; font-size: 12px; line-height: 16px; overflow-wrap: anywhere; }
+#finder .fi span { padding: 1px 5px; border-radius: 5px; -webkit-box-decoration-break: clone; box-decoration-break: clone; }
 #finder .fi.sel span { background: #0a64d8; color: #fff; }
 #finder .status { position: absolute; left: 0; right: 0; bottom: 10px; text-align: center; font-size: 11px; color: #86868b; }
 #finder .status span { justify-content: center; }

@@ -9,9 +9,9 @@
     <link rel="stylesheet" href="assets/palette.css" />
   </head>
   <body>
-    <div id="root" data-composition-id="main" data-start="0" data-duration="21.7" data-width="1920" data-height="1080">
-      <div id="desk" class="clip" data-start="0" data-duration="21.7" data-track-index="0" style="position: absolute; inset: 0">
-        <div id="stage">
+    <div id="root" data-composition-id="main" data-start="0" data-duration="22.5" data-width="1920" data-height="1080">
+      <div id="desk" class="clip" data-start="0" data-duration="22.5" data-track-index="0" style="position: absolute; inset: 0">
+        <div id="cam"><div id="stage">
           <!-- The desktop is black until Theme Switcher sets a wallpaper. CC0 photos, credits in assets/wallpapers/CREDITS.md. -->
           <div id="w-glacier" class="wall" style="background-image: url(assets/wallpapers/glacier-lake.webp)"></div>
           <div id="w-aurora" class="wall" style="background-image: url(assets/wallpapers/aurora.webp)"></div>
@@ -69,12 +69,15 @@
                 <div class="pill"><span class="i" data-i="search"></span></div>
               </div>
               <div class="icons">
-                <div class="fi" id="fi1"><div class="th" style="background-image: url(assets/wallpapers/sandscape.webp)"></div><span>coast.mov</span></div>
-                <div class="fi" id="fi2"><div class="th" style="background-image: url(assets/wallpapers/fog-forest.webp)"></div><span>forest-walk.mov</span></div>
-                <div class="fi" id="fi3"><div class="th" style="background-image: url(assets/wallpapers/night-lake.webp)"></div><span>night-drive.mov</span></div>
-                <div class="fi" id="fi4"><div class="th" style="background-image: url(assets/wallpapers/dunes.webp)"></div><span>b-roll.mov</span></div>
+                <div class="fi" id="fi1"><div class="th" style="background-image: url(assets/wallpapers/sandscape.webp)"></div><div class="nm"><span>coast.mov</span></div></div>
+                <div class="fi" id="fc1"><div class="th" style="background-image: url(assets/wallpapers/sandscape.webp)"></div><div class="nm"><span>coast-compressed.mov</span></div></div>
+                <div class="fi" id="fi2"><div class="th" style="background-image: url(assets/wallpapers/fog-forest.webp)"></div><div class="nm"><span>forest-walk.mov</span></div></div>
+                <div class="fi" id="fc2"><div class="th" style="background-image: url(assets/wallpapers/fog-forest.webp)"></div><div class="nm"><span>forest-walk-compressed.mov</span></div></div>
+                <div class="fi" id="fi3"><div class="th" style="background-image: url(assets/wallpapers/night-lake.webp)"></div><div class="nm"><span>night-drive.mov</span></div></div>
+                <div class="fi" id="fc3"><div class="th" style="background-image: url(assets/wallpapers/night-lake.webp)"></div><div class="nm"><span>night-drive-compressed.mov</span></div></div>
+                <div class="fi" id="fi4"><div class="th" style="background-image: url(assets/wallpapers/dunes.webp)"></div><div class="nm"><span>b-roll.mov</span></div></div>
               </div>
-              <div class="status"><span id="fs0">4 items, 412 GB available</span><span id="fs1">1 of 4 selected, 412 GB available</span><span id="fs2">2 of 4 selected, 412 GB available</span><span id="fs3">3 of 4 selected, 412 GB available</span></div>
+              <div class="status"><span id="fs0">4 items, 412 GB available</span><span id="fs1">1 of 4 selected, 412 GB available</span><span id="fs2">2 of 4 selected, 412 GB available</span><span id="fs3">3 of 4 selected, 412 GB available</span><span id="fs4">3 of 7 selected, 411 GB available</span></div>
             </div>
           </div>
 
@@ -92,12 +95,14 @@
           </div>
 
           <svg id="cursor" viewBox="0 0 18 26"><path d="M2 1.6v19.2l4.7-4.5 3.1 7.1 3.4-1.5-3.1-6.9h6.6z" fill="#000" stroke="#fff" stroke-width="1.5" stroke-linejoin="round" /></svg>
-        </div>
+        </div></div>
       </div>
     </div>
 
     <script src="assets/icons.js"></script>
+    <script src="assets/themes.js"></script>
     <script src="assets/views.js"></script>
+    <script src="assets/motion.js"></script>
     <script src="assets/timeline.js"></script>
   </body>
 </html>
