@@ -11,7 +11,7 @@ jobs:
     env:
       GH_TOKEN: ${{ github.token }}
       GH_REPO: ${{ github.repository }}
-      OUT: ${{ runner.temp }}/benchmark
+      OUT: ${{ github.workspace }}/bench-output
       DISPLAY: ':99'
       LIBGL_ALWAYS_SOFTWARE: '1'
     steps:
@@ -48,9 +48,9 @@ jobs:
         with:
           name: linux-v1-v2-calibration
           path: |
-            ${{ runner.temp }}/benchmark/*.txt
-            ${{ runner.temp }}/benchmark/*.log
-            ${{ runner.temp }}/benchmark/*.png
-            ${{ runner.temp }}/benchmark/*.sh
+            ${{ github.workspace }}/bench-output/*.txt
+            ${{ github.workspace }}/bench-output/*.log
+            ${{ github.workspace }}/bench-output/*.png
+            ${{ github.workspace }}/bench-output/*.sh
           if-no-files-found: warn
           retention-days: 14
