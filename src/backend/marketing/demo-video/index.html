@@ -5,274 +5,20 @@
     <meta name="viewport" content="width=1920, height=1080" />
     <title>Nevermind demo</title>
     <script src="https://cdn.jsdelivr.net/npm/gsap@3.15.0/dist/gsap.min.js"></script>
-    <style>
-      /* Colors, radii, spacing and type follow src/native/internal/design (tokens.go, row.go, search_row.go,
-         tile.go, footer.go, keycap.go, chip.go, user_bubble.go). The dark set is the default; the timeline tweens
-         every token to the light set and back when the theme switcher runs. */
-      * { box-sizing: border-box; margin: 0; padding: 0; }
-      html, body { width: 1920px; height: 1080px; overflow: hidden; background: #0b0d14; }
-      body { font-family: "Inter", sans-serif; -webkit-font-smoothing: antialiased; }
-
-      #root { position: absolute; inset: 0; overflow: hidden; background: #0b0d14; }
-
-      /* Every drawing below is in app units: a 1120 × 630 desktop scaled to the 1920 × 1080 frame. */
-      #scaler { position: absolute; left: 0; top: 0; width: 1120px; height: 630px; transform: scale(1.7142857); transform-origin: 0 0; }
-      #stage {
-        position: absolute; inset: 0; overflow: hidden;
-        --panel: rgba(26, 31, 40, 1); --glass: rgba(26, 31, 40, 0.93);
-        --raised: rgba(34, 40, 52, 1); --interactive: rgba(41, 48, 61, 1); --selected: rgba(52, 61, 77, 1);
-        --sunken: rgba(14, 17, 23, 1);
-        --edge-subtle: rgba(211, 224, 245, 0.1); --edge-strong: rgba(211, 224, 245, 0.18);
-        --shadow: rgba(0, 0, 0, 0.55);
-        --strong: rgba(240, 243, 247, 1); --primary: rgba(224, 229, 236, 1); --secondary: rgba(184, 192, 204, 1);
-        --tertiary: rgba(156, 166, 180, 1); --muted: rgba(143, 153, 167, 1); --faint: rgba(143, 153, 167, 0.75);
-        --accent: rgba(241, 207, 84, 1); --accent-fill: rgba(226, 189, 57, 1); --accent-contrast: rgba(36, 32, 21, 1);
-        --accent-soft: rgba(241, 207, 84, 0.12); --accent-muted: rgba(241, 207, 84, 0.24);
-        --accent-emph: rgba(241, 207, 84, 0.5);
-        --hi: rgba(220, 231, 249, 0.1); --lo: rgba(0, 0, 0, 0.5); --wash: rgba(0, 0, 0, 0.2);
-        --success: rgba(159, 201, 168, 1);
-        --tone-yellow: rgba(223, 206, 132, 1); --tone-blue: rgba(169, 201, 223, 1); --tone-purple: rgba(200, 182, 223, 1);
-        --tone-green: rgba(172, 209, 178, 1); --tone-orange: rgba(223, 189, 150, 1); --tone-pink: rgba(223, 178, 204, 1);
-        --bar-bg: rgba(16, 18, 26, 0.5); --bar-fg: rgba(240, 243, 247, 1);
-      }
-
-      /* Desktop backdrop: two made-up abstract wallpapers, crossfaded with the theme. */
-      .wall { position: absolute; inset: 0; }
-      #wall-dark {
-        background:
-          radial-gradient(60% 70% at 18% 88%, rgba(56, 92, 150, 0.85), transparent 70%),
-          radial-gradient(55% 60% at 85% 20%, rgba(112, 72, 150, 0.7), transparent 70%),
-          radial-gradient(40% 50% at 60% 75%, rgba(196, 120, 98, 0.35), transparent 70%),
-          linear-gradient(160deg, #141a2e 0%, #1c2140 45%, #2a1f3c 100%);
-      }
-      #wall-light {
-        opacity: 0;
-        background:
-          radial-gradient(60% 70% at 18% 88%, rgba(250, 196, 160, 0.95), transparent 70%),
-          radial-gradient(55% 60% at 85% 18%, rgba(176, 196, 240, 0.95), transparent 70%),
-          radial-gradient(40% 50% at 62% 70%, rgba(238, 186, 214, 0.7), transparent 70%),
-          linear-gradient(160deg, #f4e4d6 0%, #e9dcef 50%, #d9e2f4 100%);
-      }
-      .wall-sheen {
-        position: absolute; left: -10%; right: -10%; top: 46%; height: 120px; border-radius: 50%;
-        background: linear-gradient(90deg, transparent, rgba(255, 255, 255, 0.07), transparent);
-        filter: blur(18px); transform: rotate(-8deg);
-      }
-
-      /* Menu bar */
-      #menubar {
-        position: absolute; left: 0; right: 0; top: 0; height: 24px; display: flex; align-items: center;
-        padding: 0 12px; gap: 16px; font-size: 12px; color: var(--bar-fg); background: var(--bar-bg);
-        backdrop-filter: blur(20px);
-      }
-      #menubar .app { font-weight: 700; }
-      #menubar .spacer { flex: 1; }
-      #menubar .tray { display: flex; align-items: center; gap: 14px; }
-      #menubar svg { width: 14px; height: 14px; display: block; }
-      #mb-theme { position: relative; width: 22px; height: 18px; border-radius: 4px; }
-      #mb-theme-hl { position: absolute; inset: 0; border-radius: 4px; background: rgba(127, 127, 127, 0.28); opacity: 0; }
-      #mb-theme .ico { position: absolute; left: 4px; top: 2px; }
-      #mb-sun { opacity: 0; }
-      #mb-zap svg { width: 13px; height: 13px; }
-
-      /* Icons */
-      .i svg { display: block; width: 100%; height: 100%; }
-      .i { display: inline-block; flex: none; }
-
-      /* Files window (the video scene) */
-      #files {
-        position: absolute; left: 260px; top: 140px; width: 600px; height: 340px; border-radius: 12px;
-        background: var(--panel); border: 1px solid var(--edge-strong); box-shadow: 0 18px 50px var(--shadow);
-        overflow: hidden; opacity: 0; display: flex; flex-direction: column;
-      }
-      #files .titlebar { height: 36px; display: flex; align-items: center; gap: 8px; padding: 0 14px; border-bottom: 1px solid var(--edge-subtle); }
-      #files .dot { width: 11px; height: 11px; border-radius: 50%; background: var(--interactive); border: 1px solid var(--edge-strong); }
-      #files .ttl { margin-left: 10px; font-size: 13px; font-weight: 600; color: var(--strong); }
-      #files .body { flex: 1; display: flex; }
-      #files .side { width: 140px; padding: 10px 8px; border-right: 1px solid var(--edge-subtle); background: var(--raised); }
-      #files .side div { font-size: 12px; color: var(--secondary); padding: 5px 8px; border-radius: 6px; display: flex; gap: 8px; align-items: center; }
-      #files .side .on { background: var(--interactive); color: var(--strong); }
-      #files .side .i { width: 13px; height: 13px; color: var(--muted); }
-      #files .list { flex: 1; padding: 8px; position: relative; }
-      #files .head { display: flex; font-size: 11px; color: var(--muted); padding: 4px 10px 6px; }
-      .frow { position: relative; display: flex; align-items: center; gap: 10px; height: 34px; padding: 0 10px; font-size: 12.5px; color: var(--primary); border-radius: 7px; }
-      .frow .sel-bg { position: absolute; inset: 0; border-radius: 7px; background: var(--accent-muted); border: 1px solid var(--accent-emph); opacity: 0; }
-      .frow .thumb { position: relative; width: 34px; height: 22px; border-radius: 4px; flex: none; overflow: hidden; }
-      .frow .name { position: relative; flex: 1; }
-      .frow .meta { position: relative; width: 70px; color: var(--muted); font-size: 11.5px; text-align: right; }
-      .frow .kind { position: relative; width: 90px; color: var(--muted); font-size: 11.5px; }
-
-      /* Palette */
-      #palette { position: absolute; left: 200px; top: 78px; width: 720px; height: 474px; opacity: 0; }
-      .pane {
-        position: absolute; left: 0; right: 0; border-radius: 18px; background: var(--glass);
-        border: 1px solid var(--edge-subtle); box-shadow: inset 0 1px 0 var(--hi), 0 18px 48px var(--shadow);
-        backdrop-filter: blur(28px) saturate(1.2); overflow: hidden;
-      }
-      #searchbar { top: 0; height: 58px; }
-      #results { top: 66px; height: 408px; }
-
-      .q { position: absolute; inset: 0; display: flex; align-items: center; gap: 12px; padding: 14px 18px; visibility: hidden; }
-      .q .zap { width: 21px; height: 21px; color: var(--accent); }
-      .q .text { flex: 1; font-size: 21px; color: var(--strong); white-space: nowrap; display: flex; align-items: center; }
-      .q .ph { color: var(--faint); }
-      .q .title { color: var(--strong); }
-      .caret { display: inline-block; width: 1.5px; height: 24px; background: var(--strong); margin-left: 1px; }
-      .ch { display: none; }
-      .chip {
-        display: flex; align-items: center; gap: 6px; padding: 3px 8px; border-radius: 6px; font-size: 12px; color: var(--muted);
-        background: var(--raised); border: 1px solid var(--edge-strong); box-shadow: inset 0 1px 0 var(--hi);
-      }
-      .chip b { font-weight: 600; }
-      .chip .i { width: 12px; height: 12px; }
-
-      .view { position: absolute; inset: 0; padding: 8px; visibility: hidden; }
-      .rows { position: relative; }
-      .plate {
-        position: absolute; left: 0; right: 0; top: 0; height: 42px; border-radius: 12px; background: var(--selected);
-        border: 1px solid var(--edge-subtle); box-shadow: inset 0 1px 0 var(--hi), 0 1px 3px var(--lo);
-      }
-      .plate.prom { background: var(--accent-muted); border-color: var(--accent-emph); }
-      .section { height: 26px; padding: 10px 8px 0; font-size: 11px; font-weight: 600; color: var(--muted); }
-      .row { position: relative; height: 42px; display: flex; align-items: center; gap: 10px; padding: 5px 8px; border-radius: 12px; }
-      .row.prom-bg { background: var(--accent-soft); }
-      .tile {
-        width: 32px; height: 32px; border-radius: 8px; flex: none; display: flex; align-items: center; justify-content: center;
-        background: var(--interactive); border: 1px solid var(--edge-subtle); box-shadow: inset 0 1px 0 var(--hi); color: var(--secondary);
-      }
-      .tile .i { width: 17px; height: 17px; }
-      .tile.gold {
-        background: linear-gradient(180deg, rgb(229, 195, 72), var(--accent-fill)); border-color: rgba(140, 115, 30, 0.35);
-        box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.22), 0 1px 2px rgba(0, 0, 0, 0.14); color: var(--accent-contrast);
-      }
-      .tile.app { border: none; box-shadow: none; color: #fff; }
-      .tile.app .i { width: 18px; height: 18px; }
-      .tone-yellow { color: var(--tone-yellow); } .tone-blue { color: var(--tone-blue); } .tone-purple { color: var(--tone-purple); }
-      .tone-green { color: var(--tone-green); } .tone-orange { color: var(--tone-orange); } .tone-pink { color: var(--tone-pink); }
-      .tx { flex: 1; min-width: 0; display: flex; flex-direction: column; }
-      .t { font-size: 13px; font-weight: 600; color: var(--strong); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; line-height: 17px; }
-      .t.tint { color: var(--tone-yellow); }
-      .s { font-size: 11px; color: var(--tertiary); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; line-height: 14px; }
-      .acc { font-size: 12px; color: var(--muted); white-space: nowrap; }
-      .enter { width: 13px; height: 13px; color: var(--muted); }
-
-      .footer { position: absolute; left: 8px; right: 8px; bottom: 8px; display: flex; align-items: center; gap: 8px; }
-      .fplate {
-        display: flex; align-items: center; gap: 12px; padding: 5px 9px; border-radius: 16px; background: var(--selected);
-        border: 1px solid var(--edge-subtle); box-shadow: inset 0 1px 0 var(--hi), 0 1px 3px var(--lo);
-        font-size: 12px; font-weight: 500; color: var(--strong);
-      }
-      .fplate.name { gap: 6px; color: var(--muted); font-weight: 400; }
-      .fplate.name .i { width: 14px; height: 14px; }
-      .fplate .hint { display: flex; align-items: center; gap: 6px; }
-      .grow { flex: 1; }
-      .kc {
-        display: inline-flex; align-items: center; justify-content: center; padding: 1px 6px; border-radius: 5px; font-size: 11px;
-        font-weight: 500; color: var(--muted); background: var(--raised); border: 1px solid var(--edge-strong); box-shadow: inset 0 1px 0 var(--hi);
-      }
-
-      /* AI builder */
-      .chat { position: absolute; left: 16px; right: 16px; top: 14px; display: flex; flex-direction: column; gap: 12px; }
-      .bubble {
-        align-self: flex-end; max-width: 520px; font-size: 13px; color: var(--strong); padding: 8px 12px; border-radius: 14px;
-        background: var(--interactive); border: 1px solid var(--edge-subtle); box-shadow: inset 0 1px 0 var(--hi); line-height: 18px;
-      }
-      .card { border: 1px solid var(--edge-subtle); background: var(--raised); border-radius: 10px; padding: 9px 12px; }
-      .card .h { display: flex; align-items: center; gap: 6px; font-size: 13px; font-weight: 600; color: var(--strong); }
-      .card .h .i { width: 13px; height: 13px; color: var(--muted); }
-      .card .h .id { font-weight: 400; color: var(--muted); font-size: 12px; }
-      .card .sub { position: relative; height: 15px; margin-top: 2px; font-size: 11px; color: var(--tertiary); }
-      .card .sub span { position: absolute; left: 0; top: 0; white-space: nowrap; }
-      .files-written { display: flex; flex-direction: column; gap: 3px; margin-top: 8px; }
-      .fw { display: flex; align-items: center; gap: 7px; font-size: 12px; color: var(--secondary); opacity: 0; }
-      .fw .i { width: 12px; height: 12px; color: var(--success); }
-      .fw .n { font-family: "JetBrains Mono", monospace; font-size: 11.5px; }
-      .reply { font-size: 13px; color: var(--primary); line-height: 19px; }
-      .reply b { color: var(--strong); font-weight: 600; }
-      .status { position: absolute; left: 18px; bottom: 106px; display: flex; align-items: center; gap: 6px; font-size: 13px; color: var(--accent); }
-      .status .i { width: 15px; height: 15px; }
-      .status .secs { color: var(--muted); font-size: 12px; }
-      .composer {
-        position: absolute; left: 16px; right: 16px; bottom: 46px; height: 58px; border-radius: 10px; padding: 9px 12px;
-        border: 1px solid var(--edge-strong); background: var(--raised);
-      }
-      .composer .ph { font-size: 13px; color: var(--faint); }
-      .composer .model { position: absolute; left: 12px; bottom: 7px; font-size: 13px; font-weight: 600; color: var(--strong); display: flex; align-items: center; gap: 3px; }
-      .composer .model .i { width: 11px; height: 11px; color: var(--muted); }
-      .composer .send { position: absolute; right: 10px; bottom: 8px; width: 22px; height: 22px; border-radius: 50%; background: var(--accent-muted); }
-
-      /* List and detail */
-      .split { display: flex; gap: 8px; height: 100%; }
-      .split .rows { width: 380px; flex: none; }
-      .detail {
-        position: relative; flex: 1; height: 344px; border-radius: 12px; background: var(--raised); border: 1px solid var(--edge-strong);
-        box-shadow: inset 0 1px 0 var(--hi); overflow: hidden;
-      }
-      .dpage { position: absolute; inset: 0; padding: 14px 16px; opacity: 0; }
-      .dpage .k { font-size: 11px; color: var(--muted); margin-top: 10px; }
-      .dpage .v { font-size: 13px; color: var(--primary); margin-top: 3px; line-height: 18px; }
-      .dpage h3 { font-size: 17px; font-weight: 700; color: var(--strong); line-height: 22px; margin-top: 4px; }
-      .dpage .repo { font-size: 12px; color: var(--muted); }
-      .pill { display: inline-flex; align-items: center; gap: 5px; padding: 2px 8px; border-radius: 10px; font-size: 11px; font-weight: 600; }
-      .pill.ok { color: var(--tone-green); background: var(--wash); border: 1px solid var(--edge-subtle); }
-      .pill.wait { color: var(--tone-yellow); background: var(--wash); border: 1px solid var(--edge-subtle); }
-      .checks { margin-top: 6px; display: flex; flex-direction: column; gap: 5px; }
-      .check { display: flex; align-items: center; gap: 7px; font-size: 12px; color: var(--secondary); }
-      .check .i { width: 12px; height: 12px; }
-      .check .ok { color: var(--tone-green); }
-      .check .dot { width: 8px; height: 8px; border-radius: 50%; margin: 0 2px; background: var(--tone-yellow); }
-      .rule { height: 1px; background: var(--edge-subtle); margin-top: 12px; }
-      .diff { font-size: 12px; color: var(--muted); }
-      .diff .add { color: var(--tone-green); font-weight: 600; } .diff .del { color: var(--tone-pink); font-weight: 600; }
-      .time { font-variant-numeric: tabular-nums; }
-
-      /* Progress */
-      .prog { padding: 10px 8px; }
-      .prog .ph1 { position: relative; height: 18px; font-size: 14px; color: var(--strong); }
-      .prog .ph1 span, .prog .ph2 span { position: absolute; left: 0; top: 0; white-space: nowrap; }
-      .prog .ph2 { position: relative; height: 15px; margin-top: 4px; font-size: 11px; color: var(--muted); }
-      .bar-total { margin-top: 10px; height: 4px; border-radius: 2px; background: var(--interactive); overflow: hidden; }
-      .bar-total div { height: 100%; width: 100%; background: var(--accent-fill); transform-origin: 0 50%; }
-      .steps { margin-top: 10px; }
-      .step { position: relative; height: 42px; display: flex; align-items: center; gap: 10px; padding: 5px 0; }
-      .step .glyph { position: relative; width: 14px; height: 14px; flex: none; }
-      .step .glyph > * { position: absolute; inset: 0; }
-      .step .ring { border: 1.5px solid var(--muted); border-radius: 50%; width: 10px; height: 10px; left: 2px; top: 2px; }
-      .step .live { background: var(--accent); border-radius: 50%; width: 9px; height: 9px; left: 2.5px; top: 2.5px; opacity: 0; }
-      .step .done { color: var(--success); opacity: 0; }
-      .step .sbar { margin-top: 5px; height: 3px; border-radius: 2px; background: var(--interactive); overflow: hidden; width: 360px; }
-      .step .sbar div { height: 100%; width: 100%; background: var(--accent-fill); transform-origin: 0 50%; }
-      .step .acc { position: relative; width: 140px; text-align: right; height: 16px; }
-      .step .acc span { position: absolute; right: 0; top: 0; }
-
-      /* Native menu of the menu bar item */
-      #menu {
-        position: absolute; left: 902px; top: 26px; width: 214px; padding: 5px; border-radius: 10px; opacity: 0;
-        background: var(--glass); border: 1px solid var(--edge-strong); box-shadow: inset 0 1px 0 var(--hi), 0 14px 40px var(--shadow);
-        backdrop-filter: blur(28px); transform-origin: 80% 0;
-      }
-      .mi { position: relative; height: 24px; display: flex; align-items: center; gap: 8px; padding: 0 8px; font-size: 13px; color: var(--strong); }
-      .mi .i { width: 14px; height: 14px; color: var(--secondary); }
-      .mi .ck { width: 13px; height: 13px; color: var(--strong); margin-left: auto; }
-      .mi.label { font-size: 11px; font-weight: 600; color: var(--muted); height: 22px; }
-      .mi.dim { color: var(--muted); font-size: 12px; }
-      .msep { height: 1px; background: var(--edge-subtle); margin: 4px 8px; }
-      #menu-hl { position: absolute; top: 0; left: 5px; right: 5px; height: 24px; border-radius: 6px; background: var(--accent-fill); opacity: 0; }
-      .mi.hot { color: var(--accent-contrast); }
-
-      #cursor { position: absolute; left: 0; top: 0; width: 16px; height: 24px; opacity: 0; }
-    </style>
+    <link rel="stylesheet" href="assets/demo.css" />
   </head>
   <body>
-    <div id="root" data-composition-id="main" data-start="0" data-duration="17.8" data-width="1920" data-height="1080">
-      <div id="desk" class="clip" data-start="0" data-duration="17.8" data-track-index="0" style="position: absolute; inset: 0">
+    <div id="root" data-composition-id="main" data-start="0" data-duration="20.8" data-width="1920" data-height="1080">
+      <div id="desk" class="clip" data-start="0" data-duration="20.8" data-track-index="0" style="position: absolute; inset: 0">
         <div id="scaler"><div id="stage">
-          <div id="wall-dark" class="wall"></div>
-          <div id="wall-light" class="wall"></div>
-          <div class="wall-sheen" data-layout-ignore></div>
+          <div id="w-night" class="wall" style="background-image: url(assets/wallpapers/night-lake.webp)"></div>
+          <div id="w-misty" class="wall" style="background-image: url(assets/wallpapers/misty-peak.webp)"></div>
+          <div id="w-alpine" class="wall" style="background-image: url(assets/wallpapers/alpine-valley.webp)"></div>
+          <div id="w-dunes" class="wall" style="background-image: url(assets/wallpapers/dunes.webp)"></div>
+          <div id="w-sand" class="wall" style="background-image: url(assets/wallpapers/sandscape.webp)"></div>
+          <div id="w-glacier" class="wall" style="background-image: url(assets/wallpapers/glacier-lake.webp)"></div>
 
-          <!-- Menu bar: a generic desktop, the Nevermind zap and the Theme Switcher extension's item -->
-          <div id="menubar">
+          <div id="menubar" class="blur" style="z-index: 50">
             <span class="app">Files</span><span>File</span><span>Edit</span><span>View</span><span>Go</span><span>Window</span>
             <span class="spacer"></span>
             <div class="tray">
@@ -288,8 +34,7 @@
             </div>
           </div>
 
-          <!-- Files window with the videos the extension processes -->
-          <div id="files">
+          <div id="files" class="blur" style="z-index: 50" data-layout-ignore>
             <div class="titlebar"><span class="dot"></span><span class="dot"></span><span class="dot"></span><span class="ttl">Shoot — Day 2</span></div>
             <div class="body">
               <div class="side">
@@ -300,39 +45,41 @@
               </div>
               <div class="list">
                 <div class="head"><span style="width: 44px"></span><span style="flex: 1">Name</span><span style="width: 90px">Kind</span><span style="width: 70px; text-align: right">Size</span></div>
-                <div class="frow" id="f1"><div class="sel-bg"></div><div class="thumb" style="background: linear-gradient(135deg, #f0a46b, #6a5acd)"></div><span class="name">harbor-sunrise.mov</span><span class="kind">Movie</span><span class="meta">1.4 GB</span></div>
-                <div class="frow" id="f2"><div class="sel-bg"></div><div class="thumb" style="background: linear-gradient(135deg, #4fb0a5, #24406b)"></div><span class="name">rooftop-interview.mov</span><span class="kind">Movie</span><span class="meta">2.1 GB</span></div>
-                <div class="frow" id="f3"><div class="sel-bg"></div><div class="thumb" style="background: linear-gradient(135deg, #e7c76a, #b5523b)"></div><span class="name">market-b-roll.mov</span><span class="kind">Movie</span><span class="meta">860 MB</span></div>
+                <div class="frow" id="f1"><div class="sel-bg"></div><div class="thumb" style="background-image: url(assets/wallpapers/dunes.webp)"></div><span class="name">dunes-sunrise.mov</span><span class="kind">Movie</span><span class="meta">1.4 GB</span></div>
+                <div class="frow" id="f2"><div class="sel-bg"></div><div class="thumb" style="background-image: url(assets/wallpapers/alpine-valley.webp)"></div><span class="name">valley-drone.mov</span><span class="kind">Movie</span><span class="meta">2.1 GB</span></div>
+                <div class="frow" id="f3"><div class="sel-bg"></div><div class="thumb" style="background-image: url(assets/wallpapers/fog-forest.webp)"></div><span class="name">forest-fog.mov</span><span class="kind">Movie</span><span class="meta">860 MB</span></div>
                 <div class="frow"><div class="thumb" style="background: linear-gradient(135deg, #9aa7c7, #3b4560)"></div><span class="name">notes.txt</span><span class="kind">Text</span><span class="meta">4 KB</span></div>
                 <div class="frow"><div class="thumb" style="background: linear-gradient(135deg, #c79ad6, #5a3b70)"></div><span class="name">storyboard.png</span><span class="kind">Image</span><span class="meta">2.3 MB</span></div>
               </div>
             </div>
           </div>
 
-          <div id="palette">
-            <div id="searchbar" class="pane">
+          <div id="palette" style="z-index: 60" data-layout-allow-occlusion>
+            <div id="searchbar" class="pane blur">
               <div class="q" id="q0"><span class="i zap" data-i="zap"></span><div class="text"><span class="ph">Watcha gonna do?</span></div><div class="chip"><span class="i" data-i="sparkles"></span><b>Tab</b>to ask AI</div></div>
               <div class="q" id="q1"><span class="i zap" data-i="zap"></span><div class="text"><span class="type" data-text="theme switcher"></span><span class="caret"></span></div><div class="chip"><span class="i" data-i="sparkles"></span><b>Tab</b>to ask AI</div></div>
-              <div class="q" id="q2"><span class="i zap" data-i="zap"></span><div class="text"><span class="title">Create Extension</span></div></div>
+              <div class="q" id="q2"><span class="i zap" data-i="zap"></span><div class="text">Create Extension</div></div>
               <div class="q" id="q3"><span class="i zap" data-i="zap"></span><div class="text"><span class="type" data-text="toggle"></span><span class="caret"></span></div><div class="chip"><span class="i" data-i="sparkles"></span><b>Tab</b>to ask AI</div></div>
+              <div class="q" id="qw"><span class="i zap" data-i="zap"></span><div class="text"><span class="type" data-text="wall"></span><span class="caret"></span></div><div class="chip"><span class="i" data-i="sparkles"></span><b>Tab</b>to ask AI</div></div>
+              <div class="q" id="qg"><span class="i zap" data-i="zap"></span><div class="text"><span class="ph">Search wallpapers</span><span class="caret"></span></div></div>
               <div class="q" id="q4"><span class="i zap" data-i="zap"></span><div class="text"><span class="type" data-text="pull"></span><span class="caret"></span></div><div class="chip"><span class="i" data-i="sparkles"></span><b>Tab</b>to ask AI</div></div>
               <div class="q" id="q5"><span class="i zap" data-i="zap"></span><div class="text"><span class="ph">Search pull requests</span><span class="caret"></span></div></div>
               <div class="q" id="q6"><span class="i zap" data-i="zap"></span><div class="text"><span class="type" data-text="cal"></span><span class="caret"></span></div><div class="chip"><span class="i" data-i="sparkles"></span><b>Tab</b>to ask AI</div></div>
               <div class="q" id="q7"><span class="i zap" data-i="zap"></span><div class="text"><span class="ph">Search events</span><span class="caret"></span></div></div>
               <div class="q" id="q8"><span class="i zap" data-i="zap"></span><div class="text"><span class="type" data-text="compress"></span><span class="caret"></span></div><div class="chip"><span class="i" data-i="film"></span><b>3</b>selected files</div></div>
-              <div class="q" id="q9"><span class="i zap" data-i="zap"></span><div class="text"><span class="title">Compress Videos</span></div></div>
+              <div class="q" id="q9"><span class="i zap" data-i="zap"></span><div class="text">Compress Videos</div></div>
             </div>
 
-            <div id="results" class="pane">
+            <div id="results" class="pane blur">
               <!-- v0: root, nothing typed -->
               <div class="view" id="v0">
                 <div class="rows">
                   <div class="plate"></div>
-                  <div class="row"><div class="tile app" style="background: #4f6fa8"><span class="i" data-i="folder"></span></div><div class="tx"><div class="t">Files</div></div><span class="i enter" data-i="corner-down-left"></span></div>
+                  <div class="row"><div class="tile app" style="background: linear-gradient(180deg, #5aa2f0, #2f6fd0)"><span class="i" data-i="folder"></span></div><div class="tx"><div class="t">Files</div></div><span class="i enter" data-i="corner-down-left"></span></div>
                   <div class="row"><div class="tile"><span class="i tone-yellow" data-i="sparkles"></span></div><div class="tx"><div class="t">Create Extension</div><div class="s">Describe a command and Nevermind writes it</div></div></div>
-                  <div class="row"><div class="tile app" style="background: #3c4a5e"><span class="i" data-i="square-terminal"></span></div><div class="tx"><div class="t">Terminal</div></div></div>
+                  <div class="row"><div class="tile app" style="background: linear-gradient(180deg, #4a5160, #262b35)"><span class="i" data-i="square-terminal"></span></div><div class="tx"><div class="t">Terminal</div></div></div>
                   <div class="row"><div class="tile"><span class="i" data-i="clipboard"></span></div><div class="tx"><div class="t">Clipboard History</div><div class="s">Browse and paste what you copied</div></div></div>
-                  <div class="row"><div class="tile app" style="background: #6a5aa8"><span class="i" data-i="calculator"></span></div><div class="tx"><div class="t">Calculator</div></div></div>
+                  <div class="row"><div class="tile"><span class="i tone-blue" data-i="image"></span></div><div class="tx"><div class="t">Wallpapers</div><div class="s">Desktop background and matching colors</div></div></div>
                   <div class="row"><div class="tile"><span class="i" data-i="sticky-note"></span></div><div class="tx"><div class="t">Notes</div><div class="s">Quick notes in the palette</div></div></div>
                   <div class="row"><div class="tile"><span class="i" data-i="puzzle"></span></div><div class="tx"><div class="t">Extensions</div><div class="s">Manage installed extensions</div></div></div>
                 </div>
@@ -353,7 +100,7 @@
               <!-- v2: the AI builder writes the extension -->
               <div class="view" id="v2">
                 <div class="chat">
-                  <div class="bubble" id="b-user">Make a theme switcher that toggles light and dark, with a menu bar item.</div>
+                  <div class="bubble" id="b-user">Make a theme switcher with a wallpaper for each mode and a menu bar item.</div>
                   <div class="card" id="b-tool">
                     <div class="h"><span class="i" data-i="sparkles"></span>Writing extension <span class="id">user.theme-switcher</span></div>
                     <div class="sub"><span id="b-sub1">Writing 3 files</span><span id="b-sub2" style="opacity: 0">Installed and enabled</span></div>
@@ -383,6 +130,34 @@
                 <div class="footer"><span class="grow"></span><div class="fplate"><span class="hint">Run Command <span class="kc">↵</span></span><span class="hint">Actions <span class="kc">⌘K</span></span></div></div>
               </div>
 
+              <!-- vw: the wallpapers command -->
+              <div class="view" id="vw">
+                <div class="rows">
+                  <div class="plate"></div>
+                  <div class="row"><div class="tile"><span class="i tone-blue" data-i="image"></span></div><div class="tx"><div class="t">Wallpapers</div><div class="s">Desktop background and matching colors</div></div><span class="i enter" data-i="corner-down-left"></span></div>
+                  <div class="row"><div class="tile"><span class="i tone-blue" data-i="shuffle"></span></div><div class="tx"><div class="t">Random Wallpaper</div><div class="s">Wallpapers</div></div></div>
+                  <div class="row prom-bg"><div class="tile gold"><span class="i" data-i="zap"></span></div><div class="tx"><div class="t tint">Automate "wall"</div><div class="s">Build a reusable command with AI</div></div></div>
+                  <div class="row"><div class="tile"><span class="i" data-i="search"></span></div><div class="tx"><div class="t">Search the web for "wall"</div><div class="s">Search instead</div></div></div>
+                </div>
+                <div class="footer"><span class="grow"></span><div class="fplate"><span class="hint">Open Command <span class="kc">↵</span></span><span class="hint">Actions <span class="kc">⌘K</span></span></div></div>
+              </div>
+
+              <!-- vg: wallpapers grid; moving the selection previews each one on the desktop -->
+              <div class="view" id="vg">
+                <div class="grid">
+                  <div class="gplate"></div>
+                  <div class="cell"><div class="img" style="background-image: url(assets/wallpapers/misty-peak.webp)"></div><div class="t">Misty Peak</div><div class="s">Current</div></div>
+                  <div class="cell"><div class="img" style="background-image: url(assets/wallpapers/alpine-valley.webp)"></div><div class="t">Alpine Valley</div><div class="s">Landscape</div></div>
+                  <div class="cell"><div class="img" style="background-image: url(assets/wallpapers/dunes.webp)"></div><div class="t">Dunes</div><div class="s">Desert</div></div>
+                  <div class="cell"><div class="img" style="background-image: url(assets/wallpapers/fog-forest.webp)"></div><div class="t">Fog Forest</div><div class="s">Forest</div></div>
+                  <div class="cell"><div class="img" style="background-image: url(assets/wallpapers/aurora.webp)"></div><div class="t">Aurora</div><div class="s">Night</div></div>
+                  <div class="cell"><div class="img" style="background-image: url(assets/wallpapers/glacier-lake.webp)"></div><div class="t">Glacier Lake</div><div class="s">Landscape</div></div>
+                  <div class="cell"><div class="img" style="background-image: url(assets/wallpapers/sandscape.webp)"></div><div class="t">Sandscape</div><div class="s">Desert</div></div>
+                  <div class="cell"><div class="img" style="background-image: url(assets/wallpapers/night-lake.webp)"></div><div class="t">Night Lake</div><div class="s">Night</div></div>
+                </div>
+                <div class="footer"><div class="fplate name"><span class="i" data-i="zap"></span>Wallpapers</div><span class="grow"></span><div class="fplate"><span class="hint">Set Wallpaper <span class="kc">↵</span></span><span class="hint">Actions <span class="kc">⌘K</span></span></div></div>
+              </div>
+
               <!-- v4: pull requests command -->
               <div class="view" id="v4">
                 <div class="rows">
@@ -410,40 +185,29 @@
                     <div class="dpage" id="d1">
                       <div class="repo">lumen/app · #482 · by ana-r</div>
                       <h3>Offline sync for drafts</h3>
-                      <div style="margin-top: 8px; display: flex; gap: 6px"><span class="pill wait">Review requested</span><span class="diff"><span class="add">+214</span> <span class="del">−38</span></span></div>
-                      <div class="v" style="margin-top: 10px">Drafts save on the device and sync when the connection comes back.</div>
+                      <div class="tags"><span class="pill wait">Review requested</span><span class="diff"><span class="add">+214</span> <span class="del">−38</span></span></div>
+                      <div class="v">Drafts save on the device and sync when the connection comes back.</div>
                       <div class="rule"></div>
                       <div class="k">Checks</div>
-                      <div class="checks">
-                        <div class="check"><span class="i ok" data-i="check"></span>build</div>
-                        <div class="check"><span class="i ok" data-i="check"></span>unit tests</div>
-                        <div class="check"><span class="dot"></span>e2e · running</div>
-                      </div>
+                      <div class="checks"><div class="check"><span class="i" data-i="check"></span>build</div><div class="check"><span class="i" data-i="check"></span>unit tests</div><div class="check"><span class="dot"></span>e2e · running</div></div>
                     </div>
                     <div class="dpage" id="d2">
                       <div class="repo">lumen/api · #1290 · by theo-k</div>
                       <h3>Retry uploads on flaky networks</h3>
-                      <div style="margin-top: 8px; display: flex; gap: 6px"><span class="pill ok">Checks passing</span><span class="diff"><span class="add">+96</span> <span class="del">−12</span></span></div>
-                      <div class="v" style="margin-top: 10px">Backs off and resumes chunked uploads instead of starting over.</div>
+                      <div class="tags"><span class="pill ok">Checks passing</span><span class="diff"><span class="add">+96</span> <span class="del">−12</span></span></div>
+                      <div class="v">Backs off and resumes chunked uploads instead of starting over.</div>
                       <div class="rule"></div>
                       <div class="k">Checks</div>
-                      <div class="checks">
-                        <div class="check"><span class="i ok" data-i="check"></span>build</div>
-                        <div class="check"><span class="i ok" data-i="check"></span>unit tests</div>
-                        <div class="check"><span class="i ok" data-i="check"></span>e2e</div>
-                      </div>
+                      <div class="checks"><div class="check"><span class="i" data-i="check"></span>build</div><div class="check"><span class="i" data-i="check"></span>unit tests</div><div class="check"><span class="i" data-i="check"></span>e2e</div></div>
                     </div>
                     <div class="dpage" id="d3">
                       <div class="repo">harbor/web · #77 · by mo-li</div>
                       <h3>Dark mode for the settings page</h3>
-                      <div style="margin-top: 8px; display: flex; gap: 6px"><span class="pill wait">Review requested</span><span class="diff"><span class="add">+58</span> <span class="del">−21</span></span></div>
-                      <div class="v" style="margin-top: 10px">Moves the settings page onto the shared color tokens.</div>
+                      <div class="tags"><span class="pill wait">Review requested</span><span class="diff"><span class="add">+58</span> <span class="del">−21</span></span></div>
+                      <div class="v">Moves the settings page onto the shared color tokens.</div>
                       <div class="rule"></div>
                       <div class="k">Checks</div>
-                      <div class="checks">
-                        <div class="check"><span class="i ok" data-i="check"></span>build</div>
-                        <div class="check"><span class="i ok" data-i="check"></span>visual diff</div>
-                      </div>
+                      <div class="checks"><div class="check"><span class="i" data-i="check"></span>build</div><div class="check"><span class="i" data-i="check"></span>visual diff</div></div>
                     </div>
                   </div>
                 </div>
@@ -455,7 +219,7 @@
                 <div class="rows">
                   <div class="plate"></div>
                   <div class="row"><div class="tile"><span class="i tone-blue" data-i="calendar"></span></div><div class="tx"><div class="t">Upcoming Events</div><div class="s">Agenda · next: Design review in 20 min</div></div><span class="i enter" data-i="corner-down-left"></span></div>
-                  <div class="row"><div class="tile app" style="background: #6a5aa8"><span class="i" data-i="calculator"></span></div><div class="tx"><div class="t">Calculator</div></div></div>
+                  <div class="row"><div class="tile app" style="background: linear-gradient(180deg, #8f80d8, #5c4bb0)"><span class="i" data-i="calculator"></span></div><div class="tx"><div class="t">Calculator</div></div></div>
                   <div class="row prom-bg"><div class="tile gold"><span class="i" data-i="zap"></span></div><div class="tx"><div class="t tint">Automate "cal"</div><div class="s">Build a reusable command with AI</div></div></div>
                   <div class="row"><div class="tile"><span class="i" data-i="search"></span></div><div class="tx"><div class="t">Search the web for "cal"</div><div class="s">Search instead</div></div></div>
                 </div>
@@ -496,9 +260,9 @@
                   <div class="ph2"><span id="p-h2a">H.264 · 1080p · in the background</span><span id="p-h2b" style="opacity: 0">Saved 3.7 GB · next to the originals</span></div>
                   <div class="bar-total"><div id="p-total"></div></div>
                   <div class="steps">
-                    <div class="step" id="s1"><div class="glyph"><div class="ring"></div><div class="live"></div><span class="i done" data-i="check"></span></div><div class="tx"><div class="t">harbor-sunrise.mov</div><div class="sbar"><div></div></div></div><div class="acc"><span class="a1">1.4 GB</span><span class="a2" style="opacity: 0">1.4 GB → 212 MB</span></div></div>
-                    <div class="step" id="s2"><div class="glyph"><div class="ring"></div><div class="live"></div><span class="i done" data-i="check"></span></div><div class="tx"><div class="t">rooftop-interview.mov</div><div class="sbar"><div></div></div></div><div class="acc"><span class="a1">2.1 GB</span><span class="a2" style="opacity: 0">2.1 GB → 318 MB</span></div></div>
-                    <div class="step" id="s3"><div class="glyph"><div class="ring"></div><div class="live"></div><span class="i done" data-i="check"></span></div><div class="tx"><div class="t">market-b-roll.mov</div><div class="sbar"><div></div></div></div><div class="acc"><span class="a1">860 MB</span><span class="a2" style="opacity: 0">860 MB → 131 MB</span></div></div>
+                    <div class="step" id="s1"><div class="glyph"><div class="ring"></div><div class="live"></div><span class="i done" data-i="check"></span></div><div class="tx"><div class="t">dunes-sunrise.mov</div><div class="sbar"><div></div></div></div><div class="acc"><span class="a1">1.4 GB</span><span class="a2" style="opacity: 0">1.4 GB → 212 MB</span></div></div>
+                    <div class="step" id="s2"><div class="glyph"><div class="ring"></div><div class="live"></div><span class="i done" data-i="check"></span></div><div class="tx"><div class="t">valley-drone.mov</div><div class="sbar"><div></div></div></div><div class="acc"><span class="a1">2.1 GB</span><span class="a2" style="opacity: 0">2.1 GB → 318 MB</span></div></div>
+                    <div class="step" id="s3"><div class="glyph"><div class="ring"></div><div class="live"></div><span class="i done" data-i="check"></span></div><div class="tx"><div class="t">forest-fog.mov</div><div class="sbar"><div></div></div></div><div class="acc"><span class="a1">860 MB</span><span class="a2" style="opacity: 0">860 MB → 131 MB</span></div></div>
                   </div>
                 </div>
                 <div class="footer"><div class="fplate name"><span class="i" data-i="zap"></span>Video Tools</div><span class="grow"></span><div class="fplate"><span class="hint">Show in Files <span class="kc">↵</span></span><span class="hint">Actions <span class="kc">⌘K</span></span></div></div>
@@ -506,11 +270,23 @@
             </div>
           </div>
 
-          <!-- The Theme Switcher extension's menu bar menu -->
-          <div id="menu">
+          <!-- A generic Dock; the Nevermind icon is the app's own -->
+          <div id="dock" class="blur" style="z-index: 55" data-layout-ignore>
+            <div class="dk" style="background: linear-gradient(180deg, #6db3f6, #2f6fd0)"><span class="i" data-i="folder"></span><span class="run"></span></div>
+            <div class="dk" style="background: linear-gradient(180deg, #4fd1c5, #1f8f9a)"><span class="i" data-i="globe"></span><span class="run"></span></div>
+            <div class="dk" style="background: linear-gradient(180deg, #7ee08a, #2fa84f)"><span class="i" data-i="message-circle"></span></div>
+            <div class="dk" style="background: #fdfdfd"><div class="cal"><b>TUE</b><span>17</span></div></div>
+            <div class="dk" style="background: linear-gradient(180deg, #ffe17a, #f2b632)"><span class="i" data-i="sticky-note"></span></div>
+            <div class="dk" style="background: linear-gradient(180deg, #ff8fb1, #e0436f)"><span class="i" data-i="music"></span></div>
+            <div class="dk" style="background: linear-gradient(180deg, #4a5160, #1d2129)"><span class="i" data-i="square-terminal"></span></div>
+            <div class="dk img" style="background-image: url(assets/nevermind.webp)"><span class="run"></span></div>
+            <div class="dk" style="background: linear-gradient(180deg, #b8bec8, #7b828e)"><span class="i" data-i="settings"></span></div>
+          </div>
+
+          <div id="menu" class="blur" style="z-index: 70">
             <div id="menu-hl"></div>
             <div class="mi label">Theme Switcher</div>
-            <div class="mi" id="mi-light"><span class="i" data-i="sun"></span>Light<span class="i ck" id="ck-light" data-i="check"></span></div>
+            <div class="mi"><span class="i" data-i="sun"></span>Light<span class="i ck" data-i="check"></span></div>
             <div class="mi" id="mi-dark"><span class="i" data-i="moon"></span>Dark</div>
             <div class="mi"><span class="i" data-i="sun-moon"></span>Follow sunset</div>
             <div class="msep"></div>
@@ -519,246 +295,12 @@
             <div class="mi"><span class="i" data-i="settings"></span>Settings…</div>
           </div>
 
-          <svg id="cursor" viewBox="0 0 16 24"><path d="M1.5 1.5v18.2l4.6-4.4 3 6.9 3.1-1.3-3-6.8h6.3z" fill="#111" stroke="#fff" stroke-width="1.4" stroke-linejoin="round" /></svg>
+          <svg id="cursor" viewBox="0 0 16 24" style="z-index: 80"><path d="M1.5 1.5v18.2l4.6-4.4 3 6.9 3.1-1.3-3-6.8h6.3z" fill="#111" stroke="#fff" stroke-width="1.4" stroke-linejoin="round" /></svg>
         </div></div>
       </div>
     </div>
 
-    <script>
-      // Lucide icons (ISC). Most are copied from src/native/internal/design/lucide*.go; the rest are stock Lucide.
-      const ICONS = {
-        zap: '<path d="M15.914 4a1.5 1.5 0 00-2.474-1.561l-9 9A1.5 1.5 0 005.5 14h4.002a.5.5 0 01.471.666L8.086 20a1.5 1.5 0 002.475 1.56l9-9A1.5 1.5 0 0018.5 10h-3.997a.5.5 0 01-.472-.667z"/>',
-        sparkles: '<path d="M11.017 2.814a1 1 0 0 1 1.966 0l1.051 5.558a2 2 0 0 0 1.594 1.594l5.558 1.051a1 1 0 0 1 0 1.966l-5.558 1.051a2 2 0 0 0-1.594 1.594l-1.051 5.558a1 1 0 0 1-1.966 0l-1.051-5.558a2 2 0 0 0-1.594-1.594l-5.558-1.051a1 1 0 0 1 0-1.966l5.558-1.051a2 2 0 0 0 1.594-1.594z"/><path d="M20 2v4"/><path d="M22 4h-4"/><circle cx="4" cy="20" r="2"/>',
-        check: '<path d="M20 6 9 17l-5-5"/>',
-        "corner-down-left": '<path d="M20 4v7a4 4 0 0 1-4 4H4"/><path d="m9 10-5 5 5 5"/>',
-        search: '<path d="m21 21-4.34-4.34"/><circle cx="11" cy="11" r="8"/>',
-        sun: '<circle cx="12" cy="12" r="4"/><path d="M12 2v2"/><path d="M12 20v2"/><path d="m4.93 4.93 1.41 1.41"/><path d="m17.66 17.66 1.41 1.41"/><path d="M2 12h2"/><path d="M20 12h2"/><path d="m6.34 17.66-1.41 1.41"/><path d="m19.07 4.93-1.41 1.41"/>',
-        moon: '<path d="M20.985 12.486a9 9 0 1 1-9.473-9.472c.405-.022.617.46.402.803a6 6 0 0 0 8.268 8.268c.344-.215.825-.004.803.401"/>',
-        "sun-moon": '<path d="M12 2v2"/><path d="M14.837 16.385a6 6 0 1 1-7.223-7.222c.624-.147.97.66.715 1.248a4 4 0 0 0 5.26 5.259c.589-.255 1.396.09 1.248.715"/><path d="M16 12a4 4 0 0 0-4-4"/><path d="m19 5-1.256 1.256"/><path d="M20 12h2"/>',
-        folder: '<path d="M20 20a2 2 0 0 0 2-2V8a2 2 0 0 0-2-2h-7.9a2 2 0 0 1-1.69-.9L9.6 3.9A2 2 0 0 0 7.93 3H4a2 2 0 0 0-2 2v13a2 2 0 0 0 2 2Z"/>',
-        clock: '<circle cx="12" cy="12" r="10"/><path d="M12 6v6l4 2"/>',
-        puzzle: '<path d="M15.39 4.39a1 1 0 0 0 1.68-.474 2.5 2.5 0 1 1 3.014 3.015 1 1 0 0 0-.474 1.68l1.683 1.682a2.414 2.414 0 0 1 0 3.414L19.61 15.39a1 1 0 0 1-1.68-.474 2.5 2.5 0 1 0-3.014 3.015 1 1 0 0 1 .474 1.68l-1.683 1.682a2.414 2.414 0 0 1-3.414 0L8.61 19.61a1 1 0 0 0-1.68.474 2.5 2.5 0 1 1-3.014-3.015 1 1 0 0 0 .474-1.68l-1.683-1.682a2.414 2.414 0 0 1 0-3.414L4.39 8.61a1 1 0 0 1 1.68.474 2.5 2.5 0 1 0 3.014-3.015 1 1 0 0 1-.474-1.68l1.683-1.682a2.414 2.414 0 0 1 3.414 0z"/>',
-        "message-circle": '<path d="M2.992 16.342a2 2 0 0 1 .094 1.167l-1.065 3.29a1 1 0 0 0 1.236 1.168l3.413-.998a2 2 0 0 1 1.099.092 10 10 0 1 0-4.777-4.719"/>',
-        settings: '<path d="M9.671 4.136a2.34 2.34 0 0 1 4.659 0 2.34 2.34 0 0 0 3.319 1.915 2.34 2.34 0 0 1 2.33 4.033 2.34 2.34 0 0 0 0 3.831 2.34 2.34 0 0 1-2.33 4.033 2.34 2.34 0 0 0-3.319 1.915 2.34 2.34 0 0 1-4.659 0 2.34 2.34 0 0 0-3.32-1.915 2.34 2.34 0 0 1-2.33-4.033 2.34 2.34 0 0 0 0-3.831A2.34 2.34 0 0 1 6.35 6.051a2.34 2.34 0 0 0 3.319-1.915"/><circle cx="12" cy="12" r="3"/>',
-        clipboard: '<rect width="8" height="4" x="8" y="2" rx="1" ry="1"/><path d="M16 4h2a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V6a2 2 0 0 1 2-2h2"/>',
-        calculator: '<rect width="16" height="20" x="4" y="2" rx="2"/><line x1="8" x2="16" y1="6" y2="6"/><line x1="16" x2="16" y1="14" y2="18"/><path d="M16 10h.01"/><path d="M12 10h.01"/><path d="M8 10h.01"/><path d="M12 14h.01"/><path d="M8 14h.01"/><path d="M12 18h.01"/><path d="M8 18h.01"/>',
-        "sticky-note": '<path d="M21 9a2.4 2.4 0 0 0-.706-1.706l-3.588-3.588A2.4 2.4 0 0 0 15 3H5a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2z"/><path d="M15 3v5a1 1 0 0 0 1 1h5"/>',
-        "square-terminal": '<path d="m7 11 2-2-2-2"/><path d="M11 13h4"/><rect width="18" height="18" x="3" y="3" rx="2" ry="2"/>',
-        "panel-top": '<rect width="18" height="18" x="3" y="3" rx="2"/><path d="M3 9h18"/>',
-        "chevrons-up-down": '<path d="m7 15 5 5 5-5"/><path d="m7 9 5-5 5 5"/>',
-        "git-pull-request": '<circle cx="18" cy="18" r="3"/><circle cx="6" cy="6" r="3"/><path d="M13 6h3a2 2 0 0 1 2 2v7"/><line x1="6" x2="6" y1="9" y2="21"/>',
-        calendar: '<path d="M8 2v4"/><path d="M16 2v4"/><rect width="18" height="18" x="3" y="4" rx="2"/><path d="M3 10h18"/>',
-        film: '<rect width="18" height="18" x="3" y="3" rx="2"/><path d="M7 3v18"/><path d="M3 7.5h4"/><path d="M3 12h18"/><path d="M3 16.5h4"/><path d="M17 3v18"/><path d="M17 7.5h4"/><path d="M17 16.5h4"/>',
-        music: '<path d="M9 18V5l12-2v13"/><circle cx="6" cy="18" r="3"/><circle cx="18" cy="16" r="3"/>',
-        loader: '<path d="M12 2v4"/><path d="m16.2 7.8 2.9-2.9"/><path d="M18 12h4"/><path d="m16.2 16.2 2.9 2.9"/><path d="M12 18v4"/><path d="m4.9 19.1 2.9-2.9"/><path d="M2 12h4"/><path d="m4.9 4.9 2.9 2.9"/>',
-        wifi: '<path d="M12 20h.01"/><path d="M2 8.82a15 15 0 0 1 20 0"/><path d="M5 12.859a10 10 0 0 1 14 0"/><path d="M8.5 16.429a5 5 0 0 1 7 0"/>',
-        battery: '<rect width="16" height="10" x="2" y="7" rx="2" ry="2"/><line x1="22" x2="22" y1="11" y2="13"/><line x1="6" x2="6" y1="11" y2="13"/><line x1="10" x2="10" y1="11" y2="13"/><line x1="14" x2="14" y1="11" y2="13"/>',
-      };
-      for (const el of document.querySelectorAll("[data-i]")) {
-        const fill = el.dataset.i === "zap" && el.closest("#menubar") ? "currentColor" : "none";
-        el.innerHTML = `<svg viewBox="0 0 24 24" fill="${fill}" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">${ICONS[el.dataset.i]}</svg>`;
-      }
-      // Typed text is one hidden span per character; the timeline reveals them in order.
-      for (const el of document.querySelectorAll(".type")) {
-        el.innerHTML = [...el.dataset.text].map((c) => `<span class="ch">${c === " " ? "&nbsp;" : c}</span>`).join("");
-      }
-
-      // The design tokens of src/native/internal/design/tokens.go, as the CSS variables above.
-      const DARK = {
-        "--panel": "rgba(26, 31, 40, 1)", "--glass": "rgba(26, 31, 40, 0.93)", "--raised": "rgba(34, 40, 52, 1)",
-        "--interactive": "rgba(41, 48, 61, 1)", "--selected": "rgba(52, 61, 77, 1)", "--sunken": "rgba(14, 17, 23, 1)",
-        "--edge-subtle": "rgba(211, 224, 245, 0.1)", "--edge-strong": "rgba(211, 224, 245, 0.18)", "--shadow": "rgba(0, 0, 0, 0.55)",
-        "--strong": "rgba(240, 243, 247, 1)", "--primary": "rgba(224, 229, 236, 1)", "--secondary": "rgba(184, 192, 204, 1)",
-        "--tertiary": "rgba(156, 166, 180, 1)", "--muted": "rgba(143, 153, 167, 1)", "--faint": "rgba(143, 153, 167, 0.75)",
-        "--accent": "rgba(241, 207, 84, 1)", "--accent-fill": "rgba(226, 189, 57, 1)",
-        "--accent-soft": "rgba(241, 207, 84, 0.12)", "--accent-muted": "rgba(241, 207, 84, 0.24)", "--accent-emph": "rgba(241, 207, 84, 0.5)",
-        "--hi": "rgba(220, 231, 249, 0.1)", "--lo": "rgba(0, 0, 0, 0.5)", "--wash": "rgba(0, 0, 0, 0.2)", "--success": "rgba(159, 201, 168, 1)",
-        "--tone-yellow": "rgba(223, 206, 132, 1)", "--tone-blue": "rgba(169, 201, 223, 1)", "--tone-purple": "rgba(200, 182, 223, 1)",
-        "--tone-green": "rgba(172, 209, 178, 1)", "--tone-orange": "rgba(223, 189, 150, 1)", "--tone-pink": "rgba(223, 178, 204, 1)",
-        "--bar-bg": "rgba(16, 18, 26, 0.5)", "--bar-fg": "rgba(240, 243, 247, 1)",
-      };
-      const LIGHT = {
-        "--panel": "rgba(245, 242, 235, 1)", "--glass": "rgba(245, 242, 235, 0.94)", "--raised": "rgba(250, 248, 243, 1)",
-        "--interactive": "rgba(232, 228, 220, 1)", "--selected": "rgba(221, 216, 206, 1)", "--sunken": "rgba(227, 223, 215, 1)",
-        "--edge-subtle": "rgba(54, 49, 41, 0.14)", "--edge-strong": "rgba(54, 49, 41, 0.24)", "--shadow": "rgba(62, 53, 40, 0.26)",
-        "--strong": "rgba(40, 39, 33, 1)", "--primary": "rgba(52, 50, 44, 1)", "--secondary": "rgba(94, 90, 81, 1)",
-        "--tertiary": "rgba(109, 104, 94, 1)", "--muted": "rgba(115, 110, 100, 1)", "--faint": "rgba(115, 110, 100, 0.75)",
-        "--accent": "rgba(138, 106, 0, 1)", "--accent-fill": "rgba(230, 189, 50, 1)",
-        "--accent-soft": "rgba(138, 106, 0, 0.11)", "--accent-muted": "rgba(138, 106, 0, 0.22)", "--accent-emph": "rgba(138, 106, 0, 0.52)",
-        "--hi": "rgba(255, 254, 250, 0.9)", "--lo": "rgba(62, 53, 40, 0.13)", "--wash": "rgba(62, 53, 40, 0.05)", "--success": "rgba(53, 109, 69, 1)",
-        "--tone-yellow": "rgba(116, 93, 0, 1)", "--tone-blue": "rgba(40, 93, 130, 1)", "--tone-purple": "rgba(101, 76, 134, 1)",
-        "--tone-green": "rgba(55, 107, 69, 1)", "--tone-orange": "rgba(135, 83, 37, 1)", "--tone-pink": "rgba(136, 79, 114, 1)",
-        "--bar-bg": "rgba(250, 248, 243, 0.55)", "--bar-fg": "rgba(40, 39, 33, 1)",
-      };
-
-      const tl = gsap.timeline({ paused: true, defaults: { immediateRender: false } });
-      const ROW = 42;
-
-      function showState(q, v, t) {
-        tl.set("#" + q, { visibility: "visible" }, t);
-        tl.set("#" + v, { visibility: "visible" }, t);
-      }
-      function hideState(q, v, t) {
-        tl.set("#" + q, { visibility: "hidden" }, t);
-        tl.set("#" + v, { visibility: "hidden" }, t);
-      }
-      function cutTo(from, to, t) {
-        hideState(from[0], from[1], t);
-        showState(to[0], to[1], t);
-        tl.fromTo("#" + to[1] + " > *", { opacity: 0.4, y: 3 }, { opacity: 1, y: 0, duration: 0.14, ease: "power2.out" }, t);
-      }
-      function typeQuery(q, v, t0, perChar) {
-        const groups = [document.querySelectorAll("#" + q + " .type .ch")];
-        if (v) for (const el of document.querySelectorAll("#" + v + " .type")) groups.push(el.querySelectorAll(".ch"));
-        groups[0].forEach((_, i) => {
-          for (const g of groups) tl.set(g[i], { display: "inline" }, t0 + i * perChar);
-        });
-        return t0 + groups[0].length * perChar;
-      }
-      function movePlate(v, index, t, extra = 0) {
-        tl.to("#" + v + " .plate", { y: index * ROW + extra, duration: 0.07, ease: "power2.out" }, t);
-      }
-      function pressEnter(v, t) {
-        tl.fromTo("#" + v + " .plate", { scaleX: 1, scaleY: 1 }, { scaleX: 0.985, scaleY: 0.93, duration: 0.06, yoyo: true, repeat: 1, ease: "power1.inOut" }, t);
-      }
-      function setTheme(from, to, t, d) {
-        tl.fromTo("#stage", { ...from }, { ...to, duration: d, ease: "power2.inOut" }, t);
-        tl.fromTo("#wall-light", { opacity: from === DARK ? 0 : 1 }, { opacity: from === DARK ? 1 : 0, duration: d, ease: "power2.inOut" }, t);
-        const [outIcon, inIcon] = from === DARK ? ["#mb-moon", "#mb-sun"] : ["#mb-sun", "#mb-moon"];
-        tl.fromTo(outIcon, { opacity: 1, rotate: 0 }, { opacity: 0, rotate: -60, duration: d * 0.6 }, t);
-        tl.fromTo(inIcon, { opacity: 0, rotate: 60 }, { opacity: 1, rotate: 0, duration: d * 0.6 }, t + d * 0.4);
-      }
-      function openPalette(t) {
-        tl.fromTo("#palette", { opacity: 0, scale: 0.97 }, { opacity: 1, scale: 1, duration: 0.16, ease: "power3.out" }, t);
-      }
-      function closePalette(t) {
-        tl.to("#palette", { opacity: 0, scale: 0.98, duration: 0.12, ease: "power2.in" }, t);
-      }
-
-      // Initial state: dark desktop, palette closed. The last frame returns here so the video loops.
-      const init = (target, vars) => tl.set(target, { ...vars, immediateRender: true }, 0);
-      init("#stage", DARK);
-      init("#palette", { opacity: 0, scale: 0.97 });
-      init(["#b-user", "#b-tool", "#b-reply", "#b-ext", "#b-status"], { opacity: 0 });
-      init("#mb-sun", { opacity: 0 });
-      init(["#p-total", ".sbar div"], { scaleX: 0 });
-      init(["#q0", "#v0"], { visibility: "visible" });
-      // Caret blink across the whole film.
-      tl.fromTo(".caret", { opacity: 1 }, { opacity: 0, duration: 0.01, repeat: 31, yoyo: true, repeatDelay: 0.52, ease: "none" }, 0.1);
-
-      // 1. Ask the palette for a theme switcher; the AI builder writes it.
-      openPalette(0.2);
-      tl.set("#q0", { visibility: "hidden" }, 0.62);
-      tl.set("#q1", { visibility: "visible" }, 0.62);
-      tl.set("#v0", { visibility: "hidden" }, 0.66);
-      tl.set("#v1", { visibility: "visible" }, 0.66);
-      let t = typeQuery("q1", "v1", 0.62, 0.042);
-      pressEnter("v1", t + 0.18);
-      cutTo(["q1", "v1"], ["q2", "v2"], t + 0.32);
-      const b = t + 0.32;
-      tl.fromTo("#b-user", { opacity: 0, y: 8 }, { opacity: 1, y: 0, duration: 0.16, ease: "power3.out" }, b + 0.05);
-      tl.fromTo("#b-status", { opacity: 0 }, { opacity: 1, duration: 0.1 }, b + 0.2);
-      tl.fromTo("#b-status .i", { rotate: 0 }, { rotate: 540, duration: 1.4, ease: "none" }, b + 0.2);
-      tl.fromTo("#b-tool", { opacity: 0, y: 8 }, { opacity: 1, y: 0, duration: 0.16, ease: "power3.out" }, b + 0.3);
-      document.querySelectorAll("#b-tool .fw").forEach((el, i) => tl.fromTo(el, { opacity: 0, x: -4 }, { opacity: 1, x: 0, duration: 0.12 }, b + 0.5 + i * 0.22));
-      tl.set(["#b-st1", "#b-secs1"], { display: "none" }, b + 1.1);
-      tl.set(["#b-st2", "#b-secs2"], { display: "inline" }, b + 1.1);
-      tl.to("#b-status", { opacity: 0, duration: 0.1 }, b + 1.55);
-      tl.to("#b-sub1", { opacity: 0, duration: 0.1 }, b + 1.5);
-      tl.to("#b-sub2", { opacity: 1, duration: 0.1 }, b + 1.5);
-      tl.fromTo("#b-reply", { opacity: 0, y: 6 }, { opacity: 1, y: 0, duration: 0.18, ease: "power3.out" }, b + 1.6);
-      tl.fromTo("#b-ext", { opacity: 0, y: 6 }, { opacity: 1, y: 0, duration: 0.18, ease: "power3.out" }, b + 1.75);
-
-      // 2. The new command works: Toggle Theme flips everything to light.
-      const s2 = b + 2.55;
-      cutTo(["q2", "v2"], ["q3", "v3"], s2);
-      t = typeQuery("q3", null, s2 + 0.05, 0.04);
-      pressEnter("v3", t + 0.2);
-      setTheme(DARK, LIGHT, t + 0.28, 0.45);
-
-      // 3. Browse pull requests.
-      const s3 = t + 1.1;
-      cutTo(["q3", "v3"], ["q4", "v4"], s3);
-      t = typeQuery("q4", null, s3 + 0.05, 0.045);
-      pressEnter("v4", t + 0.15);
-      cutTo(["q4", "v4"], ["q5", "v5"], t + 0.28);
-      const p = t + 0.28;
-      tl.set("#d1", { opacity: 1 }, p);
-      movePlate("v5", 1, p + 0.75);
-      tl.set("#d1", { opacity: 0 }, p + 0.75);
-      tl.set("#d2", { opacity: 1 }, p + 0.75);
-      movePlate("v5", 2, p + 1.3);
-      tl.set("#d2", { opacity: 0 }, p + 1.3);
-      tl.set("#d3", { opacity: 1 }, p + 1.3);
-
-      // 4. Browse calendar events.
-      const s4 = p + 1.95;
-      cutTo(["q5", "v5"], ["q6", "v6"], s4);
-      t = typeQuery("q6", null, s4 + 0.05, 0.045);
-      pressEnter("v6", t + 0.15);
-      cutTo(["q6", "v6"], ["q7", "v7"], t + 0.28);
-      const e = t + 0.28;
-      movePlate("v7", 1, e + 0.7);
-      movePlate("v7", 3, e + 1.15, 26);
-
-      // 5. Process the selected videos.
-      const s5 = e + 1.75;
-      closePalette(s5);
-      tl.set(["#q7", "#v7"], { visibility: "hidden" }, s5 + 0.13);
-      tl.fromTo("#files", { opacity: 0, y: 10, scale: 0.98 }, { opacity: 1, y: 0, scale: 1, duration: 0.2, ease: "power3.out" }, s5 + 0.08);
-      // The pointer selects the three videos, then the palette opens on the selection.
-      tl.fromTo("#cursor", { opacity: 0, x: 640, y: 420 }, { opacity: 1, duration: 0.1 }, s5 + 0.2);
-      ["#f1", "#f2", "#f3"].forEach((id, i) => {
-        const at = s5 + 0.42 + i * 0.22;
-        tl.to("#cursor", { x: 520 + i * 6, y: 223 + i * 34, duration: i ? 0.16 : 0.2, ease: "power2.inOut" }, at - (i ? 0.16 : 0.2));
-        tl.fromTo(id + " .sel-bg", { opacity: 0 }, { opacity: 1, duration: 0.05 }, at);
-      });
-      tl.to("#cursor", { opacity: 0, duration: 0.12 }, s5 + 1.1);
-      const s5b = s5 + 1.2;
-      showState("q8", "v8", s5b);
-      openPalette(s5b);
-      t = typeQuery("q8", null, s5b + 0.15, 0.04);
-      pressEnter("v8", t + 0.15);
-      cutTo(["q8", "v8"], ["q9", "v9"], t + 0.28);
-      const g = t + 0.32;
-      tl.fromTo("#p-total", { scaleX: 0 }, { scaleX: 1, duration: 1.7, ease: "none" }, g);
-      ["#s1", "#s2", "#s3"].forEach((id, i) => {
-        const st = g + i * 0.38;
-        const d = 0.7 + i * 0.1;
-        tl.fromTo(id + " .live", { opacity: 0 }, { opacity: 1, duration: 0.05 }, st);
-        tl.fromTo(id + " .sbar div", { scaleX: 0 }, { scaleX: 1, duration: d, ease: "power1.inOut" }, st);
-        tl.to(id + " .live", { opacity: 0, duration: 0.05 }, st + d);
-        tl.to(id + " .ring", { opacity: 0, duration: 0.05 }, st + d);
-        tl.fromTo(id + " .done", { opacity: 0, scale: 0.6 }, { opacity: 1, scale: 1, duration: 0.12, ease: "back.out(2)" }, st + d);
-        tl.to(id + " .a1", { opacity: 0, duration: 0.08 }, st + d);
-        tl.to(id + " .a2", { opacity: 1, duration: 0.08 }, st + d);
-      });
-      const done = g + 1.72;
-      tl.to(["#p-h1a", "#p-h2a"], { opacity: 0, duration: 0.1 }, done);
-      tl.to(["#p-h1b", "#p-h2b"], { opacity: 1, duration: 0.1 }, done);
-
-      // 6. The extension's menu bar item: pick Dark, and the desktop is back where the video started.
-      const s6 = done + 0.75;
-      closePalette(s6);
-      tl.to("#files", { opacity: 0, y: 6, duration: 0.16, ease: "power2.in" }, s6 + 0.04);
-      tl.fromTo("#cursor", { opacity: 0, x: 620, y: 330 }, { opacity: 1, duration: 0.12 }, s6 + 0.15);
-      tl.to("#cursor", { x: 968, y: 10, duration: 0.55, ease: "power3.inOut" }, s6 + 0.2);
-      const click = s6 + 0.82;
-      tl.fromTo("#mb-theme-hl", { opacity: 0 }, { opacity: 1, duration: 0.05 }, click);
-      tl.fromTo("#menu", { opacity: 0, scale: 0.96, y: -4 }, { opacity: 1, scale: 1, y: 0, duration: 0.14, ease: "power3.out" }, click + 0.03);
-      tl.to("#cursor", { x: 950, y: 86, duration: 0.34, ease: "power2.inOut" }, click + 0.3);
-      tl.set("#menu-hl", { y: 51, opacity: 1 }, click + 0.62);
-      tl.set("#mi-dark", { attr: { class: "mi hot" } }, click + 0.62);
-      const pick = click + 1.05;
-      tl.to("#menu-hl", { opacity: 0, duration: 0.04, yoyo: true, repeat: 1 }, pick);
-      tl.to("#menu", { opacity: 0, duration: 0.14, ease: "power2.in" }, pick + 0.1);
-      tl.to("#mb-theme-hl", { opacity: 0, duration: 0.1 }, pick + 0.1);
-      setTheme(LIGHT, DARK, pick + 0.12, 0.45);
-      tl.to("#cursor", { opacity: 0, x: 900, y: 170, duration: 0.4, ease: "power2.in" }, pick + 0.5);
-
-      window.__timelines = window.__timelines || {};
-      window.__timelines["main"] = tl;
-      tl.seek(0);
-    </script>
+    <script src="assets/icons.js"></script>
+    <script src="assets/timeline.js"></script>
   </body>
 </html>
