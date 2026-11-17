@@ -85,6 +85,23 @@ func TestHistoryDropsTheOldestEntriesPastTheCap(t *testing.T) {
 	}
 }
 
+func TestHistoryNeverDropsASavedRecordingPastTheCap(t *testing.T) {
+	ctx := newContext()
+	ctx.dictation.recordings = []api.SavedDictation{{ID: "dictation-old", CreatedAtMs: 1, Failure: "Cloud transcription timed out."}}
+	var entries []history.Entry
+	for i := 0; i < history.MaxEntries+5; i++ {
+		entries = append(entries, history.Entry{ID: fmt.Sprintf("e%d", i), Text: "text", CreatedAt: int64(i + 100)})
+	}
+	ctx.storage.values[storageHistoryKey] = mustJSON(t, entries)
+	view := run(t, New(Legacy{}), ctx, HistoryCommandID, nil, nil).View
+	if len(view.Items) != history.MaxEntries+1 || view.Items[0].ID != "dictation-old" {
+		t.Fatalf("items = %d, first %q; want the old recording kept beside the capped transcripts", len(view.Items), view.Items[0].ID)
+	}
+	if len(ctx.dictation.deleted) != 0 {
+		t.Fatalf("deleted %v; the view must never delete unfinished audio", ctx.dictation.deleted)
+	}
+}
+
 func TestSettingsFormSavesTheChoicesAndKeepsCleaningOffWithoutAnAccount(t *testing.T) {
 	ctx := newContext()
 	ctx.ai.available = false

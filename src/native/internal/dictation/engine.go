@@ -112,7 +112,7 @@ func (e *Engine) StartWithLevel(options api.DictationStartOptions, sink func(flo
 	}
 	if err := e.service.StartWithLevel(microphoneID(options.DeviceID), sink); err != nil {
 		e.restoreMute()
-		return userFailure(err)
+		return e.failure("start", err)
 	}
 	return nil
 }
@@ -122,7 +122,7 @@ func (e *Engine) Stop() (string, error) {
 	e.restoreMute()
 	text, err := e.service.Stop()
 	if err != nil {
-		return "", userFailure(err)
+		return "", e.failure("stop", err)
 	}
 	return text, nil
 }
@@ -134,7 +134,8 @@ func (e *Engine) Cancel() error {
 	return nil
 }
 
-// Recordings lists the saved dictations, newest first.
+// Recordings lists the saved dictations, newest first. The dictation in progress is on disk too, but it is not listed
+// until it ends without a transcript.
 func (e *Engine) Recordings() ([]api.SavedDictation, error) {
 	if e.cfg.Recordings == nil {
 		return nil, nil
@@ -143,8 +144,12 @@ func (e *Engine) Recordings() ([]api.SavedDictation, error) {
 	if err != nil {
 		return nil, userFailure(err)
 	}
+	active := e.service.ActiveRecordingID()
 	out := make([]api.SavedDictation, 0, len(saved))
 	for _, recording := range saved {
+		if recording.ID == active {
+			continue
+		}
 		out = append(out, api.SavedDictation{ID: recording.ID, CreatedAtMs: recording.CreatedAt, SegmentCount: recording.SegmentCount, Failure: recording.Failure})
 	}
 	return out, nil
@@ -154,7 +159,7 @@ func (e *Engine) Recordings() ([]api.SavedDictation, error) {
 func (e *Engine) Retry(ctx context.Context, id string) (string, error) {
 	text, err := e.service.Retry(ctx, id)
 	if err != nil {
-		return "", userFailure(err)
+		return "", e.failure("retry", err)
 	}
 	return text, nil
 }
@@ -203,6 +208,15 @@ func (e *Engine) warn(event string, err error) {
 	if e.cfg.Warn != nil {
 		e.cfg.Warn(event, map[string]any{"error": err.Error()})
 	}
+}
+
+// failure logs a dictation failure with its raw error, so the log names the call that failed, and returns the words the
+// user reads. A cancellation is not a failure and is not logged.
+func (e *Engine) failure(stage string, err error) error {
+	if e.cfg.Warn != nil && !errors.Is(err, ErrCancelled) {
+		e.cfg.Warn("dictation.failed", map[string]any{"stage": stage, "error": err.Error(), "message": FailureMessage(err)})
+	}
+	return userFailure(err)
 }
 
 // microphoneID maps the extension API's default-device spellings onto the platform's: "" and "default" are the

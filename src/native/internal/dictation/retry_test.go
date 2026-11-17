@@ -84,8 +84,11 @@ func TestATransientFailureThatKeepsFailingStopsAfterTheAttemptsAndKeepsTheAudio(
 	if !errors.As(err, &saved) {
 		t.Fatalf("Stop error = %v, want a SavedError", err)
 	}
-	if len(flaky.calls) != 3 || len(*waits) != 2 {
-		t.Fatalf("%d attempts and %d waits, want 3 and 2", len(flaky.calls), len(*waits))
+	if len(flaky.calls) != defaultRetryAttempts || len(*waits) != defaultRetryAttempts-1 {
+		t.Fatalf("%d attempts and %d waits, want %d and %d", len(flaky.calls), len(*waits), defaultRetryAttempts, defaultRetryAttempts-1)
+	}
+	if want := []time.Duration{time.Second, 2 * time.Second, 4 * time.Second, 8 * time.Second, 15 * time.Second}; !slices.Equal(*waits, want) {
+		t.Fatalf("waits = %v, want %v: about thirty seconds before the user sees an error", *waits, want)
 	}
 	ids := recorder.savedIDs()
 	if len(ids) != 1 || !strings.Contains(recorder.failed[ids[0]], "timed out") {
@@ -94,8 +97,14 @@ func TestATransientFailureThatKeepsFailingStopsAfterTheAttemptsAndKeepsTheAudio(
 }
 
 func TestAPermanentFailureIsNotRetriedAndKeepsTheAudio(t *testing.T) {
-	for _, kind := range []backend.Kind{backend.KindUnauthorized, backend.KindInsufficientCredits, backend.KindRateLimited, backend.KindRejected} {
-		h, flaky, recorder, waits := retryHarness(t, backendFailure(kind))
+	spendCap := &backend.Error{Kind: backend.KindRejected, Code: "free_spend_cap_reached", Message: "spend cap"}
+	failures := []error{spendCap}
+	for _, kind := range []backend.Kind{backend.KindUnauthorized, backend.KindInsufficientCredits, backend.KindIncompatible, backend.KindRejected} {
+		failures = append(failures, backendFailure(kind))
+	}
+	for _, failure := range failures {
+		kind := failure.Error()
+		h, flaky, recorder, waits := retryHarness(t, failure)
 		_, err := dictate(h)
 		if err == nil {
 			t.Fatalf("%s: Stop error = nil", kind)

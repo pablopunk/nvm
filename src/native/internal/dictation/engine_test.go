@@ -73,6 +73,7 @@ func newEngineRig(t *testing.T, signedIn bool) engineRig {
 		Recordings: rig.store,
 		Muter:      audiomute.New(rig.output, &memoryJournal{}),
 		Background: func(_ string, fn func()) { fn() },
+		Retry:      RetryPolicy{Sleep: noWait},
 	})
 	return rig
 }

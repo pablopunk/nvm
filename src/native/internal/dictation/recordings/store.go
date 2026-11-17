@@ -1,6 +1,9 @@
-// Package recordings keeps the audio of a dictation until its transcript is in, so a dictation that failed or was cut
-// off can be transcribed again from the history. Each dictation is a JSON record and one WebM file per minute of
-// speech, written under the data folder; the record is written last, so a save that stops halfway is never listed.
+// Package recordings keeps the audio of a dictation from its first captured frame until its transcript is in, so a
+// dictation that failed, was cancelled or was cut off by a crash can be transcribed again from the history. Each
+// dictation is a JSON record and one WebM file per minute of speech, written under the data folder while the user
+// speaks. The record is written before the first segment and each segment replaces its earlier copy atomically, so a
+// crash at any moment leaves every segment written so far listed and readable. Nothing is pruned: a recording stays
+// until its transcript is in or the user deletes it.
 package recordings
 
 import (
@@ -12,21 +15,15 @@ import (
 	"path/filepath"
 	"regexp"
 	"slices"
+	"strconv"
 	"strings"
 	"time"
 
 	"github.com/pablopunk/nvm/native/internal/platform"
 )
 
-// MaxRecordings is how many saved dictations are kept; the oldest go first.
-const MaxRecordings = 25
-
-// MaxTotalBytes bounds the audio on disk. Once the saved dictations together pass it, the oldest go first; the newest
-// recording is always kept, since it is the one the user is most likely to retry.
-const MaxTotalBytes int64 = 128 << 20
-
-// maxSegments is the longest recording the store takes: 120 one-minute segments, as the Electron app allows.
-const maxSegments = 120
+// maxSegments is the longest recording the store takes: ten hours of one-minute segments.
+const maxSegments = 600
 
 // ErrInvalidID is returned for a recording name that is not a dictation's.
 var ErrInvalidID = errors.New("dictation recordings: invalid recording id")
@@ -34,59 +31,68 @@ var ErrInvalidID = errors.New("dictation recordings: invalid recording id")
 // ErrNotFound is returned when no saved recording has the id.
 var ErrNotFound = errors.New("dictation recordings: recording not found")
 
-// ErrSegmentCount is returned for a recording with no segments or more than maxSegments.
-var ErrSegmentCount = errors.New("dictation recordings: a recording needs between one and 120 segments")
+// ErrSegmentCount is returned for a recording with no segments, or a segment index past maxSegments.
+var ErrSegmentCount = errors.New("dictation recordings: a recording needs between one and 600 segments")
 
 var idPattern = regexp.MustCompile(`^dictation-[A-Za-z0-9-]{1,80}$`)
 
 // Recording describes one saved dictation.
 type Recording struct {
-	ID           string `json:"id"`
-	CreatedAt    int64  `json:"createdAt"`
-	SegmentCount int    `json:"segmentCount"`
+	ID        string `json:"id"`
+	CreatedAt int64  `json:"createdAt"`
+	// SegmentCount is how many segments are on disk, counted when the record is read.
+	SegmentCount int `json:"segmentCount"`
 	// Failure says why the last transcription failed, in the words the user reads. Empty for a dictation that was cut
-	// off (the app closed while it was on its way) and never got an answer.
+	// off (the app closed while it was recording or on its way) and never got an answer.
 	Failure string `json:"failure,omitempty"`
 }
 
-// Store reads and writes the saved dictations in dir. It is safe to use from several goroutines when the file port is.
+// Store reads and writes the saved dictations in dir. It is safe to use from several goroutines when the file port is,
+// as long as one dictation is written by one goroutine at a time.
 type Store struct {
 	files platform.FS
 	dir   string
 	now   func() time.Time
-	// maxBytes is the audio bound; tests lower it.
-	maxBytes int64
 }
 
 // New returns a store over the folder dir. now stamps each recording, so tests control the order.
 func New(files platform.FS, dir string, now func() time.Time) *Store {
-	return &Store{files: files, dir: dir, now: now, maxBytes: MaxTotalBytes}
+	return &Store{files: files, dir: dir, now: now}
 }
 
-// Save writes the segments of the dictation id and then its record, and drops the oldest recordings past the limit.
-func (s *Store) Save(id string, segments [][]byte) error {
+// SaveSegment writes segment index of the dictation id, replacing an earlier copy of it. The first segment of a
+// dictation writes its record first, so the dictation is listed from its first frame.
+func (s *Store) SaveSegment(id string, index int, audio []byte) error {
 	if err := validID(id); err != nil {
 		return err
 	}
-	if len(segments) == 0 || len(segments) > maxSegments {
+	if index < 0 || index >= maxSegments {
 		return ErrSegmentCount
 	}
 	if err := s.files.MkdirAll(s.dir, 0o700); err != nil {
 		return err
 	}
+	if _, err := s.readRecord(id); errors.Is(err, ErrNotFound) {
+		if err := s.writeRecord(Recording{ID: id, CreatedAt: s.now().UnixMilli()}); err != nil {
+			return err
+		}
+	} else if err != nil {
+		return err
+	}
+	return s.replaceFile(s.segmentPath(id, index), audio)
+}
+
+// Save writes every segment of the dictation id, as SaveSegment does one by one.
+func (s *Store) Save(id string, segments [][]byte) error {
+	if len(segments) == 0 || len(segments) > maxSegments {
+		return ErrSegmentCount
+	}
 	for index, audio := range segments {
-		if err := s.files.WriteFile(s.segmentPath(id, index), audio, 0o600); err != nil {
+		if err := s.SaveSegment(id, index, audio); err != nil {
 			return err
 		}
 	}
-	record, err := json.Marshal(Recording{ID: id, CreatedAt: s.now().UnixMilli(), SegmentCount: len(segments)})
-	if err != nil {
-		return err
-	}
-	if err := s.files.WriteFile(s.recordPath(id), record, 0o600); err != nil {
-		return err
-	}
-	return s.prune()
+	return nil
 }
 
 // MarkFailed records why the transcription of the saved dictation id failed, so the history can say so after a restart.
@@ -96,14 +102,10 @@ func (s *Store) MarkFailed(id, failure string) error {
 		return err
 	}
 	recording.Failure = failure
-	record, err := json.Marshal(recording)
-	if err != nil {
-		return err
-	}
-	return s.files.WriteFile(s.recordPath(id), record, 0o600)
+	return s.writeRecord(recording)
 }
 
-// List returns the saved recordings, newest first. A folder entry that is not a complete record is skipped.
+// List returns the saved recordings that hold audio, newest first. A record with no segment yet is skipped.
 func (s *Store) List() ([]Recording, error) {
 	entries, err := s.files.ReadDir(s.dir)
 	if errors.Is(err, fs.ErrNotExist) {
@@ -118,7 +120,7 @@ func (s *Store) List() ([]Recording, error) {
 		if !isRecord {
 			continue
 		}
-		if recording, err := s.readRecord(id); err == nil {
+		if recording, err := s.readRecord(id); err == nil && recording.SegmentCount > 0 {
 			recordings = append(recordings, recording)
 		}
 	}
@@ -132,6 +134,9 @@ func (s *Store) Load(id string) ([][]byte, error) {
 	if err != nil {
 		return nil, err
 	}
+	if recording.SegmentCount == 0 {
+		return nil, ErrNotFound
+	}
 	segments := make([][]byte, 0, recording.SegmentCount)
 	for index := range recording.SegmentCount {
 		audio, err := s.files.ReadFile(s.segmentPath(id, index))
@@ -143,19 +148,18 @@ func (s *Store) Load(id string) ([][]byte, error) {
 	return segments, nil
 }
 
-// Remove deletes the saved dictation id. A recording that is already gone is not an error.
+// Remove deletes the saved dictation id: its segments last first, then its record, so a removal cut short leaves a
+// shorter recording the user can still delete, never segments nobody lists. A recording that is already gone is not an
+// error.
 func (s *Store) Remove(id string) error {
 	if err := validID(id); err != nil {
 		return err
 	}
-	recording, err := s.readRecord(id)
-	if errors.Is(err, ErrNotFound) {
-		return nil
-	}
+	indexes, err := s.segmentIndexes(id)
 	if err != nil {
 		return err
 	}
-	for index := range recording.SegmentCount {
+	for _, index := range slices.Backward(indexes) {
 		if err := s.removeFile(s.segmentPath(id, index)); err != nil {
 			return err
 		}
@@ -163,59 +167,33 @@ func (s *Store) Remove(id string) error {
 	return s.removeFile(s.recordPath(id))
 }
 
-// prune removes the oldest recordings beyond MaxRecordings or MaxTotalBytes, and the segments of saves that stopped
-// before their record was written. Saves are serial, so none is in flight when prune runs.
-func (s *Store) prune() error {
-	recordings, err := s.List()
-	if err != nil {
-		return err
-	}
-	var total int64
-	for index, recording := range recordings {
-		total += s.audioBytes(recording)
-		if index > 0 && (index >= MaxRecordings || total > s.maxBytes) {
-			if err := s.Remove(recording.ID); err != nil {
-				return err
-			}
-		}
-	}
-	return s.removeOrphanSegments()
-}
+var segmentPattern = regexp.MustCompile(`^(dictation-[A-Za-z0-9-]{1,80})\.(\d+)\.webm$`)
 
-// audioBytes is the size of the segments of recording. A segment that cannot be read counts as empty.
-func (s *Store) audioBytes(recording Recording) int64 {
-	var total int64
-	for index := range recording.SegmentCount {
-		if info, err := s.files.Stat(s.segmentPath(recording.ID, index)); err == nil {
-			total += info.Size()
-		}
-	}
-	return total
-}
-
-var segmentPattern = regexp.MustCompile(`^(dictation-[A-Za-z0-9-]{1,80})\.\d+\.webm$`)
-
-// removeOrphanSegments deletes the segment files that have no record, left by a save that stopped halfway.
-func (s *Store) removeOrphanSegments() error {
+// segmentIndexes lists the indexes of every segment file of id on disk, in ascending order.
+func (s *Store) segmentIndexes(id string) ([]int, error) {
 	entries, err := s.files.ReadDir(s.dir)
-	if err != nil {
-		return err
+	if errors.Is(err, fs.ErrNotExist) {
+		return nil, nil
 	}
+	if err != nil {
+		return nil, err
+	}
+	var indexes []int
 	for _, entry := range entries {
 		match := segmentPattern.FindStringSubmatch(entry.Name())
-		if match == nil {
+		if match == nil || match[1] != id {
 			continue
 		}
-		if _, err := s.readRecord(match[1]); errors.Is(err, ErrNotFound) {
-			if err := s.removeFile(filepath.Join(s.dir, entry.Name())); err != nil {
-				return err
-			}
+		if index, err := strconv.Atoi(match[2]); err == nil {
+			indexes = append(indexes, index)
 		}
 	}
-	return nil
+	slices.Sort(indexes)
+	return indexes, nil
 }
 
-// readRecord reads and checks the record of id.
+// readRecord reads and checks the record of id, and counts its segments: the unbroken run of segment files from the
+// first one.
 func (s *Store) readRecord(id string) (Recording, error) {
 	if err := validID(id); err != nil {
 		return Recording{}, err
@@ -228,13 +206,36 @@ func (s *Store) readRecord(id string) (Recording, error) {
 		return Recording{}, err
 	}
 	var recording Recording
-	if err := json.Unmarshal(data, &recording); err != nil {
-		return Recording{}, err
-	}
-	if recording.ID != id || recording.SegmentCount < 1 || recording.SegmentCount > maxSegments {
+	if err := json.Unmarshal(data, &recording); err != nil || recording.ID != id {
 		return Recording{}, ErrNotFound
 	}
+	recording.SegmentCount = 0
+	for recording.SegmentCount < maxSegments {
+		if _, err := s.files.Stat(s.segmentPath(id, recording.SegmentCount)); err != nil {
+			break
+		}
+		recording.SegmentCount++
+	}
 	return recording, nil
+}
+
+// writeRecord replaces the record of recording atomically.
+func (s *Store) writeRecord(recording Recording) error {
+	recording.SegmentCount = 0
+	data, err := json.Marshal(recording)
+	if err != nil {
+		return err
+	}
+	return s.replaceFile(s.recordPath(recording.ID), data)
+}
+
+// replaceFile writes data beside name and renames it into place, so a crash never leaves half a file under name.
+func (s *Store) replaceFile(name string, data []byte) error {
+	temporary := name + ".tmp"
+	if err := s.files.WriteFile(temporary, data, 0o600); err != nil {
+		return err
+	}
+	return s.files.Rename(temporary, name)
 }
 
 // removeFile deletes name, treating a file that is already gone as deleted.

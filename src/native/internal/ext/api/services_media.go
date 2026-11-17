@@ -80,8 +80,9 @@ type SavedDictation struct {
 
 // Dictation records speech and returns the hosted transcript. Audio is never exposed to extension code. Start resolves
 // once the microphone delivers stable audio, and Stop is the call that waits for the hosted transcription, so an
-// action that runs it should declare Background. Recordings, Retry and DeleteRecording recover a dictation whose
-// transcription failed; a saved recording is deleted once its text is saved.
+// action that runs it should declare Background. The host retries passing failures before it reports one, and keeps
+// the audio of every dictation that holds sound until its transcript is in: Recordings, Retry and DeleteRecording
+// recover a dictation that failed, was cancelled or was cut off; a saved recording is deleted once its text is saved.
 type Dictation interface {
 	Status() (DictationStatus, error)
 	// APIAvailable reports whether authenticated hosted transcription is available for this client.
@@ -90,6 +91,7 @@ type Dictation interface {
 	Start(options DictationStartOptions) error
 	// Stop ends capture and returns the hosted transcript.
 	Stop() (transcript string, err error)
+	// Cancel ends capture without transcribing. Audio already captured stays in Recordings, marked as cancelled.
 	Cancel() error
 	Recordings() ([]SavedDictation, error)
 	// Retry transcribes a saved recording again. Each retry is a new, billable request.

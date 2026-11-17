@@ -9,6 +9,7 @@ import (
 	"os/exec"
 	"strings"
 	"sync"
+	"sync/atomic"
 )
 
 // pcmProcessStream reads the raw PCM a child process writes to stdout. An odd byte left over from one read waits for
@@ -20,6 +21,9 @@ type pcmProcessStream struct {
 	carry    []byte
 	reaped   sync.Once
 	classify func(message string) error
+	// closed is set by Close. Reaping the killed child closes the read end of its pipe, so a Read still pending then
+	// fails with a closed file; after Close that is the stream's end, not a microphone failure.
+	closed atomic.Bool
 }
 
 // newPCMProcessStream wraps a started child whose stdout carries signed 16-bit little-endian samples.
@@ -54,6 +58,9 @@ func (s *pcmProcessStream) Read(pcm []int16) (int, error) {
 }
 
 func (s *pcmProcessStream) endError(readErr error) error {
+	if s.closed.Load() {
+		return io.EOF
+	}
 	if errors.Is(readErr, io.EOF) || errors.Is(readErr, io.ErrUnexpectedEOF) {
 		s.reap()
 		if message := strings.TrimSpace(s.stderr.String()); message != "" {
@@ -66,6 +73,7 @@ func (s *pcmProcessStream) endError(readErr error) error {
 
 // Close kills the child, which ends a pending Read with the stream's end. It returns without waiting for the process.
 func (s *pcmProcessStream) Close() error {
+	s.closed.Store(true)
 	if s.cmd.Process != nil {
 		_ = s.cmd.Process.Kill()
 	}

@@ -26,11 +26,12 @@ type Transcriber interface {
 	CancelPreparation(ctx context.Context, operationID string, userCancelled bool) error
 }
 
-// Recorder keeps a dictation's audio until its transcript is in, so a dictation that failed can be transcribed again
-// from the history. Save reports a failure the dictation survives without; Remove drops the audio once the text is
-// confirmed; Load returns the saved segments of one dictation.
+// Recorder keeps a dictation's audio on disk from its first captured frame until its transcript is in, so a dictation
+// that failed, was cancelled or was cut off by a crash can be transcribed again from the history. SaveSegment writes
+// one WebM segment, replacing an earlier copy of it, and lists the dictation from its first call; Remove drops the audio
+// once the text is confirmed; Load returns the saved segments of one dictation.
 type Recorder interface {
-	Save(id string, segments [][]byte) error
+	SaveSegment(id string, index int, audio []byte) error
 	// MarkFailed records why the transcription failed, so the history can say so after a restart.
 	MarkFailed(id, failure string) error
 	Remove(id string) error
@@ -49,7 +50,7 @@ func (e *SavedError) Unwrap() error { return e.Err }
 
 // segmentFiles muxes every captured segment of op into a WebM file, in order.
 func segmentFiles(op *operation) [][]byte {
-	track := webm.Track{SampleRate: SampleRate, Channels: Channels, Lookahead: op.encoder.Lookahead()}
+	track := op.track()
 	files := make([][]byte, 0, len(op.segments))
 	for _, packets := range op.segments {
 		files = append(files, webm.Mux(track, packets, FrameMillis))
@@ -60,7 +61,7 @@ func segmentFiles(op *operation) [][]byte {
 // transcribeFiles sends every segment file in order and joins the texts with spaces, as the desktop app does. The
 // first segment is the one a preparation covers when prepared is set. A segment that fails for a transient reason is retried
 // under policy; any other failure fails the dictation.
-func transcribeFiles(ctx context.Context, transcriber Transcriber, policy RetryPolicy, operationID string, prepared bool, files [][]byte) (string, error) {
+func transcribeFiles(ctx context.Context, transcriber Transcriber, policy RetryPolicy, operationID string, prepared bool, files [][]byte, onRetry func(int, error)) (string, error) {
 	var texts []string
 	for index, file := range files {
 		text, err := transcribeSegment(ctx, transcriber, policy, Segment{
@@ -68,7 +69,7 @@ func transcribeFiles(ctx context.Context, transcriber Transcriber, policy RetryP
 			CancellationID: operationID,
 			Prepared:       index == 0 && prepared,
 			File:           file,
-		})
+		}, onRetry)
 		if err != nil {
 			return "", err
 		}
