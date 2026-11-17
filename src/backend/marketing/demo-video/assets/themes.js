@@ -31,11 +31,11 @@ const LIGHT = {
   "--dock-bg": "rgba(255, 255, 255, 0.3)", "--dock-edge": "rgba(255, 255, 255, 0.55)", "--dock-hi": "rgba(255, 255, 255, 0.45)",
 };
 
-// The Dock's icon tint for each theme, a hue taken from its wallpaper. Midnight, the black desktop, is grey: the
-// icons keep only their light and shade.
+// The Dock's icon tint for each theme the film picks: the one strong hue of its wallpaper. Midnight, the black
+// desktop, is grey: the icons keep only their light and shade.
 const TINT = {
   midnight: "rgb(128, 128, 128)",
-  glacier: "rgb(70, 140, 196)",
-  aurora: "rgb(46, 176, 124)",
-  misty: "rgb(206, 116, 132)",
+  sunset: "rgb(242, 124, 32)",
+  ocean: "rgb(36, 104, 224)",
+  terraces: "rgb(64, 176, 40)",
 };

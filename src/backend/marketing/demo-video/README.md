@@ -14,8 +14,9 @@ black until the theme switcher sets a wallpaper.
 1. On a black desktop, the palette is asked for a theme switcher. The `Automate` row opens the AI builder, which writes
    and installs the extension.
 2. **Theme Switcher** opens a grid of themes. Each click applies a theme's look (light or dark), its wallpaper, and
-   a tint of the wallpaper's hue that sweeps across the Dock icons, as the v2 video did. The black Midnight theme
-   leaves the icons grey.
+   a tint of the wallpaper's hue that sweeps across the Dock icons, as the v2 video did. The film picks Sunset
+   (orange), Deep Ocean (blue) and Terraces (green), and the camera moves close on the Dock for the last two. The
+   black Midnight theme leaves the icons grey.
 3. A list of pull requests.
 4. `cal` finds Calendar, Calculator and **Upcoming Events**, a list of events grouped by day.
 5. Three videos are selected in Finder. **Compress Videos** processes them and shows progress. When the palette

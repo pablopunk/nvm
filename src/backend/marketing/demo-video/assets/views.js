@@ -57,11 +57,11 @@ const automate = (key, text) => ({ title: 'Automate "' + chars(text, key) + '"',
 
 const THEMES = [
   ["Midnight", "Dark · no wallpaper", null],
-  ["Glacier Lake", "Light", "glacier-lake"],
-  ["Aurora", "Dark", "aurora"],
-  ["Misty Peak", "Light", "misty-peak"],
-  ["Desert Dunes", "Dark", "dunes"],
-  ["Alpine Valley", "Dark", "alpine-valley"],
+  ["Sunset", "Light", "sunset"],
+  ["Deep Ocean", "Dark", "ocean"],
+  ["Terraces", "Light", "terraces"],
+  ["Dusk", "Dark", "dusk"],
+  ["Lagoon", "Light", "lagoon"],
 ];
 
 function grid() {

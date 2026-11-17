@@ -10,10 +10,10 @@ const P = {
   files: [1, 2, 3].map((i) => spot("#fi" + i + " .th", 0.5, 0.55)),
 };
 // Camera framings, as in the earlier video but gentler: in on the query while it is typed, a little in on a list,
-// on the Dock while a theme lands, and on the window or menu being used.
+// close on the Dock while two themes land, and on the window or menu being used.
 const QUERY = { x: 550, y: 200 };
 const LIST = { x: 550, y: 297 };
-const DOCK = { x: 540, y: 470 };
+const DOCK = { x: 550, y: 500 };
 const FINDER = { x: 550, y: 250 };
 const MENU = { x: 850, y: 160 };
 const DURATION = 22.5;
@@ -58,7 +58,7 @@ tl.to("#checking", { opacity: 0, duration: 0.1 }, 3.0);
 document.querySelectorAll(".answer .w").forEach((w, i) => tl.set(w, { opacity: 1 }, 3.08 + i * 0.024));
 
 // 2. Theme Switcher runs. Each theme is a look, a wallpaper and a Dock tint, applied as the selection moves; the
-// camera moves in on the Dock for the last one.
+// camera moves close on the Dock for the second and third, so the tint sweeping across the icons fills the frame.
 camera(4.1, 0.3, 1.3, QUERY);
 cut("v-chat", "v-theme-q", 4.15);
 type("q2", 4.15, 0.05);
@@ -69,11 +69,11 @@ select(cells, 0, 0);
 tl.set("#cursor", { x: 860, y: 450 }, 4.75);
 tl.to("#cursor", { opacity: 1, duration: 0.1 }, 4.8);
 const picks = [
-  [1, 5.3, LIGHT, "w-glacier", TINT.glacier],
-  [2, 6.05, DARK, "w-aurora", TINT.aurora],
-  [3, 6.85, LIGHT, "w-misty", TINT.misty],
+  [1, 5.3, LIGHT, "w-sunset", TINT.sunset],
+  [2, 6.05, DARK, "w-ocean", TINT.ocean],
+  [3, 6.85, LIGHT, "w-terraces", TINT.terraces],
 ];
-camera(6.3, 0.5, 1.45, DOCK);
+camera(5.55, 0.45, 1.7, DOCK);
 for (const [i, t, theme, wall, tint] of picks) {
   cursorTo(P.cells[i], t - 0.42, 0.38);
   click(t);

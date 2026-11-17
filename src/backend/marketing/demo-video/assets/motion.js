@@ -77,7 +77,7 @@ function setTheme(to, t, dur) {
   tl.to("#stage", { ...to, duration: dur, ease: "power1.inOut" }, t);
 }
 function tintDock(color, t) {
-  tl.to(".dk .tint", { backgroundColor: color, duration: 0.24, ease: "power1.inOut", stagger: 0.035 }, t);
+  tl.to(".dk .tint", { backgroundColor: color, duration: 0.28, ease: "power1.inOut", stagger: 0.04 }, t);
 }
 let wallZ = 1;
 let currentWall = null;
