@@ -1,0 +1,9 @@
+flowchart LR
+ subgraph v1["NEVERMIND 1.x"]
+  A["Electron app"] --> B["TypeScript extensions"]
+ end
+ subgraph v2["NEVERMIND 2.x"]
+  C["Native Go + MyGo UI"] --> D["Declarative extension API"]
+  D --> E["Isolated Go extension processes"]
+  C --> F["pi agent sidecar"]
+ end
