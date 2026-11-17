@@ -53,8 +53,8 @@ button.chip:hover { color: var(--strong); }
 .list { flex: 1; min-height: 0; padding-bottom: 52px; scroll-padding: 11px 0 52px; }
 .row { cursor: pointer; user-select: none; }
 .tx .t, .tx .s { display: block; }
-/* The bundled app icons are flat squares; macOS draws app icons as rounded squares. */
-.tile.app img { border-radius: 9px; }
+/* The bundled app icons are flat squares with no margin, so they take the 32px tile size and macOS rounding. */
+.tile.app img { width: 32px; height: 32px; margin: 0; border-radius: 8px; }
 .s.notice a { color: var(--accent); }
 
 .grow { flex: 1; }
