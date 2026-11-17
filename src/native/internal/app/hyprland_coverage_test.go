@@ -69,15 +69,9 @@ func (s *hyprlandSession) text(t *testing.T) string {
 	return string(data)
 }
 
-func waitForReloads(t *testing.T, s *hyprlandSession, want int32) {
-	t.Helper()
-	deadline := time.Now().Add(5 * time.Second)
-	for s.reloads.Load() < want {
-		if time.Now().After(deadline) {
-			t.Fatalf("reloads %d, want %d", s.reloads.Load(), want)
-		}
-		time.Sleep(5 * time.Millisecond)
-	}
+// reloadsReach reports, for runUICallbacksUntil, when the session has reloaded want times.
+func reloadsReach(s *hyprlandSession, want int32) func() bool {
+	return func() bool { return s.reloads.Load() >= want }
 }
 
 // Under Hyprland with the module in place, every runnable shortcut (built-in, window management, app and extension) is
@@ -86,6 +80,8 @@ func TestOwnedModuleCarriesEveryRunnableShortcutAndTheLateOnesTriggerASecondSync
 	session, svc := newHyprlandSession(t, true)
 	p := goldenPalette(t)
 	p.Attach(&testWindow{})
+	queue := make(completionUIQueue, 256)
+	p.uiQueue = queue
 	p.compositor = svc
 	p.shortcutMgr = nil
 	app := "/usr/share/applications/org.gnome.Calculator.desktop"
@@ -117,7 +113,8 @@ func TestOwnedModuleCarriesEveryRunnableShortcutAndTheLateOnesTriggerASecondSync
 	}
 	p.compositorReady.Store(true)
 	p.requestCompositorSync()
-	waitForReloads(t, session, 1)
+	runUICallbacksUntil(t, queue, reloadsReach(session, 1))
+	settleCompositorSync(t, p, queue)
 	first := session.text(t)
 	for id := range chosen {
 		if id != late && !strings.Contains(first, id) {
@@ -134,7 +131,8 @@ func TestOwnedModuleCarriesEveryRunnableShortcutAndTheLateOnesTriggerASecondSync
 	waitForState(t, mgr, "acme.theme", supervisor.StateRunning)
 	mgr.Commands(context.Background())
 	p.extensionCommandsChanged()
-	waitForReloads(t, session, 2)
+	runUICallbacksUntil(t, queue, reloadsReach(session, 2))
+	settleCompositorSync(t, p, queue)
 	if !strings.Contains(session.text(t), late) {
 		t.Fatalf("the late command is not in the module:\n%s", session.text(t))
 	}
@@ -146,6 +144,8 @@ func TestFirstRunHandsEveryRunnableShortcutFromThePortalToTheModule(t *testing.T
 	session, svc := newHyprlandSession(t, false)
 	p := goldenPalette(t)
 	p.Attach(&testWindow{})
+	queue := make(completionUIQueue, 256)
+	p.uiQueue = queue
 	p.compositor = svc
 	p.shortcutMgr = nil
 	chosen := map[string]string{
@@ -167,14 +167,8 @@ func TestFirstRunHandsEveryRunnableShortcutFromThePortalToTheModule(t *testing.T
 	}
 	p.compositorReady.Store(true)
 	p.requestCompositorSync()
-	waitForReloads(t, session, 1)
-	deadline := time.Now().Add(5 * time.Second)
-	for len(portal.Registered()) != 0 && time.Now().Before(deadline) {
-		time.Sleep(5 * time.Millisecond)
-	}
-	if left := portal.Registered(); len(left) != 0 {
-		t.Fatalf("the portal still holds %v", left)
-	}
+	runUICallbacksUntil(t, queue, func() bool { return session.reloads.Load() >= 1 && len(portal.Registered()) == 0 })
+	settleCompositorSync(t, p, queue)
 	text := session.text(t)
 	for id := range chosen {
 		if !strings.Contains(text, id) {

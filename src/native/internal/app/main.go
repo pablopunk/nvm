@@ -62,7 +62,8 @@ const (
 type App struct {
 	commandSnapshots extview.CommandSnapshots
 	*palette.Palette
-	panel   *mygo.Window
+	panel *mygo.Window
+	// uiQueue is where onUI sends UI work: the main thread in the app (mainThreadUI), a queue a test drains in tests.
 	uiQueue interface{ Update(fn func()) }
 	S       *Settings
 	// goos is the operating system whose labels and commands the app shows; the goldens pin the recorded one.
@@ -282,6 +283,19 @@ func (p *App) ready() {
 	log.Println("ready")
 }
 
+// mainThreadUI is the app's UI queue: work runs on the main thread once the app is ready, in the order it was queued,
+// and the palette redraws after it.
+type mainThreadUI struct{ app *App }
+
+func (m mainThreadUI) Update(fn func()) {
+	mygo.App.WhenReady(func() {
+		fn()
+		if m.app.panel != nil {
+			m.app.panel.Invalidate()
+		}
+	})
+}
+
 // searchClock measures the search budgets of the running app.
 var searchClock platform.Clock = real.NewPorts().Clock
 
@@ -290,6 +304,7 @@ func Run() {
 		return
 	}
 	p := &App{}
+	p.uiQueue = mainThreadUI{app: p}
 	mygo.App.SetName("Nevermind")
 	mygo.App.SetActivationPolicy(mygo.ActivationPolicyAccessory)
 	mygo.App.OnWindowAllClosed(func() {})

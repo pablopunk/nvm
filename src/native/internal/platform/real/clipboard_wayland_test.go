@@ -48,6 +48,16 @@ func (f *fakeWatchProcesses) startCount() int {
 	return len(f.starts)
 }
 
+// firstStart is the command of the first start, read under the lock because the feed starts it from its own goroutine.
+func (f *fakeWatchProcesses) firstStart() []string {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	if len(f.starts) == 0 {
+		return nil
+	}
+	return f.starts[0]
+}
+
 func newTestFeed(env map[string]string, tools []string, processes *fakeWatchProcesses) *waylandFeed {
 	feed := newWaylandFeed("linux", environment(env), toolSet(tools...), processes.start)
 	feed.restartDelay = 0
@@ -141,8 +151,8 @@ func TestWaylandFeedDeliversEveryCopyOfABurst(t *testing.T) {
 		t.Fatalf("fourth copy = %+v", got[3])
 	}
 	wantStart := []string{"wl-paste", "--watch", "sh", "-c", waylandWatchScript}
-	if !slices.Equal(processes.starts[0], wantStart) {
-		t.Fatalf("watch command = %v, want %v", processes.starts[0], wantStart)
+	if first := processes.firstStart(); !slices.Equal(first, wantStart) {
+		t.Fatalf("watch command = %v, want %v", first, wantStart)
 	}
 }
 
