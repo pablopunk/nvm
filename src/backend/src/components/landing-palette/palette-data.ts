@@ -1,64 +1,77 @@
-import type { PaletteItem } from './palette-types';
+import type { PaletteItem, PaletteTone } from './palette-types';
 
 import builtinCommandsJson from './palette-items.json';
 
 /** Built-in commands of the desktop app, captured as static landing-page content. */
 const builtinCommands = builtinCommandsJson as PaletteItem[];
 
+interface SampleDetails {
+  keywords?: string[];
+  tone?: PaletteTone;
+  primary?: string;
+  image?: string;
+  url?: string;
+}
+
 function sample(
   kind: PaletteItem['kind'],
   title: string,
   subtitle: string,
   icon: string,
-  keywords: string[] = [],
-  image?: string,
-  url?: string,
+  details: SampleDetails = {},
 ): PaletteItem {
-  return {
-    id: `${kind}:${title}`,
-    title,
-    subtitle,
-    icon,
-    aliases: [],
-    kind,
-    keywords,
-    image,
-    url,
-  };
+  return { id: `${kind}:${title}`, title, subtitle, icon, aliases: [], kind, ...details };
 }
 
 export const RELEASES_URL = 'https://github.com/pablopunk/nvm/releases';
 /** What the dictation demo "transcribes" and pastes into the palette. */
 export const DICTATED_TEXT = 'Download nevermind';
+/** The 2.x palette's first empty-query placeholder (src/native/internal/palette/render.go). */
+export const ROOT_PLACEHOLDER = 'Watcha gonna do?';
+export const DICTATE_ID = 'command:Dictate';
 
-const LAUNCH_SUBTITLE = 'Launch application';
+/** App rows carry no subtitle in 2.x; "launch" still finds them. */
+function app(title: string, keywords: string[], image: string, url: string) {
+  return sample('app', title, '', 'app-window', {
+    keywords: [...keywords, 'app', 'launch'],
+    image,
+    url,
+  });
+}
+
 const apps: PaletteItem[] = [
-  sample('app', 'Helium', LAUNCH_SUBTITLE, 'app-window', ['browser', 'web'], '/apps/helium.webp', 'https://helium.computer'),
-  sample('app', 'T3 Code', LAUNCH_SUBTITLE, 'app-window', ['code', 'agent', 'ai'], '/apps/t3-code.webp', 'https://t3.codes'),
-  sample('app', 'Spotifin', LAUNCH_SUBTITLE, 'app-window', ['music', 'player'], '/apps/spotifin.webp', 'https://spotifin.app'),
-  sample('app', 'Telegram', LAUNCH_SUBTITLE, 'app-window', ['chat', 'messages'], '/apps/telegram.webp', 'https://telegram.org'),
-  sample('app', 'Nevermind', LAUNCH_SUBTITLE, 'app-window', ['palette', 'launcher'], '/apps/nevermind.webp', RELEASES_URL),
+  app('Helium', ['browser', 'web'], '/apps/helium.webp', 'https://helium.computer'),
+  app('T3 Code', ['code', 'agent', 'ai'], '/apps/t3-code.webp', 'https://t3.codes'),
+  app('Spotifin', ['music', 'player'], '/apps/spotifin.webp', 'https://spotifin.app'),
+  app('Telegram', ['chat', 'messages'], '/apps/telegram.webp', 'https://telegram.org'),
+  app('Nevermind', ['palette', 'launcher'], '/apps/nevermind.webp', RELEASES_URL),
 ];
 
+const design = { keywords: ['design'] };
 const files: PaletteItem[] = [
-  sample('file', 'Brand guidelines.pdf', '~/Documents/Design/Brand guidelines.pdf', 'file-text', ['design']),
-  sample('file', 'Design system.fig', '~/Documents/Design/Design system.fig', 'palette', ['design']),
-  sample('file', 'Pricing page mockup.png', '~/Pictures/Design/Pricing page mockup.png', 'image', ['design']),
-  sample('file', 'Design review notes.md', '~/Documents/Notes/Design review notes.md', 'file-code', ['design']),
+  sample('file', 'Brand guidelines.pdf', '~/Documents/Design/Brand guidelines.pdf', 'file-text', design),
+  sample('file', 'Design system.fig', '~/Documents/Design/Design system.fig', 'palette', design),
+  sample('file', 'Pricing page mockup.png', '~/Pictures/Design/Pricing page mockup.png', 'image', design),
+  sample('file', 'Design review notes.md', '~/Documents/Notes/Design review notes.md', 'file-code', design),
   sample('file', 'Roadmap Q4.pdf', '~/Documents/Planning/Roadmap Q4.pdf', 'file-text'),
-  sample('file', 'Invoices', '~/Documents/Finance/Invoices', 'folder'),
+  sample('file', 'Invoices', '~/Documents/Finance/Invoices', 'folder', { tone: 'blue' }),
 ];
 
+const copied = { keywords: ['clipboard', 'copied', 'paste'] };
 const clipboard: PaletteItem[] = [
-  sample('clipboard', 'https://nvm.fyi/pricing', 'Copied 2 minutes ago', 'link', ['clipboard', 'copied', 'paste']),
-  sample('clipboard', 'git checkout -b feature/palette', 'Copied 14 minutes ago', 'terminal', ['clipboard', 'copied', 'paste']),
-  sample('clipboard', 'Meeting at 3pm, bring the roadmap', 'Copied 1 hour ago', 'type', ['clipboard', 'copied', 'paste']),
-  sample('clipboard', '#f4cf86', 'Copied yesterday', 'palette', ['clipboard', 'copied', 'paste']),
+  sample('clipboard', 'https://nvm.fyi/pricing', 'Copied 2 minutes ago', 'link', copied),
+  sample('clipboard', 'git checkout -b feature/palette', 'Copied 14 minutes ago', 'terminal', copied),
+  sample('clipboard', 'Meeting at 3pm, bring the roadmap', 'Copied 1 hour ago', 'type', copied),
+  sample('clipboard', '#f4cf86', 'Copied yesterday', 'palette', copied),
 ];
 
+const voiceKeywords = ['dictate', 'dictation', 'voice', 'speech', 'transcribe'];
 const voice: PaletteItem[] = [
-  sample('command', 'Start Dictation', 'Speak and Nevermind pastes the transcript', 'mic', ['dictate', 'voice', 'speech', 'transcribe']),
-  sample('command', 'Dictation History', 'Browse past transcripts', 'history', ['dictate', 'voice', 'speech']),
+  sample('command', 'Dictate', 'Start or stop cloud voice dictation', 'mic', { keywords: voiceKeywords }),
+  sample('command', 'Dictation History', 'Browse and copy previous dictations', 'history', {
+    keywords: voiceKeywords,
+    primary: 'Open Dictation History',
+  }),
 ];
 
 const downloadNevermind = sample(
@@ -66,17 +79,15 @@ const downloadNevermind = sample(
   'Download Nevermind',
   'Get the app for macOS, Windows, and Linux',
   'download',
-  ['install', 'get', 'app', 'releases'],
-  undefined,
-  RELEASES_URL,
+  { keywords: ['install', 'get', 'app', 'releases'], tone: 'green', url: RELEASES_URL },
 );
 
 const clipboardHistory = sample(
   'command',
   'Clipboard History',
-  'Search everything you copied',
+  'Browse and paste what you copied',
   'clipboard',
-  ['clipboard', 'copied', 'paste'],
+  { keywords: ['clipboard', 'copied', 'paste'], tone: 'blue', primary: 'Open Clipboard History' },
 );
 
 /** Empty-query order mirrors a fresh palette: apps first, then commands. */

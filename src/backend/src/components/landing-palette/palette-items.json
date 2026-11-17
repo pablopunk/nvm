@@ -2,8 +2,10 @@
   {
     "id": "builtin:AI Chats",
     "title": "AI Chats",
-    "subtitle": "",
+    "subtitle": "3 AI chats",
     "icon": "sparkles",
+    "tone": "purple",
+    "primary": "Open AI Chats",
     "aliases": [],
     "kind": "command"
   },
@@ -12,6 +14,8 @@
     "title": "Force Quit Apps",
     "subtitle": "Force quit running applications",
     "icon": "stop-circle",
+    "tone": "red",
+    "primary": "Open Force Quit Apps",
     "aliases": [
       "force quit",
       "kill",
@@ -24,14 +28,17 @@
     "title": "Background Tasks",
     "subtitle": "Inspect and run host-managed background jobs",
     "icon": "activity",
+    "primary": "Open Background Tasks",
     "aliases": [],
     "kind": "command"
   },
   {
     "id": "builtin:Emoji & Symbols",
     "title": "Emoji & Symbols",
-    "subtitle": "Search and paste emoji, symbols, and Unicode characters",
+    "subtitle": "Search and paste emoji",
     "icon": "smile-plus",
+    "tone": "yellow",
+    "primary": "Open Emoji & Symbols",
     "aliases": [
       "emoji picker",
       "symbol picker",
@@ -44,7 +51,8 @@
     "id": "builtin:Toggle Floating Notes",
     "title": "Toggle Floating Notes",
     "subtitle": "Show or hide your floating Markdown notes",
-    "icon": "notebook-pen",
+    "icon": "sticky-note",
+    "tone": "yellow",
     "aliases": [
       "notes",
       "note"
@@ -52,10 +60,12 @@
     "kind": "command"
   },
   {
-    "id": "builtin:Search Floating Notes",
-    "title": "Search Floating Notes",
-    "subtitle": "Browse and delete your notes",
-    "icon": "list",
+    "id": "builtin:Floating Notes",
+    "title": "Floating Notes",
+    "subtitle": "Jot something down",
+    "icon": "sticky-note",
+    "tone": "yellow",
+    "primary": "Open Floating Notes",
     "aliases": [
       "notes",
       "all notes"
@@ -66,7 +76,8 @@
     "id": "builtin:New Floating Note",
     "title": "New Floating Note",
     "subtitle": "Start a fresh local Markdown note",
-    "icon": "square-pen",
+    "icon": "sticky-note",
+    "tone": "yellow",
     "aliases": [
       "new note"
     ],
@@ -77,6 +88,7 @@
     "title": "Keyboard Shortcuts",
     "subtitle": "View, change, or remove global shortcuts",
     "icon": "keyboard",
+    "primary": "Open Keyboard Shortcuts",
     "aliases": [],
     "kind": "command"
   },
@@ -85,6 +97,7 @@
     "title": "Settings",
     "subtitle": "Configure Nevermind",
     "icon": "settings",
+    "primary": "Open Settings",
     "aliases": [],
     "kind": "command"
   },
@@ -108,47 +121,55 @@
     "id": "builtin:Restart Computer",
     "title": "Restart Computer",
     "subtitle": "Restart this computer",
-    "icon": "restart",
+    "icon": "rotate-ccw",
+    "tone": "orange",
     "aliases": [],
     "kind": "command"
   },
   {
     "id": "builtin:Quit Nevermind",
     "title": "Quit Nevermind",
-    "subtitle": "Close the app",
-    "icon": "power",
+    "subtitle": "",
+    "icon": "x",
+    "tone": "red",
     "aliases": [],
     "kind": "command"
   },
   {
-    "id": "builtin:Open Downloads",
-    "title": "Open Downloads",
+    "id": "builtin:Downloads",
+    "title": "Downloads",
     "subtitle": "~/Downloads",
     "icon": "folder",
+    "tone": "blue",
+    "primary": "Open Downloads",
     "aliases": [],
     "kind": "command"
   },
   {
-    "id": "builtin:Open Documents",
-    "title": "Open Documents",
+    "id": "builtin:Documents",
+    "title": "Documents",
     "subtitle": "~/Documents",
     "icon": "folder",
+    "tone": "blue",
+    "primary": "Open Documents",
     "aliases": [],
     "kind": "command"
   },
   {
-    "id": "builtin:Open Desktop",
-    "title": "Open Desktop",
+    "id": "builtin:Desktop",
+    "title": "Desktop",
     "subtitle": "~/Desktop",
     "icon": "folder",
+    "tone": "blue",
+    "primary": "Open Desktop",
     "aliases": [],
     "kind": "command"
   },
   {
     "id": "builtin:Check for Updates",
     "title": "Check for Updates",
-    "subtitle": "",
-    "icon": "restart",
+    "subtitle": "Look for a newer version now",
+    "icon": "rotate-ccw",
     "aliases": [],
     "kind": "command"
   }
