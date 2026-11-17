@@ -28,11 +28,11 @@ func pasteRig(t *testing.T) (servicesRig, *fake.Paster) {
 	return rig, set.Paster
 }
 
-// TestPasteFixtureTypesOnlyWhenTheKeyboardIsDeclared runs the fixture's typing probe in its child. The keyboard service
-// types through the paster when desktop.keyboard is declared, and refuses without it.
-func TestPasteFixtureTypesOnlyWhenTheKeyboardIsDeclared(t *testing.T) {
+// TestTypeFixtureTypesOnlyWhenTheKeyboardIsDeclared runs the typing probe in its child. The keyboard service types
+// through the paster when desktop.keyboard is declared, and refuses without it.
+func TestTypeFixtureTypesOnlyWhenTheKeyboardIsDeclared(t *testing.T) {
 	rig, paster := pasteRig(t)
-	declared := servicedRuntime(t, "acme.paste", rig, fixtureManifest("acme.paste", api.CapabilityDesktopClipboard, api.CapabilityDesktopKeyboard))
+	declared := servicedRuntime(t, "acme.type", rig, fixtureManifest("acme.type", api.CapabilityDesktopKeyboard))
 	if got := rowTitle(t, declared, "type"); got != "type sent=true" {
 		t.Fatalf("typing row = %q, want the keyboard to type", got)
 	}
@@ -40,7 +40,7 @@ func TestPasteFixtureTypesOnlyWhenTheKeyboardIsDeclared(t *testing.T) {
 		t.Fatalf("typed = %v, want the fixture text", typed)
 	}
 
-	undeclared := servicedRuntime(t, "acme.paste", rig, fixtureManifest("acme.paste"))
+	undeclared := servicedRuntime(t, "acme.type", rig, fixtureManifest("acme.type"))
 	if got := rowTitle(t, undeclared, "type"); got != "type sent=false" {
 		t.Fatalf("undeclared typing row = %q, want the keyboard refused", got)
 	}

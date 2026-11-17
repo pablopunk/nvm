@@ -120,3 +120,21 @@ func TestAnExtensionThatWorksEverywhereRunsOnLinux(t *testing.T) {
 		t.Fatalf("listing = %+v; want no platform limit", listing)
 	}
 }
+
+// The paste fixture drives the Linux rig's background paste journey, so it must stay free of macOS-only operations;
+// the typing probe lives in acme.type, which is macOS only.
+func TestThePasteFixtureRunsOnLinuxAndTheTypeFixtureIsMacOnly(t *testing.T) {
+	h := newHarnessOnOS(t, api.OSLinux)
+	for _, id := range []string{"acme.paste", "acme.type"} {
+		if err := h.m.Install(id, fixtureContents(t, id), true); err != nil {
+			t.Fatalf("Install %s: %v", id, err)
+		}
+	}
+	h.waitRunning("acme.paste")
+	if listing := h.listing("acme.paste"); listing.UnsupportedHere || listing.OnlyOn != "" {
+		t.Fatalf("paste fixture listing = %+v; want no platform limit", listing)
+	}
+	if listing := h.listing("acme.type"); !listing.UnsupportedHere {
+		t.Fatalf("type fixture listing = %+v; want macOS only", listing)
+	}
+}
