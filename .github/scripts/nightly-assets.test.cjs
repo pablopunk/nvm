@@ -78,6 +78,9 @@ function verify(files, { tag, publicKey, name = 'update-darwin-arm64.json' }) {
 
 test('the release holds exactly the Go packages, with or without deltas', () => {
   const names = expectedNightlyAssetNames(VERSION);
+  assert.ok(names.includes('update-darwin-arm64.json'));
+  assert.ok(!names.includes('update-darwin-amd64.json'));
+  assert.ok(!names.includes(`nevermind-next-${VERSION}-amd64.dmg`));
   assert.deepEqual(validateNightlyAssetSet(names, VERSION), names);
   validateNightlyAssetSet(
     [...names, `nevermind-next-2026.1110.1-to-${VERSION}-linux-amd64.delta`],

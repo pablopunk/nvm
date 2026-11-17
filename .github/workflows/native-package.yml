@@ -2,8 +2,8 @@ name: Native packages
 
 # Builds the Go app (src/native) into installable packages on each OS. Signing runs when the existing Apple or Windows
 # certificate secrets exist. Dispatched and called macOS builds are notarized when the Apple notary secrets exist; pull
-# request previews skip notarization for faster iteration. Without signing secrets packages are unsigned and the run
-# says so. Release flags (releaseBuild) and the signed update feed need release=true, from a dispatch or from the dev
+# request previews skip the DMG and notarization for faster iteration. Without signing secrets packages are unsigned
+# and the run says so. Release flags (releaseBuild) and the signed update feed need release=true, from a dispatch or from the dev
 # build (dev-build.yml), which calls this workflow for the version it allocated.
 
 on:
@@ -56,7 +56,8 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        include: ${{ fromJSON(inputs.fast && '[{"arch":"arm64","runner":"macos-latest"}]' || '[{"arch":"arm64","runner":"macos-latest"},{"arch":"amd64","runner":"macos-15-intel"}]') }}
+        include:
+          - { arch: arm64, runner: macos-latest }
     env:
       RELEASE: ${{ inputs.release || false }}
       VERSION: ${{ inputs.version || '' }}
@@ -90,13 +91,12 @@ jobs:
           echo "sign=$sign" >> "$GITHUB_OUTPUT"
           echo "notarize=$notarize" >> "$GITHUB_OUTPUT"
 
-      - name: Restore the natives of a fast build
+      - name: Restore cached Mac natives
         id: natives
-        if: inputs.fast
         uses: actions/cache@v4
         with:
           path: src/native/resources/darwin-${{ matrix.arch }}
-          key: natives-darwin-${{ matrix.arch }}-${{ hashFiles('src/native/scripts/natives/**', 'src/native/sidecar/macos-helper/**', 'src/native/sidecar/pi-host/host.mjs', 'src/native/sidecar/pi-host/package-lock.json') }}
+          key: natives-v2-${{ runner.os }}-${{ runner.arch }}-${{ hashFiles('src/native/scripts/natives/**', 'src/native/sidecar/macos-helper/**', 'src/native/sidecar/pi-host/**') }}
 
       - name: Build the natives for this Mac
         if: steps.natives.outputs.cache-hit != 'true'
@@ -156,14 +156,6 @@ jobs:
           echo "NOTARY_PROFILE=nvm-notary" >> "$GITHUB_ENV"
           echo "NOTARY_KEYCHAIN=$SIGNING_KEYCHAIN" >> "$GITHUB_ENV"
 
-      # Keep stapler on HTTPS/TCP on the affected ephemeral Intel runners.
-      # https://github.com/actions/runner-images/issues/14924#issuecomment-6188826956
-      - name: Route Intel stapler traffic over HTTPS
-        if: matrix.arch == 'amd64' && steps.decide.outputs.notarize == 'true'
-        run: |
-          echo "block return out quick proto udp from any to any port 443" | sudo pfctl -f -
-          sudo pfctl -E
-
       - name: Stamp the package settings
         working-directory: src/native
         run: |
@@ -186,7 +178,7 @@ jobs:
         run: |
           set -uo pipefail
           for attempt in 1 2 3; do
-            go tool mygo build -platform "darwin/${{ matrix.arch }}" -sign "${SIGNING_IDENTITY:--}" ${{ inputs.fast && '-skip-dmg -skip-notarize' || '' }} 2>&1 | tee "$RUNNER_TEMP/build.log"
+            go tool mygo build -platform "darwin/${{ matrix.arch }}" -sign "${SIGNING_IDENTITY:--}" ${{ (inputs.fast || github.event_name == 'pull_request') && '-skip-dmg -skip-notarize' || '' }} 2>&1 | tee "$RUNNER_TEMP/build.log"
             status=${PIPESTATUS[0]}
             if [ "$status" -eq 0 ]; then exit 0; fi
             if ! grep -qi "timestamp" "$RUNNER_TEMP/build.log" || [ "$attempt" -eq 3 ]; then exit "$status"; fi
@@ -216,7 +208,6 @@ jobs:
           set -euo pipefail
           helper="dist/darwin-${{ matrix.arch }}/Nevermind Next.app/Contents/Resources/macos-selected-text"
           want=arm64
-          if [ "${{ matrix.arch }}" = amd64 ]; then want=x86_64; fi
           test -x "$helper" || { echo "The window helper is missing from the app bundle: $helper" >&2; exit 1; }
           lipo -archs "$helper" | grep -qx "$want" || { echo "The window helper is not a $want binary." >&2; exit 1; }
 
@@ -226,7 +217,6 @@ jobs:
           set -euo pipefail
           opus="dist/darwin-${{ matrix.arch }}/Nevermind Next.app/Contents/Resources/lib/libopus.dylib"
           want=arm64
-          if [ "${{ matrix.arch }}" = amd64 ]; then want=x86_64; fi
           test -f "$opus" || { echo "libopus is missing from the app bundle, so dictation cannot encode: $opus" >&2; exit 1; }
           lipo -archs "$opus" | grep -qx "$want" || { echo "libopus is not a $want binary." >&2; exit 1; }
           symbols="$(nm -gU "$opus")"
@@ -242,15 +232,19 @@ jobs:
             echo "macOS ${{ matrix.arch }}: no update feed. Set NATIVE_UPDATE_PUBLIC_KEY (variable), NATIVE_UPDATE_PRIVATE_KEY (secret) and dispatch a release run to publish one." >> "$GITHUB_STEP_SUMMARY"
           fi
 
-      - name: Zip the app of a fast build
-        if: inputs.fast
+      - name: Zip the preview app
+        if: inputs.fast || github.event_name == 'pull_request'
         working-directory: src/native/dist/darwin-${{ matrix.arch }}
         run: ditto -c -k --sequesterRsrc --keepParent "Nevermind Next.app" nevermind-next-fast.zip
 
       - name: Checksums
-        if: ${{ !inputs.fast }}
         working-directory: src/native/dist/darwin-${{ matrix.arch }}
-        run: shasum -a 256 ./*.dmg > SHA256SUMS
+        run: |
+          if [ "${{ inputs.fast || github.event_name == 'pull_request' }}" = true ]; then
+            shasum -a 256 ./*.zip > SHA256SUMS
+          else
+            shasum -a 256 ./*.dmg > SHA256SUMS
+          fi
 
       - name: Note the signing state
         run: |

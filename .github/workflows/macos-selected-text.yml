@@ -22,8 +22,7 @@ jobs:
     timeout-minutes: 10
     steps:
       - uses: actions/checkout@v4
-      - name: Compile both supported macOS architectures
+      - name: Compile for Apple Silicon
         working-directory: src/native
         run: |
           bash scripts/natives/build-macos-helper.sh arm64
-          bash scripts/natives/build-macos-helper.sh amd64

@@ -9,7 +9,6 @@ const crypto = require('node:crypto');
 // retargets them (retargetUpdaterMetadata) and leaves every other byte as built.
 const SLUG = 'nevermind-next';
 const UPDATE_TARGETS = [
-  'darwin-amd64',
   'darwin-arm64',
   'linux-amd64',
   'linux-arm64',
@@ -36,7 +35,6 @@ function expectedNightlyAssetNames(version) {
   requireReleaseVersion(version);
   return [
     `${SLUG}-${version}-arm64.dmg`,
-    `${SLUG}-${version}-amd64.dmg`,
     ...UPDATE_TARGETS.map((target) => updateArchiveName(version, target)),
     `${SLUG}_${version}_amd64.deb`,
     `${SLUG}_${version}_arm64.deb`,

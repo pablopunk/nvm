@@ -32,11 +32,6 @@ function writePackagingArtifacts(root, version, privateKey) {
       `nevermind-next-${version}-arm64.dmg`,
       'install.sh',
     ],
-    'native-macos-amd64': [
-      'darwin-amd64',
-      `nevermind-next-${version}-amd64.dmg`,
-      'install.sh',
-    ],
     'native-linux-amd64': [
       'linux-amd64',
       `nevermind-next_${version}_amd64.deb`,
