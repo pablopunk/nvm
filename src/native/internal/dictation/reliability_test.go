@@ -17,9 +17,9 @@ import (
 	"github.com/pablopunk/nvm/native/internal/platform/fake"
 )
 
-// transientENOTSUP is how a passing OS failure reaches the dictation: a raw errno that errors.Is matches to
+// errTransientENOTSUP is how a passing OS failure reaches the dictation: a raw errno that errors.Is matches to
 // platform.ErrUnsupported, which used to read as "not available on this system".
-var transientENOTSUP = fmt.Errorf("the microphone stream could not start: fork/exec helper: %w", syscall.ENOTSUP)
+var errTransientENOTSUP = fmt.Errorf("the microphone stream could not start: fork/exec helper: %w", syscall.ENOTSUP)
 
 // brokenMicrophone opens one stream that delivers samples and then fails with fault, and fails every later open with
 // fault, so the capture can never recover.
@@ -93,7 +93,7 @@ func TestAMidRecordingCaptureErrorKeepsTheAudioInHistoryWithRetry(t *testing.T) 
 func TestAStreamThatFailsMidRecordingIsReopenedAndKeepsEveryWord(t *testing.T) {
 	h := newHarness(t)
 	h.transcriber.texts = []string{"both halves"}
-	flaky := &reopeningMicrophone{Microphone: h.mic, first: &failingStream{samples: speech(0.5, 9000), fault: transientENOTSUP}}
+	flaky := &reopeningMicrophone{Microphone: h.mic, first: &failingStream{samples: speech(0.5, 9000), fault: errTransientENOTSUP}}
 	h.service.cfg.Microphone = flaky
 	h.mic.Queue(speech(0.5, 9000)...)
 	if err := h.service.Start(""); err != nil {
@@ -147,7 +147,7 @@ func TestATransientStartFailureIsRetriedThenSucceeds(t *testing.T) {
 		return nil
 	}
 	h.service.cfg.Warn = func(event string, _ map[string]any) { warned = append(warned, event) }
-	h.mic.FailNext(fake.OpMicrophoneOpen, transientENOTSUP)
+	h.mic.FailNext(fake.OpMicrophoneOpen, errTransientENOTSUP)
 	h.mic.FailNext(fake.OpMicrophoneOpen, platform.ErrNotFound)
 	h.mic.FailNext(fake.OpMicrophoneOpen, errors.New("the microphone stopped: error: AVFoundation -11800"))
 	h.transcriber.texts = []string{"after three hiccups"}
@@ -169,7 +169,7 @@ func TestATransientStartFailureIsRetriedThenSucceeds(t *testing.T) {
 func TestAStartThatKeepsFailingTransientlyGivesUpAfterTheAttempts(t *testing.T) {
 	h := newHarness(t)
 	for range defaultRetryAttempts {
-		h.mic.FailNext(fake.OpMicrophoneOpen, transientENOTSUP)
+		h.mic.FailNext(fake.OpMicrophoneOpen, errTransientENOTSUP)
 	}
 	err := h.service.Start("")
 	if !errors.Is(err, syscall.ENOTSUP) {
@@ -331,7 +331,7 @@ func TestFailureClassification(t *testing.T) {
 		}
 	}
 	transient := []error{
-		transientENOTSUP, platform.ErrNotFound, ErrNotReady, errors.New("unknown"),
+		errTransientENOTSUP, platform.ErrNotFound, ErrNotReady, errors.New("unknown"),
 		backendFailure(backend.KindOffline), backendFailure(backend.KindTimeout), backendFailure(backend.KindServer),
 		backendFailure(backend.KindRateLimited), backendFailure(backend.KindBadResponse),
 	}
@@ -343,7 +343,7 @@ func TestFailureClassification(t *testing.T) {
 	if got := FailureMessage(platform.ErrUnsupported); got != "Dictation is not available on this system yet." {
 		t.Errorf("FailureMessage(ErrUnsupported) = %q", got)
 	}
-	if got := FailureMessage(transientENOTSUP); strings.Contains(got, "not available on this system") {
+	if got := FailureMessage(errTransientENOTSUP); strings.Contains(got, "not available on this system") {
 		t.Errorf("FailureMessage(ENOTSUP) = %q, want a passing failure", got)
 	}
 }
