@@ -181,7 +181,18 @@ jobs:
         env:
           MYGO_UPDATER_PRIVATE_KEY: ${{ secrets.NATIVE_UPDATE_PRIVATE_KEY }}
           GH_TOKEN: ${{ github.token }}
-        run: go tool mygo build -platform "darwin/${{ matrix.arch }}" -sign "${SIGNING_IDENTITY:--}" ${{ inputs.fast && '-skip-dmg -skip-notarize' || '' }}
+        # Apple's timestamp server sometimes does not answer codesign ("A timestamp was expected but was not found"),
+        # so a build whose signing hit that is tried again; any other failure stops at once.
+        run: |
+          set -uo pipefail
+          for attempt in 1 2 3; do
+            go tool mygo build -platform "darwin/${{ matrix.arch }}" -sign "${SIGNING_IDENTITY:--}" ${{ inputs.fast && '-skip-dmg -skip-notarize' || '' }} 2>&1 | tee "$RUNNER_TEMP/build.log"
+            status=${PIPESTATUS[0]}
+            if [ "$status" -eq 0 ]; then exit 0; fi
+            if ! grep -q "timestamp was expected" "$RUNNER_TEMP/build.log" || [ "$attempt" -eq 3 ]; then exit "$status"; fi
+            echo "::warning::Apple's timestamp server did not answer; building again (attempt $((attempt + 1)) of 3)"
+            sleep 30
+          done
 
       - name: Verify the link flags and the signature
         working-directory: src/native
