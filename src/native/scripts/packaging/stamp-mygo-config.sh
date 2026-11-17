@@ -2,12 +2,13 @@
 # Writes one packaging run's settings into mygo.json. CI runs it on a fresh checkout, so nothing secret is committed.
 # Reads VERSION (blank keeps the committed version), NOTARY_PROFILE and NOTARY_KEYCHAIN (both set to notarize) and
 # WINDOWS_CERTIFICATE_FILE (a .pfx path to sign Windows builds). A release run (RELEASE=true) with UPDATE_PUBLIC_KEY
-# and UPDATE_REPOSITORY also writes the updates feed: the repository's native-v releases, signed with the private key
+# and UPDATE_REPOSITORY also writes the updates feed: the repository's latest release, signed with the private key
 # that MYGO_UPDATER_PRIVATE_KEY gives mygo build.
 set -euo pipefail
 
 cd "$(dirname "$0")/../.."
-update_tag_prefix=native-v
+# Releases are tagged v<version> as in 1.x: stable is the repository's latest release, which MyGo's feed reads.
+update_tag_prefix=v
 update_key=""
 if [ "${RELEASE:-false}" = true ]; then
   update_key="${UPDATE_PUBLIC_KEY:-}"

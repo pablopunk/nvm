@@ -17,7 +17,7 @@ type blockingUpdateEngine struct {
 }
 
 func (e *blockingUpdateEngine) Enabled() bool                                     { return true }
-func (e *blockingUpdateEngine) SetPrereleases(bool)                               {}
+func (e *blockingUpdateEngine) SetChannel(string)                                 {}
 func (e *blockingUpdateEngine) Relaunch()                                         {}
 func (e *blockingUpdateEngine) Install(context.Context, func(int64, int64)) error { return nil }
 func (e *blockingUpdateEngine) Check(ctx context.Context) (update.Offer, bool, error) {

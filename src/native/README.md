@@ -113,7 +113,6 @@ docs/             design notes
 |---|---|
 | [PLAN.md](PLAN.md) | Work packages, validation ladder, UX protocols, milestones, readiness |
 | [docs/cutover.md](docs/cutover.md) | Moving users from 1.x to 2.0: install, scheme, data, backend, channels, rollback, owner decisions |
-| [docs/release-checklist.md](docs/release-checklist.md) | Ordered steps from a version bump to a published release |
 | [docs/release.md](docs/release.md) | The release run, feeds, update keys, rollback |
 | [docs/packaging.md](docs/packaging.md) | What each package contains, signing and notarization, release flags |
 | [docs/extension-api.md](docs/extension-api.md) | Extension API design (WP3.1) |

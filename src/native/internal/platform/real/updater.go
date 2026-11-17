@@ -28,8 +28,17 @@ func (u *selfUpdater) Enabled() bool {
 	return mygo.Updater.Enabled()
 }
 
-func (u *selfUpdater) SetPrereleases(on bool) {
-	mygo.Updater.SetPrereleases(on)
+// SetChannel points the checks at the channel's releases. Stable reads MyGo's feed, the repository's latest release;
+// Nightly and Dev read the release pointers (channelSource), so a nightly never offers a dev build.
+func (u *selfUpdater) SetChannel(channel string) {
+	source := newChannelSource(channel)
+	if source == nil {
+		mygo.Updater.SetSource(nil)
+		mygo.Updater.SetPrereleases(channel == updateChannelNightly || channel == updateChannelDev)
+		return
+	}
+	mygo.Updater.SetPrereleases(false)
+	mygo.Updater.SetSource(source)
 }
 
 func (u *selfUpdater) Check(ctx context.Context) (platform.Release, bool, error) {

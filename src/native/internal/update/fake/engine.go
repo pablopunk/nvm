@@ -26,14 +26,14 @@ type Install struct {
 // Engine is a scripted update.Engine. Checks answer in order and the last one repeats; installs run in order, and
 // once they are used up an install succeeds. It records what the service asked of it.
 type Engine struct {
-	mu          sync.Mutex
-	enabled     bool
-	checks      []Check
-	installs    []Install
-	prereleases bool
-	checkCount  int
-	installCnt  int
-	relaunches  int
+	mu         sync.Mutex
+	enabled    bool
+	checks     []Check
+	installs   []Install
+	channel    string
+	checkCount int
+	installCnt int
+	relaunches int
 }
 
 var _ update.Engine = (*Engine)(nil)
@@ -55,11 +55,11 @@ func (e *Engine) Enabled() bool {
 	return e.enabled
 }
 
-// SetPrereleases records the channel's prerelease choice.
-func (e *Engine) SetPrereleases(on bool) {
+// SetChannel records the channel the checks follow.
+func (e *Engine) SetChannel(channel string) {
 	e.mu.Lock()
 	defer e.mu.Unlock()
-	e.prereleases = on
+	e.channel = channel
 }
 
 // Check counts the check and returns the next scripted answer.
@@ -104,11 +104,11 @@ func (e *Engine) Relaunch() {
 	e.relaunches++
 }
 
-// Prereleases reports the last SetPrereleases choice.
+// Prereleases reports whether the last channel set offers prereleases.
 func (e *Engine) Prereleases() bool {
 	e.mu.Lock()
 	defer e.mu.Unlock()
-	return e.prereleases
+	return e.channel == "nightly" || e.channel == "dev"
 }
 
 // Checks reports how many checks ran.

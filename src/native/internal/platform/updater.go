@@ -20,8 +20,10 @@ type Release struct {
 type SelfUpdater interface {
 	// Enabled reports whether this build can update itself at all.
 	Enabled() bool
-	// SetPrereleases chooses whether Check offers prerelease versions.
-	SetPrereleases(on bool)
+	// SetChannel chooses the release line Check follows, by the update channel's name: "stable" (the repository's
+	// latest release), "nightly" (the newest of the nightly pointer's releases and the latest release) or "dev" (the
+	// dev pointer's releases), as 1.x does.
+	SetChannel(channel string)
 	// Check asks the feed for a version newer than the running one. found is false when the app is up to date.
 	Check(ctx context.Context) (release Release, found bool, err error)
 	// Install downloads and verifies the release of the last Check, then replaces the app with it. progress receives

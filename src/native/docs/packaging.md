@@ -79,11 +79,11 @@ SmartScreen warnings.
 
 Release runs (`release` set to true) with the repository variable
 `NATIVE_UPDATE_PUBLIC_KEY` stamp an `updates` block into `mygo.json` for the build:
-the public key and the repository, with the `native-v` release prefix. `mygo build`
-signs the update files with `NATIVE_UPDATE_PRIVATE_KEY`, and each release job uploads
-the manifests and archives beside the installers. `verify-updates.sh` checks that the
-public key is linked into the executable. Publishing and owner steps are in
-[release.md](release.md#updates).
+the public key and the repository, with releases tagged `v<version>` as in 1.x.
+`mygo build` signs the update files with `NATIVE_UPDATE_PRIVATE_KEY`, and each job
+uploads the manifests and archives beside the installers. `verify-updates.sh` checks
+that the public key is linked into the executable. The dev build calls this workflow
+and publishes the result; see [release.md](release.md).
 
 ## Checks in the workflow
 

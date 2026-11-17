@@ -20,7 +20,7 @@ can see:
 | Local data | the Electron user-data folder; `~/.config/nevermind` for `config.json` and `extensions/` | `~/.config/nevermind` (shared, 1.x format) for `config.json` and `extensions/`; machine-local state in the OS user-data folder: `~/Library/Application Support/Nevermind Next`, `$XDG_DATA_HOME` or `~/.local/share/nevermind-next`, `%APPDATA%\Nevermind Next` | `portable/`, `platform/folders`, `app/store.go`, `extension-paths.ts` |
 | Keychain service | 1.x entries | `nvm-native` | `auth/vault.go` |
 | URL scheme | `nvm` | `nvm` today (collision, section 2) | `deep-link.ts`, `mygo.json` |
-| Update feed | GitHub releases `v...`, read through `release-pointers` and GitHub's latest stable | GitHub releases `native-v...` (never "latest") | `update-channels.md`, `release.md` |
+| Update feed | GitHub releases `v...`, read through `release-pointers` and GitHub's latest stable | the same releases and pointers as 1.x | `release.md` |
 | Backend identity | `X-Nevermind-Client: desktop`, version `YYYY.MMDD.N` | same name, version `2.0.0-next.N` | `nevermind-api.ts`, `identity.go` |
 
 Things to settle before both apps run on one machine:
@@ -33,8 +33,8 @@ Things to settle before both apps run on one machine:
 - **macOS privacy grants** (Accessibility, Apple Events, microphone, camera) belong to the bundle identifier. A
   user grants them again for 2.0.
 - **Uninstall.** Removing one app never removes the other's data. Say so in the install notes.
-- **Updates never cross.** 1.x's updater cannot offer 2.0 (different bundle identifier), and 2.0's updater reads only
-  `native-v` releases. Users who want 2.0 install it by hand (section 5).
+- **Updates do not carry 1.x to 2.0.** 2.0 releases use 1.x's tags but hold only MyGo manifests, so a 1.x app finds
+  no update it can read. Users move to 2.0 by installing it by hand once.
 
 ## 2. Identity and URL scheme
 
@@ -151,29 +151,8 @@ and a deploy that passes the pricing gate in `docs/backend-api-compatibility.md`
 
 ## 5. Release channels and order
 
-Today:
-
-- **1.x** has hourly dev builds (`v<version>-dev`), nightly promotion (`-nightly`), and stable promotion (`v<version>`,
-  GitHub's "latest"). Promotion workflows: `promote-nightly.yml`, `promote-stable.yml`, `nightly-release.yml`.
-- **2.0** has `native.yml` (checks), `native-rig.yml` (L4 journeys) and `native-package.yml`, which is manual and
-  publishes nothing. Release steps are in `release.md`. The app's updater has two channels, stable and nightly, that
-  read `native-v` releases. **There is no 2.0 promotion workflow, no dev pointer, and no dry-run of promote or
-  rollback.** These are missing (WP5.5 acceptance).
-
-Order (each step must pass the checklist in `release-checklist.md`):
-
-1. **Nightly (internal).** `native-v2.0.0-next.N`, a prerelease that is not "latest". The owner dogfoods it as the only
-   launcher for five working days (PLAN section 3.3).
-2. **Beta (volunteers).** Two weeks of `native-v2.0.0-beta.N` prereleases. The nightly channel offers prereleases, so
-   testers stay on that channel. No new channel is needed for beta, but the owner must confirm that testers opt into
-   nightly. Crash and budget telemetry stays within the privacy rules.
-3. **Stable.** `native-v2.0.0`, published with `--latest=false`. Electron stays GitHub's "latest" until cutover, so
-   1.x discovery is unaffected.
-4. **Cutover (a separate decision).** Point the website, the backend's default `NEVERMIND_DESKTOP_UPDATE_URL` (only
-   if the 1.x line is retired) and the download pages at 2.0. This is a backend or web change, not a client release.
-
-Version rules: 2.0 uses SemVer prereleases in `mygo.json`; 1.x keeps date-stamped versions. The two lines are
-compared only by the backend, and section 4 keeps that comparison from crossing lines.
+2.0 replaces 1.x in its release flow: the hourly dev build, the nightly promotion and the stable promotion run as in
+1.x and package the Go app. Versions are 1.x's `YYYY.MMDD.N`. See `release.md`.
 
 ## 6. Dogfood gate and parity review (PLAN section 3)
 

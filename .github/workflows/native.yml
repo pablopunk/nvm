@@ -6,12 +6,10 @@ on:
       - 'src/native/**'
       - 'src/backend/src/pages/api/**'
       - '.github/workflows/native.yml'
+  # Every commit on main runs, because the dev, nightly and stable promotions require this workflow to pass on the
+  # commit they release (CI_WORKFLOWS in .github/scripts/nightly-release-gates.cjs).
   push:
     branches: [main]
-    paths:
-      - 'src/native/**'
-      - 'src/backend/src/pages/api/**'
-      - '.github/workflows/native.yml'
   workflow_dispatch:
     inputs:
       refresh_indicator_assets:

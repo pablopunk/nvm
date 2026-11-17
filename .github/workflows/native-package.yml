@@ -1,15 +1,30 @@
 name: Native packages
 
 # Builds the Go app (src/native) into installable packages on each OS. Signing runs when the existing Apple or Windows
-# certificate secrets exist. Dispatched macOS builds are notarized when the Apple notary secrets exist; pull request
-# previews skip notarization for faster iteration. Without signing secrets packages are unsigned and the run says so. Release flags (releaseBuild) need
-# workflow_dispatch with release=true.
+# certificate secrets exist. Dispatched and called macOS builds are notarized when the Apple notary secrets exist; pull
+# request previews skip notarization for faster iteration. Without signing secrets packages are unsigned and the run
+# says so. Release flags (releaseBuild) and the signed update feed need release=true, from a dispatch or from the dev
+# build (dev-build.yml), which calls this workflow for the version it allocated.
 
 on:
   pull_request:
     paths:
       - 'src/native/**'
       - '.github/workflows/native-package.yml'
+  workflow_call:
+    inputs:
+      version:
+        description: Version stamped into the packages
+        required: true
+        type: string
+      release:
+        description: Link the release flags and the update feed into these builds
+        type: boolean
+        default: false
+      source_sha:
+        description: Commit to build
+        required: true
+        type: string
   workflow_dispatch:
     inputs:
       version:
@@ -29,7 +44,7 @@ permissions:
   contents: read
 
 concurrency:
-  group: native-package-${{ github.ref }}
+  group: native-package-${{ github.workflow }}-${{ github.ref }}
   cancel-in-progress: ${{ github.event_name == 'pull_request' }}
 
 jobs:
@@ -43,13 +58,16 @@ jobs:
       matrix:
         include: ${{ fromJSON(inputs.fast && '[{"arch":"arm64","runner":"macos-latest"}]' || '[{"arch":"arm64","runner":"macos-latest"},{"arch":"amd64","runner":"macos-15-intel"}]') }}
     env:
-      RELEASE: ${{ github.event_name == 'workflow_dispatch' && inputs.release || false }}
-      VERSION: ${{ github.event_name == 'workflow_dispatch' && inputs.version || '' }}
+      RELEASE: ${{ inputs.release || false }}
+      VERSION: ${{ inputs.version || '' }}
+      NEVERMIND_SOURCE_COMMIT: ${{ inputs.source_sha || '' }}
       UPDATE_PUBLIC_KEY: ${{ vars.NATIVE_UPDATE_PUBLIC_KEY }}
       UPDATE_REPOSITORY: ${{ github.repository }}
     steps:
       - name: Checkout
         uses: actions/checkout@v4
+        with:
+          ref: ${{ inputs.source_sha || github.sha }}
 
       - name: Setup Go
         uses: actions/setup-go@v5
@@ -68,7 +86,7 @@ jobs:
           sign=false
           notarize=false
           if [ "$HAS_CERTIFICATE" = true ]; then sign=true; fi
-          if [ "$sign" = true ] && [ "$HAS_NOTARY" = true ] && [ "$EVENT_NAME" = workflow_dispatch ] && [ "$FAST" != true ]; then notarize=true; fi
+          if [ "$sign" = true ] && [ "$HAS_NOTARY" = true ] && [ "$EVENT_NAME" != pull_request ] && [ "$FAST" != true ]; then notarize=true; fi
           echo "sign=$sign" >> "$GITHUB_OUTPUT"
           echo "notarize=$notarize" >> "$GITHUB_OUTPUT"
 
@@ -241,6 +259,8 @@ jobs:
             src/native/dist/darwin-${{ matrix.arch }}/update-*.json
             src/native/dist/darwin-${{ matrix.arch }}/*.tar.gz
             src/native/dist/darwin-${{ matrix.arch }}/*.delta
+            src/native/dist/darwin-${{ matrix.arch }}/install.sh
+            src/native/dist/darwin-${{ matrix.arch }}/SHA256SUMS
           if-no-files-found: error
           retention-days: 14
 
@@ -256,13 +276,16 @@ jobs:
           - { arch: amd64, runner: ubuntu-latest }
           - { arch: arm64, runner: ubuntu-24.04-arm }
     env:
-      RELEASE: ${{ github.event_name == 'workflow_dispatch' && inputs.release || false }}
-      VERSION: ${{ github.event_name == 'workflow_dispatch' && inputs.version || '' }}
+      RELEASE: ${{ inputs.release || false }}
+      VERSION: ${{ inputs.version || '' }}
+      NEVERMIND_SOURCE_COMMIT: ${{ inputs.source_sha || '' }}
       UPDATE_PUBLIC_KEY: ${{ vars.NATIVE_UPDATE_PUBLIC_KEY }}
       UPDATE_REPOSITORY: ${{ github.repository }}
     steps:
       - name: Checkout
         uses: actions/checkout@v4
+        with:
+          ref: ${{ inputs.source_sha || github.sha }}
 
       - name: Setup Go
         uses: actions/setup-go@v5
@@ -325,7 +348,13 @@ jobs:
         uses: actions/upload-artifact@v4
         with:
           name: native-linux-${{ matrix.arch }}
-          path: src/native/dist/linux-${{ matrix.arch }}/*
+          path: |
+            src/native/dist/linux-${{ matrix.arch }}/*.tar.gz
+            src/native/dist/linux-${{ matrix.arch }}/*.deb
+            src/native/dist/linux-${{ matrix.arch }}/update-*.json
+            src/native/dist/linux-${{ matrix.arch }}/*.delta
+            src/native/dist/linux-${{ matrix.arch }}/install.sh
+            src/native/dist/linux-${{ matrix.arch }}/SHA256SUMS
           if-no-files-found: error
           retention-days: 14
 
@@ -335,13 +364,16 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 45
     env:
-      RELEASE: ${{ github.event_name == 'workflow_dispatch' && inputs.release || false }}
-      VERSION: ${{ github.event_name == 'workflow_dispatch' && inputs.version || '' }}
+      RELEASE: ${{ inputs.release || false }}
+      VERSION: ${{ inputs.version || '' }}
+      NEVERMIND_SOURCE_COMMIT: ${{ inputs.source_sha || '' }}
       UPDATE_PUBLIC_KEY: ${{ vars.NATIVE_UPDATE_PUBLIC_KEY }}
       UPDATE_REPOSITORY: ${{ github.repository }}
     steps:
       - name: Checkout
         uses: actions/checkout@v4
+        with:
+          ref: ${{ inputs.source_sha || github.sha }}
 
       - name: Setup Go
         uses: actions/setup-go@v5
@@ -425,6 +457,12 @@ jobs:
         uses: actions/upload-artifact@v4
         with:
           name: native-windows-amd64
-          path: src/native/dist/windows-amd64/*
+          path: |
+            src/native/dist/windows-amd64/*-setup-*.exe
+            src/native/dist/windows-amd64/*.tar.gz
+            src/native/dist/windows-amd64/update-*.json
+            src/native/dist/windows-amd64/*.delta
+            src/native/dist/windows-amd64/install.ps1
+            src/native/dist/windows-amd64/SHA256SUMS
           if-no-files-found: error
           retention-days: 14

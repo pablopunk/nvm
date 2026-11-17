@@ -44,7 +44,7 @@ func NewService(o Options) *Service {
 	if o.Channels != nil {
 		channel = o.Channels.Channel()
 	}
-	o.Engine.SetPrereleases(channel.Prereleases())
+	o.Engine.SetChannel(string(channel))
 	return &Service{
 		engine:   o.Engine,
 		clock:    o.Clock,
@@ -136,7 +136,7 @@ func (s *Service) SetChannel(channel Channel) error {
 	s.state = State{Status: StatusIdle, CurrentVersion: s.state.CurrentVersion}
 	state := s.state
 	s.mu.Unlock()
-	s.engine.SetPrereleases(channel.Prereleases())
+	s.engine.SetChannel(string(channel))
 	s.notify(state)
 	if s.channels != nil {
 		return s.channels.SetChannel(channel)

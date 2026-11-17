@@ -21,5 +21,13 @@ if [ -n "$source_commit" ]; then
 fi
 if [ "${RELEASE:-false}" = true ]; then
   flags="$flags -X $package.releaseBuild=true"
+  # The Nightly and Dev update channels find their releases through this repository's release pointers.
+  if [ -n "${UPDATE_REPOSITORY:-}" ]; then
+    if ! [[ "$UPDATE_REPOSITORY" =~ ^[A-Za-z0-9_.-]+/[A-Za-z0-9_.-]+$ ]]; then
+      echo "invalid update repository: expected owner/name" >&2
+      exit 1
+    fi
+    flags="$flags -X github.com/pablopunk/nvm/native/internal/platform/real.updateRepository=$UPDATE_REPOSITORY"
+  fi
 fi
 printf '%s\n' "$flags"
