@@ -12,7 +12,7 @@
 
 
 <p align="center">
-  <img src="src/backend/public/videos/nevermind-demo-v2.gif" alt="Nevermind command palette demo" width="640" />
+  <a href="src/backend/public/videos/nevermind-demo-v3.mp4"><img src="src/backend/public/videos/nevermind-demo-v3.jpg" alt="Nevermind command palette demo" width="640" /></a>
 </p>
 
 > [!IMPORTANT]
