@@ -61,5 +61,11 @@ while IFS= read -r dir; do
     *) rm -rf "$dir" ;;
   esac
 done < <(find "$out/node_modules" -type d -path '*/prebuilds/*' -prune)
+# Prebuilt native modules can ship already signed by their authors without a secure timestamp, and codesign then fails to
+# re-sign them for the app ("A timestamp was expected but was not found"). Strip those signatures so the app's own
+# signature covers them.
+if [ "$goos" = darwin ]; then
+  find "$out/node_modules" -type f \( -name '*.node' -o -name '*.dylib' \) -exec codesign --remove-signature {} \; 2>/dev/null || true
+fi
 rm -f "$out/package.json" "$out/package-lock.json"
 echo "pi host: $out ($(du -sh "$out" | cut -f1))"

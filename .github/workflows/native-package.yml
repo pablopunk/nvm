@@ -189,7 +189,7 @@ jobs:
             go tool mygo build -platform "darwin/${{ matrix.arch }}" -sign "${SIGNING_IDENTITY:--}" ${{ inputs.fast && '-skip-dmg -skip-notarize' || '' }} 2>&1 | tee "$RUNNER_TEMP/build.log"
             status=${PIPESTATUS[0]}
             if [ "$status" -eq 0 ]; then exit 0; fi
-            if ! grep -q "timestamp was expected" "$RUNNER_TEMP/build.log" || [ "$attempt" -eq 3 ]; then exit "$status"; fi
+            if ! grep -qi "timestamp" "$RUNNER_TEMP/build.log" || [ "$attempt" -eq 3 ]; then exit "$status"; fi
             echo "::warning::Apple's timestamp server did not answer; building again (attempt $((attempt + 1)) of 3)"
             sleep 30
           done
