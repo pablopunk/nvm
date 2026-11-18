@@ -9,7 +9,7 @@ import (
 
 // needsReadiness reports whether the device has to deliver sound before the dictation counts as started. The device
 // list is read under the retry policy; a list that still cannot be read is logged and the start goes on without the
-// wait.
+// Bluetooth-specific wait. All devices still wait for a captured frame.
 func (s *Service) needsReadiness(ctx context.Context, deviceID string) bool {
 	var devices []platform.MicrophoneDevice
 	err := s.cfg.Retry.do(ctx, func(int) error {

@@ -109,8 +109,8 @@ func (s *Service) Snapshot() Snapshot {
 }
 
 // Start prepares the backend, opens deviceID (or the default device when it is "") and starts capturing. It returns
-// once the stream is open, so a missing or refused microphone is reported here and not later. Opening is retried under
-// the retry policy while it fails for a passing reason. A Bluetooth microphone also has to start delivering sound first
+// after capture receives a frame, so a missing or refused microphone is reported here and not later. Opening is retried
+// under the retry policy while it fails for a passing reason. A Bluetooth microphone also has to start delivering sound first
 // (ErrNotReady when it does not), so its first words are not lost. A Cancel while the microphone is still opening ends
 // the start with ErrCancelled, and the stream that opened late is closed.
 func (s *Service) Start(deviceID string) error {

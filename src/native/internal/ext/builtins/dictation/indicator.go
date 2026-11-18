@@ -10,8 +10,7 @@ import (
 // IndicatorID identifies the dictation indicator.
 const IndicatorID = "dictation"
 
-// Indicator timings: a microphone that takes longer than this to open shows that it is waiting, and the terminal states
-// stay on screen long enough to read.
+// Terminal indicators stay on screen long enough to read.
 const (
 	noSpeechDuration = 2200 * time.Millisecond
 	errorDuration    = 4000 * time.Millisecond
