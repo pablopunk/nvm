@@ -184,3 +184,33 @@ func TestNewCatalogPassSupersedesOlderPass(t *testing.T) {
 		t.Fatalf("superseded pass replaced catalog: %q", got)
 	}
 }
+
+func TestCatalogReadersSeeOldOrCompleteRefresh(t *testing.T) {
+	var c rootRowCache
+	fillRootCache(&c, "a", "b")
+	c.rows["a"] = manager.SearchResult{ExtensionID: "a", Title: "old"}
+	c.rows["b"] = manager.SearchResult{ExtensionID: "b", Title: "old"}
+	_, epoch := c.takeScope()
+	stageA := make(chan struct{})
+	stageB := make(chan struct{})
+	done := make(chan struct{})
+	go func() {
+		defer close(done)
+		answers := map[string]manager.SearchResult{"a": {ExtensionID: "a", Title: "new"}}
+		close(stageA)
+		<-stageB
+		answers["b"] = manager.SearchResult{ExtensionID: "b", Title: "new"}
+		c.commitPass(context.Background(), epoch, nil, answers)
+	}()
+	<-stageA
+	rows := c.cachedOutside(nil)
+	if rows[0].Title != "old" || rows[1].Title != "old" {
+		t.Fatalf("partial catalog: %+v", rows)
+	}
+	close(stageB)
+	<-done
+	rows = c.cachedOutside(nil)
+	if rows[0].Title != "new" || rows[1].Title != "new" {
+		t.Fatalf("incomplete catalog: %+v", rows)
+	}
+}
