@@ -84,6 +84,7 @@ type Palette struct {
 	gridWindowWidth float32
 	gridPaneWidth   float32
 	defaultEnter    *defaultEnterIntent
+	presented       presentedChoice
 	actionSequence  uint64
 	activation      *activation // the row activation whose action is running now, or nil
 	actionPending   bool
@@ -170,6 +171,17 @@ type Palette struct {
 	dialogs atomic.Int32
 	// windowWidth and windowHeight are the size the window was last resized to for a presentation (split.go).
 	windowWidth, windowHeight int
+}
+
+// presentedChoice identifies the selected row in the last rendered frame.
+type presentedChoice struct {
+	view                   *View
+	query, id, kind, title string
+	shows                  int
+	action                 search.Action
+	actions                []search.Action
+	hasAction              bool
+	learnKey               string
 }
 
 type defaultEnterIntent struct {

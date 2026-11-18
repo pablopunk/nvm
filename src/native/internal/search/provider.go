@@ -26,6 +26,12 @@ type NarrowingSeedProvider interface {
 	SeedNarrowing(query string, previous []Item) []Item
 }
 
+// SeededSearchProvider receives the seed already admitted for this generation, so an aggregate can retain it
+// until its individual source answers rather than replacing it with unrelated partial batches.
+type SeededSearchProvider interface {
+	SearchSeeded(ctx context.Context, query string, seed []Item, emit func(Batch))
+}
+
 // RootStreamer is a Provider whose empty-query rows come in batches, as its search rows do. A provider that gathers the
 // root from several independent sources implements it, so the sources that answer first show before the others. Its
 // last batch carries Final, as a search's does.

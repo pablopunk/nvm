@@ -63,3 +63,86 @@ func TestPinnedChoiceDisappearingReturnsToRankedDefault(t *testing.T) {
 		t.Fatal("removed selection must return to the ranked default")
 	}
 }
+
+func TestEnterAdmitsLastPresentedRowAcrossLateRanking(t *testing.T) {
+	var ran string
+	action := func(name string) search.Action {
+		return search.Action{Title: name, Dismiss: search.DismissNever, Run: func(search.Host) { ran = name }}
+	}
+	view := &View{Title: "Root"}
+	p := New(Options{Root: view})
+	p.query = "pu"
+	old := search.Item{ID: "pull", Kind: "command", Title: "Show Pull Requests", Actions: []search.Action{action("pull")}}
+	best := search.Item{ID: "pulse", Kind: "app", Title: "Pulse", Actions: []search.Action{action("pulse")}}
+	p.showRows(view, "pu", []search.Item{old}, false, true)
+	p.recordPresentedChoice()
+	p.showRows(view, "pu", []search.Item{best, old}, true, false)
+	p.onEnter()
+	if ran != "pull" {
+		t.Fatalf("Enter ran %q, want last presented row", ran)
+	}
+	p.choicePinned = false
+	p.chosen = 0
+	p.recordPresentedChoice()
+	p.onEnter()
+	if ran != "pulse" {
+		t.Fatalf("after new frame Enter ran %q, want new top", ran)
+	}
+}
+
+func TestRemovedPresentedRowCannotRunReplacement(t *testing.T) {
+	view := &View{Title: "Root"}
+	p := New(Options{Root: view})
+	p.query = "pu"
+	p.showRows(view, "pu", []search.Item{{ID: "old", Kind: "command", Title: "Old"}}, false, true)
+	p.recordPresentedChoice()
+	p.showRows(view, "pu", []search.Item{{ID: "new", Kind: "app", Title: "New"}}, true, false)
+	if p.admitPresentedChoice() {
+		t.Fatal("removed row admitted its replacement")
+	}
+}
+
+func TestExplicitNavigationOverridesPresentedChoice(t *testing.T) {
+	view := &View{Title: "Root"}
+	p := New(Options{Root: view})
+	p.query = "pu"
+	p.showRows(view, "pu", []search.Item{{ID: "a"}, {ID: "b"}}, false, true)
+	p.recordPresentedChoice()
+	p.Choose(1)
+	if !p.admitPresentedChoice() || p.Chosen() != 1 {
+		t.Fatal("explicit navigation lost to the prior frame")
+	}
+}
+
+func TestEnterUsesPresentedActionWhenRowMutatesInPlace(t *testing.T) {
+	var ran string
+	view := &View{Title: "Root"}
+	p := New(Options{Root: view})
+	p.query = "pu"
+	makeRow := func(name string) search.Item {
+		return search.Item{ID: "same", Kind: "command", Title: "Command", Actions: []search.Action{{Title: name, Dismiss: search.DismissNever, Run: func(search.Host) { ran = name }}}}
+	}
+	p.showRows(view, "pu", []search.Item{makeRow("shown")}, false, true)
+	p.recordPresentedChoice()
+	p.showRows(view, "pu", []search.Item{makeRow("updated")}, true, false)
+	p.onEnter()
+	if ran != "shown" {
+		t.Fatalf("ran %q rather than presented action", ran)
+	}
+	p.recordPresentedChoice()
+	p.onEnter()
+	if ran != "updated" {
+		t.Fatalf("new frame did not adopt updated action: %q", ran)
+	}
+}
+
+func TestActionMenuOwnerIncludesKind(t *testing.T) {
+	view := &View{Title: "Root"}
+	p := New(Options{Root: view})
+	p.showRows(view, "q", []search.Item{{ID: "same", Kind: "app"}}, true, false)
+	before := p.menuOwnerKey()
+	p.showRows(view, "q", []search.Item{{ID: "same", Kind: "command"}}, true, false)
+	if p.menuOwnerKey() == before {
+		t.Fatal("different row kinds share an action menu owner")
+	}
+}

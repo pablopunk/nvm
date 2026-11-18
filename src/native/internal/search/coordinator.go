@@ -160,6 +160,7 @@ func (c *Coordinator) Query(q string, providers []Provider) (Snapshot, bool) {
 			warm = Snapshot{Gen: gen, Query: q, Items: rows, Pending: true}
 			hit = true
 			c.emitted = true
+			c.shown = c.providerCache(rows)
 		}
 	}
 	if hit && warm.Items == nil {
@@ -169,6 +170,7 @@ func (c *Coordinator) Query(q string, providers []Provider) (Snapshot, bool) {
 		warm = Snapshot{Gen: gen, Query: q, Items: mergeCached(c.slots, c.limit(), q != "", c.opts.Flat, remembered.settled), Settled: remembered.settled}
 		if !c.opts.Synchronous {
 			c.emitted = true
+			c.shown = c.providerCache(warm.Items)
 		}
 	}
 	c.mu.Unlock()
@@ -245,6 +247,16 @@ func (c *Coordinator) invoke(ctx context.Context, gen, idx int, p Provider, q st
 	emit := func(b Batch) {
 		b.Provider = p.ID()
 		c.deliver(gen, idx, b)
+	}
+	if seeded, ok := p.(SeededSearchProvider); ok && q != "" {
+		c.mu.Lock()
+		var rows []Item
+		if gen == c.gen && idx < len(c.slots) {
+			rows = append(rows, c.slots[idx].items...)
+		}
+		c.mu.Unlock()
+		seeded.SearchSeeded(ctx, q, rows, emit)
+		return
 	}
 	answerCall(ctx, p, q, emit)
 }

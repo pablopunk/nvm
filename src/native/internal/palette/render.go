@@ -22,6 +22,7 @@ func (p *Palette) View(c *ui.Context) {
 	theme := design.WindowTheme(os.Getenv("NVM_THEME") == "dark" || c.Theme().Dark)
 	theme.Background = ui.Transparent
 	ui.Themed(c, theme).Fill().Children(func() { p.viewThemed(c) })
+	p.recordPresentedChoice()
 	p.revealRenderedWindow()
 	if p.opts.OnNavigation != nil {
 		p.reportNavigationFrame(frame)

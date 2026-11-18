@@ -10,7 +10,14 @@ import (
 )
 
 func (p *Palette) openActionMenu(chosen int) {
-	p.menuSnapshot = append([]search.Action(nil), p.menuActions()...)
+	if !p.admitPresentedChoice() {
+		return
+	}
+	if !p.choicePinned && p.presented.view == p.cur() && p.presented.query == p.shownQuery && p.presented.shows == p.shows {
+		p.menuSnapshot = menuActionsFrom(p.presented.actions)
+	} else {
+		p.menuSnapshot = append([]search.Action(nil), p.menuActions()...)
+	}
 	p.menuOwner = p.menuOwnerKey()
 	p.actionsOpen, p.actChosen = true, chosen
 	p.menuQuery = ""
@@ -106,9 +113,9 @@ func (p *Palette) actionPanel(c *ui.Context) {
 func (p *Palette) menuOwnerKey() string {
 	if row := p.chosenItem(); row != nil {
 		if row.ID != "" {
-			return "id:" + row.ID
+			return "id:" + row.Kind + "\x00" + row.ID
 		}
-		return "title:" + row.Title
+		return "title:" + row.Kind + "\x00" + row.Title
 	}
 	return ""
 }

@@ -92,11 +92,27 @@ func mergedExtensionRows(rows map[string][]search.Item) []search.Item {
 	return out
 }
 
+func containsSearchID(rows []search.Item, id string) bool {
+	for _, row := range rows {
+		if row.ID == id {
+			return true
+		}
+	}
+	return false
+}
+
 // Search emits, for q, each extension's search rows as that extension answers.
 func (e extensionSearch) Search(ctx context.Context, q string, emit func(search.Batch)) {
+	e.SearchSeeded(ctx, q, nil, emit)
+}
+
+func (e extensionSearch) SearchSeeded(ctx context.Context, q string, seed []search.Item, emit func(search.Batch)) {
 	m := e.p.extensionManager()
 	if m != nil {
 		rows := map[string][]search.Item{}
+		if m.IsBuiltIn(appsbuiltin.ID) {
+			rows[appsbuiltin.ID] = e.SeedNarrowing(q, seed)
+		}
 		// The built-in app catalog is a host-owned snapshot, refreshed independently of query calls.
 		if m.IsBuiltIn(appsbuiltin.ID) {
 			installed := e.installedAppPaths()
@@ -105,7 +121,7 @@ func (e extensionSearch) Search(ctx context.Context, q string, emit func(search.
 					continue
 				}
 				for _, item := range rootRowsFor(e.p, m, result, e.in.shortcuts) {
-					if installed[item.ID] && search.MatchesName(q, item.Title) {
+					if installed[item.ID] && search.MatchesName(q, item.Title) && !containsSearchID(rows[result.ExtensionID], item.ID) {
 						rows[result.ExtensionID] = append(rows[result.ExtensionID], item)
 					}
 				}
@@ -113,6 +129,7 @@ func (e extensionSearch) Search(ctx context.Context, q string, emit func(search.
 		}
 		emit(search.Batch{Items: mergedExtensionRows(rows), Replace: true})
 		appAnswered := false
+		var fallbacks fallbackGroup
 		m.SearchEach(ctx, q, func(result manager.SearchResult) {
 			if result.ExtensionID == appsbuiltin.ID {
 				appAnswered = true
@@ -120,13 +137,15 @@ func (e extensionSearch) Search(ctx context.Context, q string, emit func(search.
 			if isCommandPlacedBuiltIn(result.ExtensionID) {
 				return
 			}
-			rows[result.ExtensionID] = searchRowsFor(e.p, m, q, result, e.in.shortcuts)
+			resultRows := searchRowsFor(e.p, m, q, result, e.in.shortcuts)
+			fallbacks.accept(result.ExtensionID, resultRows, rows)
 			emit(search.Batch{Items: mergedExtensionRows(rows), Replace: true})
 		})
 		if !appAnswered {
 			delete(rows, appsbuiltin.ID)
-			emit(search.Batch{Items: mergedExtensionRows(rows), Replace: true})
 		}
+		fallbacks.flush(rows)
+		emit(search.Batch{Items: mergedExtensionRows(rows), Replace: true})
 	}
 	emit(search.Batch{Final: true})
 }

@@ -194,3 +194,22 @@ func TestFallbacksAreAvailableBeforeOtherProvidersSettle(t *testing.T) {
 		t.Fatalf("answer did not suppress fallbacks: %v", rowIDs(rows))
 	}
 }
+
+func TestRapidNarrowingCarriesTheLastImmediateSeed(t *testing.T) {
+	sink := newSnapshotSink()
+	c := NewCoordinator(Options{Clock: fake.NewClock(), OnSnapshot: sink.OnSnapshot, Flat: true, Tiered: true})
+	t.Cleanup(c.Cancel)
+	p := narrowingProvider{refreshControl{calls: make(chan chan Batch, 8)}}
+	providers := []Provider{p}
+	c.Query("p", providers)
+	first := <-p.calls
+	first <- Batch{Items: []Item{{ID: "pulse", Kind: KindApplications, Title: "Pulse"}}, Final: true}
+	sink.untilSettled(t, c.Gen())
+	for _, q := range []string{"pu", "pul", "puls"} {
+		warm, ok := c.Query(q, providers)
+		if !ok || !containsTitle(warm.Items, "Pulse") {
+			t.Fatalf("%q lost immediate seed: %+v", q, warm)
+		}
+		<-p.calls
+	}
+}

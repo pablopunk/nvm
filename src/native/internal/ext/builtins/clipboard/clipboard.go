@@ -134,7 +134,11 @@ func (e Extension) SearchItems(ctx api.Context, query string) ([]api.Item, error
 	}
 	rows := make([]api.Item, 0, len(entries))
 	for i, entry := range entries {
-		rows = append(rows, copyRow(entry, float64(scoreSearchCopy-i), lookOf(ctx, options)))
+		row := copyRow(entry, float64(scoreSearchCopy-i), lookOf(ctx, options))
+		if excerpt := matchExcerpt(entry.Text, row.Title, query); excerpt != "" {
+			row.Subtitle = excerpt
+		}
+		rows = append(rows, row)
 	}
 	return rows, nil
 }

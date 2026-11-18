@@ -2,6 +2,7 @@ package clipboard
 
 import (
 	"errors"
+	"strings"
 	"testing"
 	"time"
 
@@ -347,5 +348,15 @@ func TestListMenuGroupsTheRemovalsUnderManageHistory(t *testing.T) {
 	}
 	if n := len(view.ActionPanel.Sections[0].Actions); n != 3 {
 		t.Fatalf("the Manage History group holds %d removals, want 3", n)
+	}
+}
+
+func TestSearchExcerptExplainsOnlyBuriedMatches(t *testing.T) {
+	text := strings.Repeat("prefix ", 20) + "the PulSe match is here"
+	if got := matchExcerpt(text, "prefix prefix", "pulse"); !strings.Contains(got, "PulSe") {
+		t.Fatalf("excerpt = %q", got)
+	}
+	if got := matchExcerpt(text, "PulSe match", "pulse"); got != "" {
+		t.Fatalf("visible match got excerpt %q", got)
 	}
 }

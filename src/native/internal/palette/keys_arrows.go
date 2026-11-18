@@ -79,6 +79,9 @@ func (p *Palette) syncSearchField(k ui.TextKey, text string) {
 // open the row after the second Down. The field is synced only when its text is the palette's query, so text typed
 // ahead of the frame is not overwritten.
 func (p *Palette) arrowOnArrival(key ui.Key, fieldText string) (handled, syncField bool) {
+	if fieldText == p.query && !p.actionsOpen && !p.admitPresentedChoice() {
+		return true, true
+	}
 	if !p.stepWithArrow(key) {
 		return false, false
 	}

@@ -4,6 +4,7 @@ import (
 	"strings"
 
 	"github.com/egoist/mygo/ui"
+	"github.com/pablopunk/nvm/native/internal/search"
 )
 
 // keys routes the keyboard for the view on top, in the order the contract fixes: the action menu first, then the
@@ -86,12 +87,31 @@ func (p *Palette) navigateRows(c *ui.Context, v *View) bool {
 // runActionShortcut runs the first action whose key was pressed: the chosen row's, then the page's own, as a row's
 // shortcut does.
 func (p *Palette) runActionShortcut(c *ui.Context) {
+	before := p.chosen
+	admitted := p.admitPresentedChoice()
+	if !admitted {
+		return
+	}
+	defer func() {
+		if !p.choicePinned {
+			p.chosen = before
+		}
+	}()
 	key, rowAction := p.chosenRowKey()
+	actions := p.shortcutActions()
 	rowActions := 0
 	if it := p.actionableItem(); it != nil {
 		rowActions = len(it.Actions)
+		if !p.choicePinned && p.presented.view == p.cur() && p.presented.query == p.shownQuery && p.presented.shows == p.shows {
+			key = p.presented.learnKey
+			rowActions = len(p.presented.actions)
+			actions = append([]search.Action(nil), p.presented.actions...)
+			if v := p.cur(); v.Actions != nil {
+				actions = append(actions, v.Actions()...)
+			}
+		}
 	}
-	for i, a := range p.shortcutActions() {
+	for i, a := range actions {
 		if a.Key != 0 && c.Shortcut(a.Mods, a.Key) {
 			if p.actionsOpen {
 				p.closeActionMenu()

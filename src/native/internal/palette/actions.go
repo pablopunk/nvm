@@ -22,7 +22,10 @@ func (p *Palette) actions() []search.Action {
 // menuActions are the actions the action menu lists: all of actions() but those marked MenuHidden, whose shortcuts still
 // run through actions().
 func (p *Palette) menuActions() []search.Action {
-	all := p.actions()
+	return menuActionsFrom(p.actions())
+}
+
+func menuActionsFrom(all []search.Action) []search.Action {
 	visible := make([]search.Action, 0, len(all))
 	seen := make(map[string]bool)
 	for _, a := range all {
@@ -66,6 +69,34 @@ func (p *Palette) actionableItem() *search.Item {
 		return nil
 	}
 	return p.chosenItem()
+}
+
+// recordPresentedChoice records what was drawn, not a later provider update.
+func (p *Palette) recordPresentedChoice() {
+	p.presented = presentedChoice{}
+	if p.shownView != p.cur() || p.shownQuery != strings.TrimSpace(p.query) {
+		return
+	}
+	if item := p.chosenItem(); item != nil {
+		action, hasAction := item.DefaultAction()
+		p.presented = presentedChoice{view: p.cur(), query: p.shownQuery, id: item.ID, kind: item.Kind, title: item.Title, shows: p.shows, action: action, actions: append([]search.Action(nil), item.Actions...), hasAction: hasAction, learnKey: item.LearnKey}
+	}
+}
+
+// admitPresentedChoice binds a key to the row last drawn unless the user explicitly moved the choice.
+// A removed row is never replaced by another row under the same key press.
+func (p *Palette) admitPresentedChoice() bool {
+	shown := p.presented
+	if p.choicePinned || shown.view == nil || shown.view != p.cur() || shown.query != strings.TrimSpace(p.query) || shown.shows != p.shows {
+		return true
+	}
+	for i, row := range p.results {
+		if row.Kind == shown.kind && ((shown.id != "" && row.ID == shown.id) || (shown.id == "" && row.ID == "" && row.Title == shown.title)) {
+			p.chosen = i
+			return true
+		}
+	}
+	return false
 }
 
 // runDefault runs the first action of the chosen row: what Enter does. At the root the query is remembered
@@ -132,7 +163,18 @@ func (p *Palette) onEnter() {
 			v.OnSubmit(q)
 		}
 	default:
-		p.runDefault()
+		pinned := p.choicePinned
+		shown := p.presented
+		if p.admitPresentedChoice() {
+			if !pinned && shown.view == v && shown.query == q && shown.shows == p.shows {
+				if shown.hasAction {
+					p.rememberQuery(q)
+					p.runRowAction(shown.learnKey, shown.action)
+				}
+			} else {
+				p.runDefault()
+			}
+		}
 	}
 }
 
