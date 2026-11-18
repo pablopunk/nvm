@@ -135,8 +135,8 @@ func (s *Service) StartWithLevel(deviceID string, sink func(float64, string, fun
 	s.starting = op
 	s.mu.Unlock()
 
+	op.ready = make(chan struct{})
 	if s.needsReadiness(op.ctx, deviceID) {
-		op.ready = make(chan struct{})
 		op.tracker = &readinessTracker{}
 	}
 	s.prepare(op)
@@ -165,9 +165,6 @@ func (s *Service) StartWithLevel(deviceID string, sink func(float64, string, fun
 	s.cur = op
 	safego.Go("dictation.capture", func(context.Context) { op.capture() })
 	s.mu.Unlock()
-	if op.ready == nil {
-		return nil
-	}
 	return s.awaitReady(op)
 }
 

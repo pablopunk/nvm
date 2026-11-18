@@ -14,6 +14,7 @@ func TestAFailedChosenDeviceFallsBackToTheDefaultAndWarns(t *testing.T) {
 	var warned []string
 	h.service.cfg.Warn = func(event string, _ map[string]any) { warned = append(warned, event) }
 	h.mic.FailNext(fake.OpMicrophoneOpen, platform.ErrNotFound)
+	h.mic.Queue(frames(1, 0)...)
 	if err := h.service.Start("usb-mic"); err != nil {
 		t.Fatalf("Start: %v", err)
 	}
@@ -78,6 +79,7 @@ func TestCancelWhileTheMicrophoneOpensEndsTheStartAndClosesTheLateStream(t *test
 	if got := h.service.Snapshot().Phase; got != PhaseIdle {
 		t.Fatalf("phase after a cancelled start = %s, want idle", got)
 	}
+	h.mic.Queue(frames(1, 0)...)
 	if err := h.service.Start("default"); err != nil {
 		t.Fatalf("a Start after the cancel: %v", err)
 	}

@@ -79,7 +79,7 @@ type SavedDictation struct {
 }
 
 // Dictation records speech and returns the hosted transcript. Audio is never exposed to extension code. Start resolves
-// once the microphone delivers stable audio, and Stop is the call that waits for the hosted transcription, so an
+// after a microphone frame is captured (and Bluetooth input is ready), and Stop is the call that waits for the hosted transcription, so an
 // action that runs it should declare Background. The host retries passing failures before it reports one, and keeps
 // the audio of every dictation that holds sound until its transcript is in: Recordings, Retry and DeleteRecording
 // recover a dictation that failed, was cancelled or was cut off; a saved recording is deleted once its text is saved.

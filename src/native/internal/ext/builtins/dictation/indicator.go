@@ -13,9 +13,8 @@ const IndicatorID = "dictation"
 // Indicator timings: a microphone that takes longer than this to open shows that it is waiting, and the terminal states
 // stay on screen long enough to read.
 const (
-	waitingIndicatorDelay = time.Second
-	noSpeechDuration      = 2200 * time.Millisecond
-	errorDuration         = 4000 * time.Millisecond
+	noSpeechDuration = 2200 * time.Millisecond
+	errorDuration    = 4000 * time.Millisecond
 )
 
 // indicatorInput is the dictation indicator in one state.
@@ -57,89 +56,35 @@ func failureIndicator(message string) api.IndicatorInput {
 	return input
 }
 
-// deferredIndicator shows the waiting state only when the microphone takes longer than waitingIndicatorDelay to open. A
-// start that opens in time never flickers the waiting state, and a finished start shows listening again.
+// deferredIndicator serializes preparation updates and rejects late device metadata.
 type deferredIndicator struct {
 	indicators api.Indicators
 	mu         sync.Mutex
-	timer      *time.Timer
-	pending    api.IndicatorInput
-	hasPending bool
-	visible    bool
+	pending    bool
 }
 
-// newDeferredIndicator returns a deferred indicator that draws on indicators.
 func newDeferredIndicator(indicators api.Indicators) *deferredIndicator {
-	return &deferredIndicator{indicators: indicators}
+	return &deferredIndicator{indicators: indicators, pending: true}
 }
-
-// begin schedules the waiting state, and cancels any state scheduled before it.
-func (d *deferredIndicator) begin(input api.IndicatorInput) {
-	d.mu.Lock()
-	defer d.mu.Unlock()
-	d.stopTimerLocked()
-	if d.visible {
-		d.show(listeningIndicator())
-	}
-	d.visible = false
-	d.pending, d.hasPending = input, true
-	d.timer = time.AfterFunc(waitingIndicatorDelay, d.reveal)
-}
-
-// reveal shows the scheduled state once its delay has passed.
-func (d *deferredIndicator) reveal() {
-	d.mu.Lock()
-	defer d.mu.Unlock()
-	d.timer = nil
-	if !d.hasPending {
-		return
-	}
-	d.visible = true
-	d.show(d.pending)
-}
-
-// refine replaces the scheduled state, and the shown one when it is already visible.
 func (d *deferredIndicator) refine(input api.IndicatorInput) {
 	d.mu.Lock()
 	defer d.mu.Unlock()
-	if !d.hasPending {
-		return
-	}
-	d.pending = input
-	if d.visible {
-		d.show(input)
+	if d.pending {
+		_ = d.indicators.Show(input)
 	}
 }
-
-// finish ends the waiting: a visible waiting state turns into listening, and nothing is scheduled any more.
 func (d *deferredIndicator) finish() {
 	d.mu.Lock()
 	defer d.mu.Unlock()
-	d.stopTimerLocked()
-	d.hasPending = false
-	if d.visible {
-		d.show(listeningIndicator())
+	if d.pending {
+		d.pending = false
+		_ = d.indicators.Show(listeningIndicator())
 	}
-	d.visible = false
 }
-
-// cancel drops the scheduled state without showing anything.
 func (d *deferredIndicator) cancel() {
 	d.mu.Lock()
 	defer d.mu.Unlock()
-	d.stopTimerLocked()
-	d.hasPending, d.visible = false, false
-}
-
-func (d *deferredIndicator) stopTimerLocked() {
-	if d.timer != nil {
-		d.timer.Stop()
-		d.timer = nil
-	}
-}
-
-func (d *deferredIndicator) show(input api.IndicatorInput) {
-	_ = d.indicators.Show(input)
+	d.pending = false
 }
 
 // showIndicator draws input through the extension's indicator surface. A surface that refuses is not a dictation

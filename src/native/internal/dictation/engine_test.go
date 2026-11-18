@@ -80,6 +80,7 @@ func newEngineRig(t *testing.T, signedIn bool) engineRig {
 
 func TestEngineStatusFollowsTheDictationPhase(t *testing.T) {
 	rig := newEngineRig(t, true)
+	rig.mic.Queue(frames(1, 0)...)
 	if got := rig.engine.Status(); got != api.DictationIdle {
 		t.Fatalf("status %q; want idle", got)
 	}
@@ -129,6 +130,7 @@ func TestEngineDevicesRefuseWhenTheListCannotBeRead(t *testing.T) {
 
 func TestEngineStartOpensTheDefaultMicrophoneAndMutesTheOutput(t *testing.T) {
 	rig := newEngineRig(t, true)
+	rig.mic.Queue(frames(1, 0)...)
 	if err := rig.engine.Start(api.DictationStartOptions{DeviceID: "default", MuteSystemAudioWhileRecord: true}); err != nil {
 		t.Fatal(err)
 	}
@@ -182,6 +184,7 @@ func TestEngineStopWithoutADictationIsAFailure(t *testing.T) {
 
 func TestEngineCancelEndsTheDictationAndStopThenFails(t *testing.T) {
 	rig := newEngineRig(t, true)
+	rig.mic.Queue(frames(1, 0)...)
 	if err := rig.engine.Start(api.DictationStartOptions{}); err != nil {
 		t.Fatal(err)
 	}

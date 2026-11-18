@@ -25,6 +25,7 @@ type operation struct {
 	captureCtx  context.Context
 	stopCapture context.CancelFunc
 	streamMu    sync.Mutex
+	endOnce     sync.Once
 	stream      platform.MicrophoneStream
 	restart     bool
 	// reopen opens the microphone again after its stream failed; retry bounds how often, and onRetry hears each try.
@@ -47,9 +48,10 @@ type operation struct {
 	levelSink    func(float64, string, func() bool)
 	levelPeak    float64
 	levelSmooth  float64
-	// ready is closed once the readiness tracker hears the device; tracker is nil when the device needs no wait.
-	ready   chan struct{}
-	tracker *readinessTracker
+	// ready closes after the first frame, or after Bluetooth readiness is established.
+	ready       chan struct{}
+	tracker     *readinessTracker
+	readyClosed bool
 }
 
 // capture reads the microphone until the dictation stops, frames its samples, encodes each frame and cuts the packets
@@ -180,11 +182,12 @@ func (op *operation) addFrame(frame []int16) bool {
 
 // noteFrame feeds the readiness tracker of a device that needs one, and closes ready once the device is heard.
 func (op *operation) noteFrame(frame []int16) {
-	if op.tracker == nil {
+	if op.ready == nil || op.readyClosed {
 		return
 	}
-	if op.tracker.consume(float64(op.frames*FrameMillis), hasSound(frame)) {
+	if op.tracker == nil || op.tracker.consume(float64(op.frames*FrameMillis), hasSound(frame)) {
 		op.tracker = nil
+		op.readyClosed = true
 		close(op.ready)
 	}
 }
@@ -217,10 +220,12 @@ func (op *operation) track() webm.Track {
 
 // endCapture stops the capture for good: the stream closes and no other one opens.
 func (op *operation) endCapture() {
-	op.stopCapture()
-	if stream := op.currentStream(); stream != nil {
-		_ = stream.Close()
-	}
+	op.endOnce.Do(func() {
+		op.stopCapture()
+		if stream := op.currentStream(); stream != nil {
+			_ = stream.Close()
+		}
+	})
 }
 
 // restartStream closes the current stream so the capture opens the microphone again.

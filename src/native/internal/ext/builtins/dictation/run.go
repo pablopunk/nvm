@@ -33,7 +33,7 @@ func (e Extension) start(ctx api.Context) (api.Result, error) {
 	cleanWithAI := settings.CleanupWithAI && aiAvailable(ctx)
 	e.session.beginStart(frontmostAppID(ctx))
 	defer e.session.endStart()
-	showIndicator(ctx, listeningIndicator())
+	showIndicator(ctx, waitingIndicator(""))
 	if cleanWithAI {
 		prepareCleanup(ctx)
 	}
@@ -42,7 +42,6 @@ func (e Extension) start(ctx api.Context) (api.Result, error) {
 		return api.Result{}, nil
 	}
 	deferred := newDeferredIndicator(ctx.Indicators())
-	deferred.begin(waitingIndicator(""))
 	go nameMicrophone(ctx, settings.DeviceID, deferred)
 	err := ctx.Dictation().Start(api.DictationStartOptions{IndicatorID: IndicatorID, DeviceID: settings.DeviceID, MuteSystemAudioWhileRecord: true})
 	if err != nil {

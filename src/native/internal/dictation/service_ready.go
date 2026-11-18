@@ -36,6 +36,12 @@ func (s *Service) awaitReady(op *operation) error {
 	for attempt := 1; ; attempt++ {
 		switch s.waitReady(op, timeout) {
 		case readyHeard:
+			s.mu.Lock()
+			active := s.cur == op && op.captureCtx.Err() == nil
+			s.mu.Unlock()
+			if !active {
+				return ErrCancelled
+			}
 			return nil
 		case readyCaptureEnded:
 			return s.abandonStart(op)

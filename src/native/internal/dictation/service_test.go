@@ -98,7 +98,7 @@ func newHarness(t *testing.T) harness {
 	h := harness{
 		mic:         fake.NewMicrophone(),
 		codec:       fake.NewOpusCodec(),
-		transcriber: &scriptedTranscriber{},
+		transcriber: &scriptedTranscriber{texts: []string{""}},
 		levels:      make(chan float64, 1024),
 	}
 	h.service = NewService(Config{
@@ -175,8 +175,9 @@ func TestLongDictationsAreSentAsOneMinuteSegmentsInOrder(t *testing.T) {
 	}
 }
 
-func TestSilentRecordingSendsNothingAndReturnsNoText(t *testing.T) {
+func TestSilentRecordingReturnsNoText(t *testing.T) {
 	h := newHarness(t)
+	h.mic.Queue(frames(1, 0)...)
 	if err := h.service.Start("default"); err != nil {
 		t.Fatalf("Start: %v", err)
 	}
@@ -184,8 +185,8 @@ func TestSilentRecordingSendsNothingAndReturnsNoText(t *testing.T) {
 	if err != nil || text != "" {
 		t.Fatalf("Stop = %q, %v; want an empty transcript and no error", text, err)
 	}
-	if ids := h.transcriber.ids(); len(ids) != 0 {
-		t.Fatalf("a recording with no audio reached the backend: %v", ids)
+	if ids := h.transcriber.ids(); len(ids) != 1 {
+		t.Fatalf("captured silent frame should reach the backend: %v", ids)
 	}
 }
 
@@ -256,6 +257,7 @@ func TestStartWrapsAMissingOpusLibraryAndReleasesTheMicrophone(t *testing.T) {
 
 func TestStartWhileRunningIsRefusedAndStopWhileIdleToo(t *testing.T) {
 	h := newHarness(t)
+	h.mic.Queue(frames(1, 0)...)
 	if _, err := h.service.Stop(); !errors.Is(err, ErrNotRecording) {
 		t.Fatalf("Stop while idle = %v, want ErrNotRecording", err)
 	}
@@ -353,6 +355,7 @@ func TestLevelFollowsTheCapturedSignal(t *testing.T) {
 
 func TestDeviceChoiceReachesTheMicrophone(t *testing.T) {
 	h := newHarness(t)
+	h.mic.Queue(frames(1, 0)...)
 	if err := h.service.Start("usb-mic"); err != nil {
 		t.Fatalf("Start: %v", err)
 	}
