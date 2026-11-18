@@ -82,9 +82,9 @@ func (p *Palette) showRows(v *View, q string, rows []search.Item, settled, pendi
 	if i := p.defaultEnter; i != nil && (i.view != v || i.query != q || i.shows != p.shows) {
 		p.defaultEnter = nil
 	}
-	// An empty partial answer is still loading, not evidence that the previous list is obsolete.
-	// Keep its query attribution so Enter and row shortcuts cannot act on it for the new query.
-	if p.shownView == v && len(p.results) > 0 && len(rows) == 0 && !settled {
+	// A previous query's retained rows are not actionable for the new query while its first snapshot is pending.
+	// An empty answer for this query is authoritative and must clear rows even while other sources are pending.
+	if p.shownView == v && p.shownQuery != q && len(p.results) > 0 && len(rows) == 0 && !settled {
 		p.settled, p.pending = false, true
 		return
 	}

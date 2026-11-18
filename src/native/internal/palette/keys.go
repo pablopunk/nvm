@@ -90,6 +90,17 @@ func (p *Palette) runActionShortcut(c *ui.Context) {
 	before := p.chosen
 	admitted := p.admitPresentedChoice()
 	if !admitted {
+		if v := p.cur(); v.Actions != nil {
+			for _, action := range v.Actions() {
+				if action.Key != 0 && c.Shortcut(action.Mods, action.Key) {
+					if p.actionsOpen {
+						p.closeActionMenu()
+					}
+					p.runAction(action)
+					return
+				}
+			}
+		}
 		return
 	}
 	defer func() {

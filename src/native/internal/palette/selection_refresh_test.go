@@ -245,3 +245,18 @@ func TestRemovedPinnedChoiceDoesNotFallBackToPriorPresentedRow(t *testing.T) {
 		t.Fatal("newly drawn default did not become actionable")
 	}
 }
+
+func TestEmptyPartialReplacementRevokesPresentedAction(t *testing.T) {
+	var ran bool
+	v := &View{Title: "Root"}
+	p := New(Options{Root: v})
+	p.query = "q"
+	row := search.Item{ID: "old", Publication: 1, Actions: []search.Action{{Title: "Old", Dismiss: search.DismissNever, Run: func(search.Host) { ran = true }}}}
+	p.showRows(v, "q", []search.Item{row}, false, true)
+	p.recordPresentedChoice()
+	p.showRows(v, "q", nil, false, true)
+	p.onEnter()
+	if ran || len(p.results) != 0 {
+		t.Fatal("empty authoritative partial result kept an actionable row")
+	}
+}
