@@ -1,20 +1,24 @@
 #!/usr/bin/env bash
 # Downloads the pinned ONNX Runtime and PP-OCR models into resources/<goos>-<goarch>/, where mygo build ships them.
-# usage: scripts/natives/fetch-ocr.sh <goos> <goarch>
+# usage: scripts/natives/fetch-ocr.sh <goos> <goarch>   (needs curl and unzip)
 set -euo pipefail
 
 root="$(cd "$(dirname "$0")/../.." && pwd)"
 goos=$1
 goarch=$2
 ORT_VERSION=1.23.2
+# Microsoft's NuGet package carries the official ONNX Runtime build for every desktop target in one archive; the
+# per-platform GitHub release archives this script used before are no longer published.
+ORT_PACKAGE=https://api.nuget.org/v3-flatcontainer/microsoft.ml.onnxruntime/$ORT_VERSION/microsoft.ml.onnxruntime.$ORT_VERSION.nupkg
+ORT_PACKAGE_SUM=25fe172f7fcdf34f2b5b02c8b997f6b88abc282956849d4af4335af23d0c4e4a
 MODELS=https://www.modelscope.cn/models/RapidAI/RapidOCR/resolve/v3.10.0
 
 case "$goos-$goarch" in
-  darwin-arm64) asset=onnxruntime-osx-arm64-$ORT_VERSION.tgz; library=libonnxruntime.$ORT_VERSION.dylib; output=libonnxruntime.dylib; sum=b4d513ab2b26f088c66891dbbc1408166708773d7cc4163de7bdca0e9bbb7856 ;;
-  darwin-amd64) asset=onnxruntime-osx-x86_64-$ORT_VERSION.tgz; library=libonnxruntime.$ORT_VERSION.dylib; output=libonnxruntime.dylib; sum=d10359e16347b57d9959f7e80a225a5b4a66ed7d7e007274a15cae86836485a6 ;;
-  linux-amd64) asset=onnxruntime-linux-x64-$ORT_VERSION.tgz; library=libonnxruntime.so.$ORT_VERSION; output=libonnxruntime.so; sum=1fa4dcaef22f6f7d5cd81b28c2800414350c10116f5fdd46a2160082551c5f9b ;;
-  linux-arm64) asset=onnxruntime-linux-aarch64-$ORT_VERSION.tgz; library=libonnxruntime.so.$ORT_VERSION; output=libonnxruntime.so; sum=7c63c73560ed76b1fac6cff8204ffe34fe180e70d6582b5332ec094810241e5c ;;
-  windows-amd64) asset=onnxruntime-win-x64-$ORT_VERSION.zip; library=onnxruntime.dll; output=onnxruntime.dll; sum=0b38df9af21834e41e73d602d90db5cb06dbd1ca618948b8f1d66d607ac9f3cd ;;
+  darwin-arm64) rid=osx-arm64; library=libonnxruntime.dylib ;;
+  darwin-amd64) rid=osx-x64; library=libonnxruntime.dylib ;;
+  linux-amd64) rid=linux-x64; library=libonnxruntime.so ;;
+  linux-arm64) rid=linux-arm64; library=libonnxruntime.so ;;
+  windows-amd64) rid=win-x64; library=onnxruntime.dll ;;
   *) echo "no OCR runtime for $goos-$goarch" >&2; exit 1 ;;
 esac
 
@@ -32,17 +36,14 @@ fetch() { # url, destination, sha256
 
 work="$(mktemp -d)"
 trap 'rm -rf "$work"' EXIT
-fetch "https://github.com/microsoft/onnxruntime/releases/download/v$ORT_VERSION/$asset" "$work/$asset" "$sum"
-case "$asset" in
-  *.zip) unzip -q "$work/$asset" -d "$work" ;;
-  *) tar -xzf "$work/$asset" -C "$work" ;;
-esac
+fetch "$ORT_PACKAGE" "$work/onnxruntime.nupkg" "$ORT_PACKAGE_SUM"
+unzip -q -o "$work/onnxruntime.nupkg" "runtimes/$rid/native/$library" LICENSE ThirdPartyNotices.txt -d "$work/package"
 
 out="$root/resources/$goos-$goarch"
 mkdir -p "$out/lib" "$out/ocr"
-cp -L "$work/${asset%.*}/lib/$library" "$out/lib/$output"
-cp "$work/${asset%.*}/LICENSE" "$out/ocr/ONNX-RUNTIME-LICENSE"
-cp "$work/${asset%.*}/ThirdPartyNotices.txt" "$out/ocr/ONNX-RUNTIME-NOTICES"
+cp "$work/package/runtimes/$rid/native/$library" "$out/lib/$library"
+cp "$work/package/LICENSE" "$out/ocr/ONNX-RUNTIME-LICENSE"
+cp "$work/package/ThirdPartyNotices.txt" "$out/ocr/ONNX-RUNTIME-NOTICES"
 cat > "$out/ocr/MODELS-NOTICE" <<'NOTICE'
 PP-OCRv5 mobile detection and Latin recognition models, distributed by RapidAI/RapidOCR v3.10.0.
 PaddleOCR: https://github.com/PaddlePaddle/PaddleOCR (Apache-2.0).
