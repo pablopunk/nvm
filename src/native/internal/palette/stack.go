@@ -22,6 +22,9 @@ func (p *Palette) Show() {
 }
 
 func (p *Palette) prepareShow() {
+	if v := p.cur(); v.SingleSnapshot && v.coord != nil {
+		v.coord.Cancel()
+	}
 	p.navigation.advance()
 	p.defaultEnter = nil
 	p.cancelAction()
