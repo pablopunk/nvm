@@ -1,19 +1,6 @@
 package search
 
-import (
-	"cmp"
-	"slices"
-)
-
-// A flat result changes once per keystroke. The first snapshot of a query waits until every ranked provider has
-// answered or FirstSnapshot has passed; after that, rows already on screen keep their order inside their tier. Rows that
-// arrive later follow them in their tier, and a better tier always goes above a worse one: a late exact match leads the
-// rows already shown. The query fallbacks stay last. A row leaves only when its provider's newer answer no longer has
-// it. The remembered result of a query keeps the full ranking, so the next visit shows the rows in their best order at
-// once.
-
-// readyLocked reports whether the current generation may publish: a snapshot is already on screen, or every ranked
-// provider has finished. Appended providers never hold up the first snapshot. The caller holds c.mu.
+// readyLocked reports whether the current generation may publish. Appended providers never hold it up.
 func (c *Coordinator) readyLocked() bool {
 	if c.emitted || c.opts.Synchronous {
 		return true
@@ -26,58 +13,9 @@ func (c *Coordinator) readyLocked() bool {
 	return true
 }
 
-// stableLocked returns fresh in the order the screen already shows: the committed rows that are still part of the
-// answer, then the new rows in ranked order. A committed row whose provider has not answered again yet stays. Only a
-// flat result is kept stable: a sectioned one is grouped by kind, so its order is the sections'. The caller holds c.mu.
-func (c *Coordinator) stableLocked(fresh []Item) []Item {
-	if c.opts.Synchronous || !c.opts.Flat || c.committed == nil {
-		return fresh
-	}
-	byKey := make(map[cachedItemKey]Item, len(fresh))
-	for _, item := range fresh {
-		byKey[cacheKey(item)] = item
-	}
-	waiting := c.unansweredLocked()
-	out := make([]Item, 0, len(fresh))
-	placed := make(map[cachedItemKey]bool, len(fresh))
-	for _, item := range c.committed {
-		key := cacheKey(item)
-		if current, ok := byKey[key]; ok {
-			out, placed[key] = append(out, current), true
-		} else if waiting[c.committedFrom[key]] {
-			out, placed[key] = append(out, item), true
-		}
-	}
-	for _, item := range fresh {
-		if key := cacheKey(item); !placed[key] {
-			out, placed[key] = append(out, item), true
-		}
-	}
-	return firstN(fallbacksLast(byTier(out)), c.limit())
-}
-
-// byTier keeps the order of the rows inside each tier and puts a better tier above a worse one, so a row that arrives
-// after the first snapshot still lands above every row of a lower tier, however long those have been on screen. The
-// rows of an untiered result all have TierNone and keep their order.
-func byTier(rows []Item) []Item {
-	slices.SortStableFunc(rows, func(a, b Item) int { return cmp.Compare(a.ranked.tier, b.ranked.tier) })
-	return rows
-}
-
-// fallbacksLast moves the query fallbacks (web search, Automate) below every other row, keeping each group's order:
-// a late answer never lands under the rows that only echo the query.
-func fallbacksLast(items []Item) []Item {
-	out := make([]Item, 0, len(items))
-	var fallbacks []Item
-	for _, item := range items {
-		if item.QueryFallback {
-			fallbacks = append(fallbacks, item)
-		} else {
-			out = append(out, item)
-		}
-	}
-	return append(out, fallbacks...)
-}
+// stableLocked uses the merge's rank order, independent of arrival order. Slots retain their own cached
+// rows until an authoritative batch replaces them.
+func (c *Coordinator) stableLocked(fresh []Item) []Item { return fresh }
 
 // unansweredLocked lists the providers that have not answered this generation yet. The caller holds c.mu.
 func (c *Coordinator) unansweredLocked() map[string]bool {

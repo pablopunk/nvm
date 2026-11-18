@@ -93,11 +93,15 @@ func (p *Palette) showRows(v *View, q string, rows []search.Item, settled, pendi
 	if newQuery {
 		p.chosen, p.choicePinned = 0, false
 	} else if selected := p.chosenItem(); p.choicePinned && selected != nil && selected.ID != "" {
+		found := false
 		for i := range rows {
-			if rows[i].ID == selected.ID {
-				p.chosen = i
+			if rows[i].ID == selected.ID && rows[i].Kind == selected.Kind {
+				p.chosen, found = i, true
 				break
 			}
+		}
+		if !found {
+			p.chosen, p.choicePinned = 0, false
 		}
 	} else if !p.choicePinned {
 		p.chosen = 0

@@ -18,7 +18,7 @@ type footerRevealState struct {
 
 func (p *Palette) prepareFooterReveal(c *ui.Context, list ui.Element, v *View) {
 	bounds := list.Bounds()
-	now := selection{v, p.query, p.chosen}
+	now := selection{view: v, query: p.query, chosen: p.chosen}
 	key := ""
 	if p.chosen >= 0 && p.chosen < len(p.results) {
 		key = listRowKey(p.results, p.chosen).(string)

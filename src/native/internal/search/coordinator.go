@@ -3,6 +3,7 @@ package search
 import (
 	"context"
 	"sort"
+	"strings"
 	"sync"
 	"time"
 
@@ -134,6 +135,7 @@ func NewCoordinator(opts Options) *Coordinator {
 // provider. An empty q asks the providers for their root rows.
 func (c *Coordinator) Query(q string, providers []Provider) (Snapshot, bool) {
 	c.mu.Lock()
+	previousQuery := c.query
 	c.resetLocked()
 	gen := c.gen
 	ctx, cancel := context.WithCancel(context.Background())
@@ -150,7 +152,21 @@ func (c *Coordinator) Query(q string, providers []Provider) (Snapshot, bool) {
 	remembered, hit := c.cache.get(q)
 	c.warmSettled = hit && remembered.settled
 	var warm Snapshot
-	if hit {
+	if !hit && q != "" && previousQuery != "" && strings.HasPrefix(q, previousQuery) && q != previousQuery {
+		for i, p := range providers {
+			if seed, ok := p.(NarrowingSeedProvider); ok {
+				c.slots[i].items = c.learned(seed.SeedNarrowing(q, c.shown[p.ID()]), q)
+			}
+		}
+		rows := mergeCached(c.slots, c.limit(), true, c.opts.Flat, false)
+		if len(rows) > 0 {
+			warm = Snapshot{Gen: gen, Query: q, Items: rows, Pending: true}
+			hit = true
+			c.emitted = true
+			c.commitLocked(rows)
+		}
+	}
+	if hit && warm.Items == nil {
 		for _, s := range c.slots {
 			s.items = append([]Item(nil), remembered.providers[s.id]...)
 		}

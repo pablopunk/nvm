@@ -27,8 +27,7 @@ func TestAKeystrokeWhoseProvidersAnswerInTimeShowsOneSnapshot(t *testing.T) {
 	}
 }
 
-// TestRowsOnScreenKeepTheirOrderWhenALateProviderAnswers checks that a provider answering after the first snapshot
-// adds its rows below the rows on screen, even when they rank higher, so nothing on screen moves.
+// TestRowsOnScreenKeepTheirOrderWhenALateProviderAnswers checks that late rows are ranked consistently.
 func TestRowsOnScreenKeepTheirOrderWhenALateProviderAnswers(t *testing.T) {
 	clock := fake.NewClock()
 	sink := newSnapshotSink()
@@ -45,8 +44,8 @@ func TestRowsOnScreenKeepTheirOrderWhenALateProviderAnswers(t *testing.T) {
 	}
 	close(release)
 	snaps := sink.untilSettled(t, c.Gen())
-	if got := titles(snaps[len(snaps)-1].Items); !equalStrings(got, []string{"Fast", "Early", "Best"}) {
-		t.Fatalf("rows after the late answer = %v, want the late row below the rows on screen", got)
+	if got := titles(snaps[len(snaps)-1].Items); !equalStrings(got, []string{"Best", "Fast", "Early"}) {
+		t.Fatalf("rows after the late answer = %v, want all rows in ranked order", got)
 	}
 
 	sink2 := newSnapshotSink()

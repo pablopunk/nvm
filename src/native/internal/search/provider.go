@@ -20,6 +20,12 @@ type Provider interface {
 	Search(ctx context.Context, q string, emit func(Batch))
 }
 
+// NarrowingSeedProvider selects previously visible rows safe to reuse while a narrower query refreshes.
+// Its next authoritative batch replaces the seed under the usual provider lifecycle.
+type NarrowingSeedProvider interface {
+	SeedNarrowing(query string, previous []Item) []Item
+}
+
 // RootStreamer is a Provider whose empty-query rows come in batches, as its search rows do. A provider that gathers the
 // root from several independent sources implements it, so the sources that answer first show before the others. Its
 // last batch carries Final, as a search's does.

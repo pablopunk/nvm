@@ -52,3 +52,14 @@ func TestRenderedListDefaultChoiceFollowsNewTopResult(t *testing.T) {
 		t.Fatal("new query inherited the list's old default item")
 	}
 }
+
+func TestPinnedChoiceDisappearingReturnsToRankedDefault(t *testing.T) {
+	view := &View{Title: "Root"}
+	p := New(Options{Root: view})
+	p.showRows(view, "q", []search.Item{{ID: "first", Kind: "one"}, {ID: "chosen", Kind: "one"}}, false, true)
+	p.Choose(1)
+	p.showRows(view, "q", []search.Item{{ID: "first", Kind: "one"}, {ID: "chosen", Kind: "other"}}, true, false)
+	if p.Chosen() != 0 || p.choicePinned {
+		t.Fatal("removed selection must return to the ranked default")
+	}
+}

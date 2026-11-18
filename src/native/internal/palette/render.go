@@ -240,20 +240,31 @@ func detailColumn(c *ui.Context, v *View) ui.Element {
 
 // selection identifies the row a keyboard user is on: the view, the query it came from, and the cursor.
 type selection struct {
-	view   *View
-	query  string
-	chosen int
+	view            *View
+	query           string
+	chosen          int
+	id, kind, title string
 }
 
 // announceSelection tells assistive technology the title of the chosen row whenever the choice moves, so a
 // keyboard user hears what is selected (PLAN.md J27). It announces only on a change.
 func (p *Palette) announceSelection(c *ui.Context, it *search.Item) {
-	now := selection{p.shownView, p.shownQuery, p.chosen}
+	now := selection{view: p.shownView, query: p.shownQuery, chosen: p.chosen, id: it.ID, kind: it.Kind, title: it.Title}
 	if now == p.announced {
 		return
 	}
 	p.announced = now
 	c.Announce(it.Title)
+}
+
+// hasStrongSearchMatch lets a matching result take visual priority over an open-ended fallback.
+func (p *Palette) hasStrongSearchMatch() bool {
+	for _, item := range p.results {
+		if !item.QueryFallback && item.MatchTier() >= search.TierExact && item.MatchTier() <= search.TierPrefix {
+			return true
+		}
+	}
+	return false
 }
 
 // row draws result i. A section header goes above the first row of each run of one section.
@@ -267,7 +278,7 @@ func (p *Palette) row(c *ui.Context, i int) {
 		Tile:        p.tileData(it),
 		Tone:        it.Tone,
 		TintTitle:   it.TintTitle,
-		Prominent:   it.Prominent,
+		Prominent:   it.Prominent && (!it.QueryFallback || sel || !p.hasStrongSearchMatch()),
 		Selected:    sel,
 		NoHoverWash: true,
 		Disabled:    it.Disabled,

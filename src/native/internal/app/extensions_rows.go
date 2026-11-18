@@ -6,6 +6,7 @@ import (
 	"sort"
 
 	"github.com/pablopunk/nvm/native/internal/ext/api"
+	appsbuiltin "github.com/pablopunk/nvm/native/internal/ext/builtins/apps"
 	"github.com/pablopunk/nvm/native/internal/ext/manager"
 	"github.com/pablopunk/nvm/native/internal/palette/extview"
 	"github.com/pablopunk/nvm/native/internal/platform"
@@ -27,6 +28,26 @@ func extensionProvider(p *App, in *rootInput) search.Provider { return extension
 func (e extensionSearch) OwnsCallBudgets() {}
 
 func (e extensionSearch) ID() string { return "extensions" }
+
+// SeedNarrowing keeps only app name matches; their host-owned launch actions are revalidated by the app service.
+func (e extensionSearch) SeedNarrowing(q string, previous []search.Item) []search.Item {
+	var rows []search.Item
+	installed := e.installedAppPaths()
+	for _, item := range previous {
+		if item.Kind == search.KindApplications && installed[item.ID] && search.MatchesName(q, item.Title) {
+			rows = append(rows, item)
+		}
+	}
+	return rows
+}
+
+func (e extensionSearch) installedAppPaths() map[string]bool {
+	paths := map[string]bool{}
+	for _, app := range e.p.appsSnapshot() {
+		paths[app.Path] = true
+	}
+	return paths
+}
 
 // Root collects what RootStream emits. The coordinator streams the root, so this is for callers that want it whole.
 func (e extensionSearch) Root(ctx context.Context) []search.Item {
@@ -75,12 +96,37 @@ func mergedExtensionRows(rows map[string][]search.Item) []search.Item {
 func (e extensionSearch) Search(ctx context.Context, q string, emit func(search.Batch)) {
 	m := e.p.extensionManager()
 	if m != nil {
-		m.SearchEach(ctx, q, func(result manager.SearchResult) {
-			if isCommandPlacedBuiltIn(result.ExtensionID) {
-				return // listed by commandRows, at the place of its command
+		rows := map[string][]search.Item{}
+		// The built-in app catalog is a host-owned snapshot, refreshed independently of query calls.
+		if m.IsBuiltIn(appsbuiltin.ID) {
+			installed := e.installedAppPaths()
+			for _, result := range e.p.rootRows.cachedOutside(nil) {
+				if result.ExtensionID != appsbuiltin.ID {
+					continue
+				}
+				for _, item := range rootRowsFor(e.p, m, result, e.in.shortcuts) {
+					if installed[item.ID] && search.MatchesName(q, item.Title) {
+						rows[result.ExtensionID] = append(rows[result.ExtensionID], item)
+					}
+				}
 			}
-			emit(search.Batch{Items: searchRowsFor(e.p, m, q, result, e.in.shortcuts)})
+		}
+		emit(search.Batch{Items: mergedExtensionRows(rows), Replace: true})
+		appAnswered := false
+		m.SearchEach(ctx, q, func(result manager.SearchResult) {
+			if result.ExtensionID == appsbuiltin.ID {
+				appAnswered = true
+			}
+			if isCommandPlacedBuiltIn(result.ExtensionID) {
+				return
+			}
+			rows[result.ExtensionID] = searchRowsFor(e.p, m, q, result, e.in.shortcuts)
+			emit(search.Batch{Items: mergedExtensionRows(rows), Replace: true})
 		})
+		if !appAnswered {
+			delete(rows, appsbuiltin.ID)
+			emit(search.Batch{Items: mergedExtensionRows(rows), Replace: true})
+		}
 	}
 	emit(search.Batch{Final: true})
 }

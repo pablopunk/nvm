@@ -128,3 +128,69 @@ func TestWarmFallbackSurvivesPendingRefresh(t *testing.T) {
 		t.Fatalf("answer did not suppress fallback: %v", titles(rows))
 	}
 }
+
+type narrowingProvider struct{ refreshControl }
+
+func (p narrowingProvider) SeedNarrowing(q string, previous []Item) []Item {
+	var out []Item
+	for _, item := range previous {
+		if MatchesName(q, item.Title) {
+			out = append(out, item)
+		}
+	}
+	return out
+}
+
+func TestNarrowingSeedsThenAcceptsAuthoritativeReplacement(t *testing.T) {
+	sink := newSnapshotSink()
+	c := NewCoordinator(Options{Clock: fake.NewClock(), OnSnapshot: sink.OnSnapshot, Flat: true, Tiered: true})
+	t.Cleanup(c.Cancel)
+	p := narrowingProvider{refreshControl{calls: make(chan chan Batch, 4)}}
+	providers := []Provider{p}
+	c.Query("p", providers)
+	first := <-p.calls
+	first <- Batch{Items: []Item{{ID: "pulse", Kind: KindApplications, Title: "Pulse"}}, Final: true}
+	sink.untilSettled(t, c.Gen())
+	warm, ok := c.Query("pu", providers)
+	if !ok || !containsTitle(warm.Items, "Pulse") || warm.Settled {
+		t.Fatalf("narrowing seed = %+v", warm)
+	}
+	second := <-p.calls
+	second <- Batch{Items: nil, Final: true}
+	settled := sink.untilSettled(t, c.Gen())
+	if containsTitle(settled[len(settled)-1].Items, "Pulse") {
+		t.Fatal("authoritative empty result retained seed")
+	}
+}
+
+func TestNarrowingRejectsSupersededBatches(t *testing.T) {
+	sink := newSnapshotSink()
+	c := NewCoordinator(Options{Clock: fake.NewClock(), OnSnapshot: sink.OnSnapshot, Flat: true})
+	t.Cleanup(c.Cancel)
+	p := narrowingProvider{refreshControl{calls: make(chan chan Batch, 4)}}
+	c.Query("p", []Provider{p})
+	oldGen := c.Gen()
+	old := <-p.calls
+	c.Query("pu", []Provider{p})
+	current := <-p.calls
+	c.deliver(oldGen, 0, Batch{Items: []Item{{ID: "stale", Title: "Stale"}}, Final: true})
+	_ = old
+	current <- Batch{Items: []Item{{ID: "pulse", Title: "Pulse"}}, Final: true}
+	snaps := sink.untilSettled(t, c.Gen())
+	if containsTitle(snaps[len(snaps)-1].Items, "Stale") {
+		t.Fatal("old generation was published")
+	}
+}
+
+func TestFallbacksAreAvailableBeforeOtherProvidersSettle(t *testing.T) {
+	ranked := [][]Item{{{ID: "web", Title: "Search the web", QueryFallback: true, Score: 40}, {ID: "automate", Title: "Automate", QueryFallback: true, Score: 40}}}
+	rows := mergeAppended(ranked, nil, 10, true, true, false)
+	if len(rows) != 2 || rows[0].ID != "automate" || rows[1].ID != "web" {
+		t.Fatalf("fallback order = %v", rowIDs(rows))
+	}
+	ranked = append(ranked, []Item{{ID: "answer", Title: "Answer", Answers: true}})
+	rows = mergeAppended(ranked, nil, 10, true, true, false)
+	if len(rows) != 1 || rows[0].ID != "answer" {
+		t.Fatalf("answer did not suppress fallbacks: %v", rowIDs(rows))
+	}
+}

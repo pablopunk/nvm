@@ -131,7 +131,7 @@ func appItem(app api.App, running, uninstallable bool, score float64, aliases []
 	open := api.Run(refOpen, "Open "+app.Name, map[string]string{argPath: app.Path})
 	open.DismissAfterRun = true
 	item := api.Item{
-		Title: app.Name, Section: search.KindApplications, LearnKey: "app:" + app.ID,
+		ID: app.Path, Title: app.Name, Section: search.KindApplications, LearnKey: "app:" + app.ID,
 		CustomizeAs: aliasPrefix + app.Path,
 		File:        &api.FileRef{Path: app.Path, Name: app.Name, Kind: "file"},
 		Aliases:     aliases, Score: score, LastUsedMs: app.FirstSeenMs,

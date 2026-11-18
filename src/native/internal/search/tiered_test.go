@@ -2,6 +2,7 @@ package search
 
 import (
 	"context"
+	"slices"
 	"testing"
 	"time"
 
@@ -193,4 +194,17 @@ func TestDirectRowsLeadAndFallbacksStayLast(t *testing.T) {
 func TestEmptyQueryKeepsScoreOrder(t *testing.T) {
 	got := tieredTitles(t, nil, "", Item{Title: "b", Score: 1}, Item{Title: "a", Score: 2})
 	assertTitles(t, got, "a", "b")
+}
+
+func TestTitlePrefixBeatsInfixAndContentAcrossKinds(t *testing.T) {
+	rows := []Item{
+		{ID: "content", Title: "Pulse message", Kind: KindClipboard, Content: true},
+		{ID: "infix", Title: "Affinity Publisher", Kind: KindFiles},
+		{ID: "prefix", Title: "Pulse", Kind: KindApplications},
+	}
+	rankTiered(rows, newQueryMatcher("pul"), "pul", nil, 0)
+	slices.SortStableFunc(rows, compareRows)
+	if rows[0].ID != "prefix" || rows[1].ID != "infix" || rows[2].ID != "content" {
+		t.Fatalf("ranked = %v", rowIDs(rows))
+	}
 }

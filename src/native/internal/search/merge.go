@@ -8,13 +8,11 @@ import (
 // DefaultLimit is how many rows a merged result keeps: the first rows by score, as the prototype kept.
 const DefaultLimit = 40
 
-// withoutQueryFallbacks drops the query fallbacks an answer makes unnecessary. An answer is a row that marks
-// AnswersQuery; the answer may come from any provider, so the ranked and appended rows are checked together. While a
-// first search is still running, every fallback is dropped too. A previously settled query keeps its fallbacks
-// during revalidation, unless a current or cached answer suppresses them.
-func withoutQueryFallbacks(ranked, appended []Item, settled bool) ([]Item, []Item) {
+// withoutQueryFallbacks suppresses query fallbacks when a provider supplies a direct answer.
+// Otherwise they are available as soon as their providers publish them.
+func withoutQueryFallbacks(ranked, appended []Item, _ bool) ([]Item, []Item) {
 	answered := slices.ContainsFunc(ranked, isAnswer) || slices.ContainsFunc(appended, isAnswer)
-	if answered || !settled {
+	if answered {
 		return slices.DeleteFunc(ranked, isQueryFallback), slices.DeleteFunc(appended, isQueryFallback)
 	}
 	return ranked, appended
