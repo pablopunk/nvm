@@ -113,7 +113,7 @@ func (p *Palette) runActionShortcut(c *ui.Context) {
 	rowActions := 0
 	if it := p.actionableItem(); it != nil {
 		rowActions = len(it.Actions)
-		if !p.choicePinned && p.presented.view == p.cur() && p.presented.query == p.shownQuery && p.presented.shows == p.shows {
+		if p.usesPresentedActions() {
 			key = p.presented.learnKey
 			rowActions = len(p.presented.actions)
 			actions = append([]search.Action(nil), p.presented.actions...)

@@ -84,8 +84,14 @@ func (p *Palette) recordPresentedChoice() {
 	}
 	if item := p.chosenItem(); item != nil {
 		action, hasAction := item.DefaultAction()
-		p.presented = presentedChoice{view: p.cur(), query: p.shownQuery, id: item.ID, kind: item.Kind, title: item.Title, provider: item.Provider, source: item.Source, publication: item.Publication, version: p.rowsVersion, shows: p.shows, action: action, actions: append([]search.Action(nil), item.Actions...), hasAction: hasAction, learnKey: item.LearnKey}
+		p.presented = presentedChoice{view: p.cur(), query: p.shownQuery, id: item.ID, kind: item.Kind, title: item.Title, provider: item.Provider, source: item.Source, publication: item.Publication, version: p.rowsVersion, shows: p.shows, chosen: p.chosen, action: action, actions: append([]search.Action(nil), item.Actions...), hasAction: hasAction, learnKey: item.LearnKey}
 	}
+}
+
+func (p *Palette) usesPresentedActions() bool {
+	shown := p.presented
+	return shown.view == p.cur() && shown.query == strings.TrimSpace(p.query) && shown.shows == p.shows &&
+		(!p.choicePinned || shown.version == p.rowsVersion && shown.chosen == p.chosen)
 }
 
 // admitPresentedChoice binds a key to the row last drawn unless the user explicitly moved the choice.
@@ -194,10 +200,9 @@ func (p *Palette) onEnter() {
 			v.OnSubmit(q)
 		}
 	default:
-		pinned := p.choicePinned
 		shown := p.presented
 		if p.admitPresentedChoice() {
-			if !pinned && shown.view == v && shown.query == q && shown.shows == p.shows {
+			if p.usesPresentedActions() {
 				if shown.hasAction {
 					p.rememberQuery(q)
 					p.runRowAction(shown.learnKey, shown.action)

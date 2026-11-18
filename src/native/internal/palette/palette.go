@@ -184,6 +184,7 @@ type presentedChoice struct {
 	publication, version   uint64
 	invalid                bool
 	shows                  int
+	chosen                 int
 	action                 search.Action
 	actions                []search.Action
 	hasAction              bool

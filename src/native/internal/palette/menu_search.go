@@ -14,7 +14,7 @@ func (p *Palette) openActionMenu(chosen int) {
 	if !p.admitPresentedChoice() {
 		return
 	}
-	if !p.choicePinned && p.presented.view == p.cur() && p.presented.query == p.shownQuery && p.presented.shows == p.shows {
+	if p.usesPresentedActions() {
 		p.menuSnapshot = menuActionsFrom(p.presented.actions)
 	} else {
 		p.menuSnapshot = append([]search.Action(nil), p.menuActions()...)
