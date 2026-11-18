@@ -84,3 +84,33 @@ func TestDeferredEnterWaitsForMatchingQuery(t *testing.T) {
 		t.Fatalf("extra frames replayed default action: %v", ran)
 	}
 }
+
+func TestSingleSnapshotDeferredEnterTracksExistingGeneration(t *testing.T) {
+	var ran string
+	release := make(chan struct{})
+	provider := search.NewRowsProvider("held", func(ctx context.Context, q string) []search.Item {
+		if q == "new" {
+			select {
+			case <-release:
+			case <-ctx.Done():
+				return nil
+			}
+		}
+		return []search.Item{{ID: q, Title: q, Actions: []search.Action{{Title: q, Dismiss: search.DismissNever, Run: func(search.Host) { ran = q }}}}}
+	})
+	root := &View{Title: "Root", SingleSnapshot: true, Providers: func() []search.Provider { return []search.Provider{provider} }}
+	h := newHarness(t, root, false)
+	h.p.SetQuery("old")
+	h.awaitRows(func(titles []string) bool { return len(titles) == 1 && titles[0] == "old" })
+	h.key(Mod, ui.KeyA)
+	h.typeText("new")
+	h.key(0, ui.KeyEnter)
+	if ran != "" || h.p.defaultEnter == nil {
+		t.Fatal("pending query acted on stale row")
+	}
+	close(release)
+	h.awaitRows(func(titles []string) bool { return len(titles) == 1 && titles[0] == "new" && h.p.Settled() })
+	if ran != "new" {
+		t.Fatalf("deferred Enter ran %q", ran)
+	}
+}

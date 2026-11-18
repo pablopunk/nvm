@@ -31,6 +31,9 @@ func (e extensionSearch) ID() string { return "extensions" }
 
 // SeedNarrowing keeps only app name matches; their host-owned launch actions are revalidated by the app service.
 func (e extensionSearch) SeedNarrowing(q string, previous []search.Item) []search.Item {
+	if m := e.p.extensionManager(); m == nil || !m.IsBuiltIn(appsbuiltin.ID) {
+		return nil
+	}
 	var rows []search.Item
 	installed := e.installedAppPaths()
 	for _, item := range previous {
@@ -243,7 +246,7 @@ func extensionRow(p *App, m *manager.Manager, extID, title string, item api.Item
 		p.shortcutTitles.remember(item.CustomizeAs, item.Title)
 		row = p.withShortcutActions(row, item.CustomizeAs, bound)
 	}
-	return p.withAuthoringActions(row, extID, "")
+	return guardRootExtensionActions(m, extID, p.withAuthoringActions(row, extID, ""))
 }
 
 // folderLearnKey namespaces a folder extension's learning key by its id, so its rows learn apart from built-in rows

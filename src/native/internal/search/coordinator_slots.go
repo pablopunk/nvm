@@ -82,6 +82,9 @@ func (c *Coordinator) complete(gen, idx int, returned bool) {
 		c.mu.Unlock()
 		return
 	}
+	if c.opts.SingleSnapshot && !returned && !s.refreshing {
+		s.items = nil
+	}
 	if s.refreshing && returned {
 		// A provider that returned without emitting has answered with an empty result.
 		s.items = nil
@@ -118,6 +121,14 @@ func (c *Coordinator) cutOff(gen, idx int) {
 	s := c.slots[idx]
 	s.slow = true
 	c.statsLocked(s.id).Slow++
+	if c.opts.SingleSnapshot && s.selfBudgeted {
+		c.mu.Unlock()
+		return
+	}
+	if c.opts.SingleSnapshot && !s.returned {
+		s.items = nil
+		s.refreshing = false
+	}
 	c.finishLocked(s)
 	if !s.selfBudgeted && s.cancel != nil {
 		s.cancel()

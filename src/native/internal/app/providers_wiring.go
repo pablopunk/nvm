@@ -16,6 +16,6 @@ type rootSource struct {
 var rootSources = []rootSource{
 	{id: "extension-commands", rows: extensionCommandRows},
 	{id: "extensions", provider: extensionProvider},
-	{id: "commands", rows: commandRows},
+	{id: "commands", provider: rootCommandsProvider},
 	{id: "updates", rows: updateRootRows},
 }

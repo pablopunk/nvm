@@ -48,6 +48,8 @@ type View struct {
 	Flat bool
 	// Tiered ranks typed queries by match tier, then class and usage (search.Options.Tiered).
 	Tiered bool
+	// SingleSnapshot keeps each typed result fixed until the query changes.
+	SingleSnapshot bool
 	// OnSubmit receives the input text when Enter is pressed in a Body view.
 	OnSubmit  func(q string)
 	HideInput bool

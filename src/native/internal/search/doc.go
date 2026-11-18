@@ -5,11 +5,8 @@
 // The package draws nothing: an Item carries plain data, and a Detail closure is the only place a row
 // touches ui. The palette package decides how rows are shown.
 //
-// Typed root searches rank each available snapshot independently of provider arrival order. A provider may opt in to
-// carrying safe, matching rows into a narrower query; its first authoritative batch replaces those rows. The palette
-// follows the best ranked result until a user chooses one, and retains that choice by identity while it remains.
-// Each provider publication gives rows host-owned identities; provider and extension scope keep IDs distinct.
-// Input arriving between frames acts on the last presented row and action only while that publication remains;
-// ambiguous or replaced rows wait for a frame. An explicit move instead acts on the moved-to row. A queued Enter for an unseen query waits for a settled result to be drawn and is cancelled by navigation.
-// The app catalog seed is checked against the current host index and replaced by the app provider's answer.
+// Typed root searches publish one complete provider result per query. Exact cached results are immediate and
+// revalidation only updates future cache entries. A narrowing keeps the previously leading matching row first when
+// it is still present. While a cold query runs, the palette retains the last coherent list with its old query
+// attribution so it cannot run as the new query. Extension and resource authority is checked on action execution.
 package search

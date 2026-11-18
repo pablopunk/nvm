@@ -142,6 +142,10 @@ func (p *Palette) NotifyTopDataChanged(extensionID string) {
 // ReloadRows revalidates the visible rows from the UI thread after host data changes. Cached snapshots stay
 // available for instant navigation; every search revalidates its providers.
 func (p *Palette) ReloadRows() {
+	if p.cur().SingleSnapshot {
+		p.search()
+		return
+	}
 	p.shownView = nil
 	p.search()
 }

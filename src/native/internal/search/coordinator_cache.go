@@ -31,3 +31,13 @@ func (c *Coordinator) providerCache(visible []Item) map[string][]Item {
 	}
 	return rows
 }
+
+// completeProviderCache retains the completed provider answers for exact-query re-ranking and continuity.
+// The query LRU bounds the number of retained catalogs; provider-level limits still apply.
+func (c *Coordinator) completeProviderCache() map[string][]Item {
+	rows := make(map[string][]Item, len(c.slots))
+	for _, s := range c.slots {
+		rows[s.id] = append([]Item(nil), s.items...)
+	}
+	return rows
+}

@@ -90,3 +90,21 @@ func (p *App) chatHeads() []chatHead {
 	}
 	return heads
 }
+
+// rootCommandProvider delegates per-built-in deadlines to the extension manager. A single coordinator deadline
+// would discard the entire command catalog while several independently bounded built-ins are answering.
+func rootCommandsProvider(p *App, in *rootInput) search.Provider {
+	return rootCommandProvider{p: p, in: in}
+}
+
+type rootCommandProvider struct {
+	p  *App
+	in *rootInput
+}
+
+func (rootCommandProvider) ID() string                           { return "commands" }
+func (rootCommandProvider) OwnsCallBudgets()                     {}
+func (r rootCommandProvider) Root(context.Context) []search.Item { return commandRows(r.p, r.in, "") }
+func (r rootCommandProvider) Search(_ context.Context, q string, emit func(search.Batch)) {
+	emit(search.Batch{Items: commandRows(r.p, r.in, q), Final: true})
+}

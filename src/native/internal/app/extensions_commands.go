@@ -33,7 +33,7 @@ func matchingCommandRows(p *App, m *manager.Manager, result manager.CommandResul
 		if commandTakesShortcuts(command) {
 			row = p.withShortcutActions(row, actionID, bound)
 		}
-		out = append(out, p.withAuthoringActions(row, result.ExtensionID, command.ID))
+		out = append(out, guardRootExtensionActions(m, result.ExtensionID, p.withAuthoringActions(row, result.ExtensionID, command.ID)))
 	}
 	return out
 }

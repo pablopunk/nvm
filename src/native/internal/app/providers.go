@@ -145,5 +145,5 @@ const rootEmptyTitle = "Type anything"
 // rootView is the palette's first level: the providers of every source, merged by the coordinator. Its rows are in
 // score order with no section labels, as 1.x's root list shows them.
 func (p *App) rootView() *palette.View {
-	return &palette.View{Title: rootViewTitle, Providers: p.rootProviders, Hint: "esc Close", Limit: rootRowLimit, Flat: true, Tiered: true, EmptyTitle: rootEmptyTitle}
+	return &palette.View{Title: rootViewTitle, Providers: p.rootProviders, Hint: "esc Close", Limit: rootRowLimit, Flat: true, Tiered: true, SingleSnapshot: true, EmptyTitle: rootEmptyTitle}
 }

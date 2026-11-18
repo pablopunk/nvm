@@ -18,6 +18,9 @@ func (p *Palette) search() {
 	}
 	v := p.cur()
 	q := strings.TrimSpace(p.query)
+	if v.SingleSnapshot && p.shownView == v && p.shownQuery == q {
+		return
+	}
 	if p.actionsOpen && (p.shownView != v || p.shownQuery != q) {
 		p.closeActionMenu()
 	}
@@ -32,7 +35,7 @@ func (p *Palette) search() {
 	if snap, ready := p.coordinator(v).Query(q, v.Providers()); ready {
 		p.showRows(v, q, snap.Items, snap.Settled, snap.Pending)
 	} else if p.shownView == v {
-		p.settled, p.pending = false, true
+		p.settled, p.pending = false, !v.SingleSnapshot
 	}
 }
 
@@ -41,12 +44,13 @@ func (p *Palette) search() {
 func (p *Palette) coordinator(v *View) *search.Coordinator {
 	if v.coord == nil {
 		v.coord = search.NewCoordinator(search.Options{
-			Clock:       p.opts.Clock,
-			Synchronous: p.opts.Synchronous,
-			Learner:     p.opts.Learner,
-			Limit:       v.Limit,
-			Flat:        v.Flat,
-			Tiered:      v.Tiered,
+			Clock:          p.opts.Clock,
+			Synchronous:    p.opts.Synchronous,
+			Learner:        p.opts.Learner,
+			Limit:          v.Limit,
+			Flat:           v.Flat,
+			Tiered:         v.Tiered,
+			SingleSnapshot: v.SingleSnapshot,
 			OnSnapshot: func(s search.Snapshot) {
 				p.win.Update(func() { p.applySnapshot(v, s) })
 			},
@@ -76,8 +80,8 @@ func (p *Palette) carrySupersededRows(v *View, s search.Snapshot) {
 	}
 }
 
-// showRows follows ranking until the user chooses a row. An explicit choice survives refresh by identity;
-// changing the view or query resets that choice.
+// showRows keeps an explicit choice by identity. A single-snapshot root receives one result for each query;
+// other views may refresh their ranked rows in place.
 func (p *Palette) showRows(v *View, q string, rows []search.Item, settled, pending bool) {
 	if i := p.defaultEnter; i != nil && (i.view != v || i.query != q || i.shows != p.shows) {
 		p.defaultEnter = nil

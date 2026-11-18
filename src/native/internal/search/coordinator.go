@@ -3,7 +3,6 @@ package search
 import (
 	"context"
 	"sort"
-	"strings"
 	"sync"
 	"time"
 
@@ -63,6 +62,8 @@ type Options struct {
 	Tiered bool
 	// Flat lists the rows in score order with no section labels, as 1.x's root list does, for every query.
 	Flat bool
+	// SingleSnapshot publishes one complete result per displayed query; refreshes only update its cache.
+	SingleSnapshot bool
 }
 
 // ProviderStats counts the calls of one provider over the coordinator's life.
@@ -77,7 +78,8 @@ type ProviderStats struct {
 // result of each query for instant redisplay. A new query cancels the previous one: rows that arrive for an
 // older generation are dropped, so a slow provider never overwrites a newer query's rows.
 type Coordinator struct {
-	opts Options
+	opts   Options
+	single singleQueryState
 
 	mu                    sync.Mutex
 	publishMu             sync.Mutex
@@ -125,73 +127,6 @@ func NewCoordinator(opts Options) *Coordinator {
 		opts.CacheSize = defaultCacheSize
 	}
 	return &Coordinator{opts: opts, cache: newQueryCache(opts.CacheSize), stats: map[string]*ProviderStats{}}
-}
-
-// Query starts the search for q with the given providers and returns the rows ready at once: the rows
-// remembered for q (ok), or, in Synchronous mode, the complete result. Without a remembered result the
-// caller shows nothing new until the first snapshot arrives through OnSnapshot. Query never waits for a
-// provider. An empty q asks the providers for their root rows.
-func (c *Coordinator) Query(q string, providers []Provider) (Snapshot, bool) {
-	c.mu.Lock()
-	previousQuery := c.query
-	c.resetLocked()
-	gen := c.gen
-	ctx, cancel := context.WithCancel(context.Background())
-	c.cancel = cancel
-	c.query = q
-	c.slots = make([]*slot, len(providers))
-	for i, p := range providers {
-		c.slots[i] = &slot{id: p.ID(), appended: isAppended(p), started: c.opts.Clock.Now(), budget: budgetOf(p), selfBudgeted: ownsCallBudgets(p), done: make(chan struct{}), refreshing: true}
-	}
-	c.pending = len(providers)
-	c.emitted = false
-	c.superseded = c.shown
-	remembered, hit := c.cache.get(q)
-	c.warmSettled = hit && remembered.settled
-	var warm Snapshot
-	if !hit && q != "" && previousQuery != "" && strings.HasPrefix(q, previousQuery) && q != previousQuery {
-		for i, p := range providers {
-			if seed, ok := p.(NarrowingSeedProvider); ok {
-				c.slots[i].items = c.learned(seed.SeedNarrowing(q, c.shown[p.ID()]), q)
-			}
-		}
-		rows := mergeCached(c.slots, c.limit(), true, c.opts.Flat, false)
-		if len(rows) > 0 {
-			warm = Snapshot{Gen: gen, Query: q, Items: rows, Pending: true}
-			hit = true
-			c.emitted = true
-			c.shown = c.providerCache(rows)
-		}
-	}
-	if hit && warm.Items == nil {
-		for _, s := range c.slots {
-			s.items = append([]Item(nil), remembered.providers[s.id]...)
-		}
-		warm = Snapshot{Gen: gen, Query: q, Items: mergeCached(c.slots, c.limit(), q != "", c.opts.Flat, remembered.settled), Settled: remembered.settled}
-		if !c.opts.Synchronous {
-			c.emitted = true
-			c.shown = c.providerCache(warm.Items)
-		}
-	}
-	c.mu.Unlock()
-
-	if c.opts.Synchronous {
-		for i, p := range providers {
-			c.invoke(ctx, gen, i, p, q)
-		}
-		return c.current(gen), true
-	}
-	if len(providers) == 0 {
-		return c.current(gen), true
-	}
-	for i, p := range providers {
-		c.start(ctx, gen, i, p, q)
-	}
-	go c.firstSnapshotTimer(gen)
-	if !hit {
-		return Snapshot{}, false
-	}
-	return warm, true
 }
 
 // Cancel stops the providers of the current query and drops their rows. It is what happens to a view when
@@ -319,10 +254,20 @@ func (c *Coordinator) snapshotLocked() Snapshot {
 		}
 	}
 	settled := c.pending == 0
-	fresh := mergeAppended(ranked, appended, c.limit(), c.query != "", c.opts.Flat, settled || c.warmSettled)
+	limit := c.limit()
+	if c.opts.SingleSnapshot {
+		limit = 0
+	}
+	fresh := mergeAppended(ranked, appended, limit, c.query != "", c.opts.Flat, settled || c.warmSettled)
+	if c.opts.SingleSnapshot {
+		fresh = firstN(c.single.refine(c.query, fresh), c.limit())
+	}
 	snap := Snapshot{revision: c.revision, Gen: c.gen, Query: c.query, Items: fresh, Settled: settled, Pending: c.pendingCallsLocked()}
 	c.emitted = true
 	providerRows := c.providerCache(fresh)
+	if c.opts.SingleSnapshot {
+		providerRows = c.completeProviderCache()
+	}
 	c.shown = c.providerCache(snap.Items)
 	if len(snap.Items) == 0 && !settled {
 		snap.Carried = c.carriedLocked()
@@ -359,9 +304,12 @@ func (c *Coordinator) publish(snap Snapshot) {
 	c.publishMu.Lock()
 	defer c.publishMu.Unlock()
 	c.mu.Lock()
-	if snap.Gen != c.gen || snap.revision <= c.publishedRevision {
+	if snap.Gen != c.gen || snap.revision <= c.publishedRevision || (c.opts.SingleSnapshot && c.single.visible != nil) {
 		c.mu.Unlock()
 		return
+	}
+	if c.opts.SingleSnapshot {
+		c.single.setVisible(snap)
 	}
 	c.publishedRevision = snap.revision
 	c.mu.Unlock()

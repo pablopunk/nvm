@@ -1,7 +1,10 @@
 package search
 
-// readyLocked reports whether the current generation may publish. Appended providers never hold it up.
+// readyLocked waits for every source in single-snapshot mode; streaming views may publish before appended sources.
 func (c *Coordinator) readyLocked() bool {
+	if c.opts.SingleSnapshot {
+		return c.pending == 0
+	}
 	if c.emitted || c.opts.Synchronous {
 		return true
 	}

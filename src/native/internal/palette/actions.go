@@ -181,10 +181,17 @@ func (p *Palette) onEnter() {
 		if p.shownView == v && p.shownQuery == q && v.Providers != nil {
 			p.defaultEnter.gen = p.coordinator(v).Gen()
 		} else {
-			if v.Providers != nil {
-				p.defaultEnter.gen = p.coordinator(v).Gen() + 1
+			if v.SingleSnapshot && v.Providers != nil {
+				p.search()
+				if p.defaultEnter != nil {
+					p.defaultEnter.gen = p.coordinator(v).Gen()
+				}
+			} else {
+				if v.Providers != nil {
+					p.defaultEnter.gen = p.coordinator(v).Gen() + 1
+				}
+				p.search()
 			}
-			p.search()
 		}
 		return
 	}
