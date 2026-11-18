@@ -130,6 +130,7 @@ func TestEngineDevicesRefuseWhenTheListCannotBeRead(t *testing.T) {
 
 func TestEngineStartOpensTheDefaultMicrophoneAndMutesTheOutput(t *testing.T) {
 	rig := newEngineRig(t, true)
+	rig.transcriber.texts = []string{""} // the frame that proves capture is silent; its recording is still transcribed
 	rig.mic.Queue(frames(1, 0)...)
 	if err := rig.engine.Start(api.DictationStartOptions{DeviceID: "default", MuteSystemAudioWhileRecord: true}); err != nil {
 		t.Fatal(err)
