@@ -44,7 +44,8 @@ func commandRow(p *App, m *manager.Manager, result manager.CommandResult, comman
 	sections := extview.MenuSections(&primary, command.ActionPanel, command.Actions)
 	deps := p.extensionViewDeps(m)
 	row := search.Item{
-		Kind: result.Title, Title: command.Title, Subtitle: commandSubtitle(command, result.Title), Icon: iconOr(command.Icon, "puzzle"),
+		Source: result.ExtensionID,
+		Kind:   result.Title, Title: command.Title, Subtitle: commandSubtitle(command, result.Title), Icon: iconOr(command.Icon, "puzzle"),
 		Tone: commandTone(command), Score: score,
 		Actions: commandMenuActions(deps, result.ExtensionID, sections, commandInitialView(command)),
 	}

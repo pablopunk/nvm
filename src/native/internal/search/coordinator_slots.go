@@ -45,7 +45,13 @@ func (c *Coordinator) deliver(gen, idx int, b Batch) {
 	if b.Replace {
 		s.items = nil
 	}
-	s.items = append(s.items, c.learned(b.Items, c.query)...)
+	items := append([]Item(nil), b.Items...)
+	for i := range items {
+		c.publication++
+		items[i].Provider = s.id
+		items[i].Publication = c.publication
+	}
+	s.items = append(s.items, c.learned(items, c.query)...)
 	s.pending = s.pending || b.Pending
 	if b.Final {
 		c.finishLocked(s)

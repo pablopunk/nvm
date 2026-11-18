@@ -103,6 +103,11 @@ type Item struct {
 	Actions    []Action
 	Detail     func(c *ui.Context, h Host) // preview pane
 	ID         string
+	// Provider and Source identify the host provider and its extension, respectively. Publication is a
+	// host-issued identity for one emitted row, never an extension-supplied action handle.
+	Provider    string
+	Source      string
+	Publication uint64
 	// Disabled rows stay visible as context: they draw muted, carry no actions and are skipped by the keyboard.
 	Disabled bool
 	// Contextual rows are plain guidance text, such as a load error, drawn full contrast and wrapped.

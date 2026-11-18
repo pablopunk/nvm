@@ -1,6 +1,7 @@
 package palette
 
 import (
+	"fmt"
 	"github.com/egoist/mygo/ui"
 
 	"github.com/pablopunk/nvm/native/internal/design"
@@ -112,10 +113,7 @@ func (p *Palette) actionPanel(c *ui.Context) {
 
 func (p *Palette) menuOwnerKey() string {
 	if row := p.chosenItem(); row != nil {
-		if row.ID != "" {
-			return "id:" + row.Kind + "\x00" + row.ID
-		}
-		return "title:" + row.Kind + "\x00" + row.Title
+		return fmt.Sprintf("%q:%q:%q:%q:%d:%d", row.Provider, row.Source, row.Kind, row.ID, row.Publication, p.rowsVersion)
 	}
 	return ""
 }

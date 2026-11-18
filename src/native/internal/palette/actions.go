@@ -77,10 +77,14 @@ func (p *Palette) recordPresentedChoice() {
 	if p.shownView != p.cur() || p.shownQuery != strings.TrimSpace(p.query) {
 		return
 	}
-	p.presented = presentedChoice{view: p.cur(), query: p.shownQuery, shows: p.shows}
+	p.presented = presentedChoice{view: p.cur(), query: p.shownQuery, shows: p.shows, version: p.rowsVersion}
+	p.choiceLost = false
+	if p.choicePinned {
+		p.choiceVersion = p.rowsVersion
+	}
 	if item := p.chosenItem(); item != nil {
 		action, hasAction := item.DefaultAction()
-		p.presented = presentedChoice{view: p.cur(), query: p.shownQuery, id: item.ID, kind: item.Kind, title: item.Title, shows: p.shows, action: action, actions: append([]search.Action(nil), item.Actions...), hasAction: hasAction, learnKey: item.LearnKey}
+		p.presented = presentedChoice{view: p.cur(), query: p.shownQuery, id: item.ID, kind: item.Kind, title: item.Title, provider: item.Provider, source: item.Source, publication: item.Publication, version: p.rowsVersion, shows: p.shows, action: action, actions: append([]search.Action(nil), item.Actions...), hasAction: hasAction, learnKey: item.LearnKey}
 	}
 }
 
@@ -88,14 +92,36 @@ func (p *Palette) recordPresentedChoice() {
 // A removed row is never replaced by another row under the same key press.
 func (p *Palette) admitPresentedChoice() bool {
 	shown := p.presented
-	if p.choicePinned || shown.view == nil || shown.view != p.cur() || shown.query != strings.TrimSpace(p.query) || shown.shows != p.shows {
+	if p.choiceLost {
+		return false
+	}
+	if shown.view == nil || shown.view != p.cur() || shown.query != strings.TrimSpace(p.query) || shown.shows != p.shows {
 		return true
 	}
+	if shown.invalid {
+		return false
+	}
+	if p.choicePinned {
+		return p.choiceVersion == p.rowsVersion
+	}
+	if shown.version == p.rowsVersion {
+		return true
+	}
+	if shown.publication == 0 {
+		return false
+	}
+	match := -1
 	for i, row := range p.results {
-		if row.Kind == shown.kind && ((shown.id != "" && row.ID == shown.id) || (shown.id == "" && row.ID == "" && row.Title == shown.title)) {
-			p.chosen = i
-			return true
+		if row.Provider == shown.provider && row.Source == shown.source && row.Publication == shown.publication {
+			if match >= 0 {
+				return false
+			}
+			match = i
 		}
+	}
+	if match >= 0 {
+		p.chosen = match
+		return true
 	}
 	return false
 }

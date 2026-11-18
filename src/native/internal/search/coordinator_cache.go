@@ -1,12 +1,15 @@
 package search
 
-type cachedItemKey struct{ id, kind, title, learnKey string }
+type cachedItemKey struct {
+	id, kind, title, learnKey, provider, source string
+	publication                                 uint64
+}
 
 func cacheKey(item Item) cachedItemKey {
 	if item.ID != "" {
-		return cachedItemKey{id: item.ID, kind: item.Kind}
+		return cachedItemKey{id: item.ID, kind: item.Kind, provider: item.Provider, source: item.Source, publication: item.Publication}
 	}
-	return cachedItemKey{kind: item.Kind, title: item.Title, learnKey: item.LearnKey}
+	return cachedItemKey{kind: item.Kind, title: item.Title, learnKey: item.LearnKey, provider: item.Provider, source: item.Source, publication: item.Publication}
 }
 
 // providerCache keeps the visible snapshot by source. Large inventories must not multiply across remembered queries.

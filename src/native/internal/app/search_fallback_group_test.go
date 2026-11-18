@@ -15,6 +15,7 @@ func TestFallbackGroupPublishesTogetherInEitherArrivalOrder(t *testing.T) {
 		}
 		rows := map[string][]search.Item{}
 		var group fallbackGroup
+		group.targets([]string{aichats.ID, websearch.ID, "unrelated"})
 		group.accept(first, []search.Item{{ID: first, QueryFallback: true}, {ID: "ordinary"}}, rows)
 		if len(rows[first]) != 1 || rows[first][0].ID != "ordinary" {
 			t.Fatalf("early fallback escaped: %+v", rows)
@@ -29,9 +30,47 @@ func TestFallbackGroupPublishesTogetherInEitherArrivalOrder(t *testing.T) {
 func TestFallbackGroupFlushesWhenOneProviderIsAbsent(t *testing.T) {
 	rows := map[string][]search.Item{}
 	var group fallbackGroup
+	group.targets([]string{websearch.ID, "unrelated"})
 	group.accept(websearch.ID, []search.Item{{ID: "web", QueryFallback: true}}, rows)
-	group.flush(rows)
 	if len(rows[websearch.ID]) != 1 {
 		t.Fatal("available fallback was lost")
 	}
+}
+
+func TestFallbackGroupFailureReleasesOtherSource(t *testing.T) {
+	rows := map[string][]search.Item{}
+	var group fallbackGroup
+	group.targets([]string{aichats.ID, websearch.ID, "held"})
+	group.accept(websearch.ID, []search.Item{{ID: "web", QueryFallback: true}}, rows)
+	if len(rows[websearch.ID]) != 0 {
+		t.Fatal("published before the eligible counterpart answered")
+	}
+	group.accept(aichats.ID, nil, rows)
+	if len(rows[websearch.ID]) != 1 {
+		t.Fatal("failure did not release the available fallback")
+	}
+}
+
+func TestAvailableFallbackPublishesWhileUnrelatedSourceIsHeld(t *testing.T) {
+	rows := map[string][]search.Item{}
+	var group fallbackGroup
+	group.targets([]string{websearch.ID, "held"})
+	answers := make(chan string)
+	published := make(chan bool, 1)
+	release := make(chan struct{})
+	go func() {
+		answers <- websearch.ID
+		<-release
+		answers <- "held"
+	}()
+	go func() {
+		id := <-answers
+		group.accept(id, []search.Item{{ID: "web", QueryFallback: true}}, rows)
+		published <- len(rows[websearch.ID]) == 1
+		<-answers
+	}()
+	if !<-published {
+		t.Fatal("unrelated source held available fallback")
+	}
+	close(release)
 }

@@ -130,7 +130,7 @@ func (e extensionSearch) SearchSeeded(ctx context.Context, q string, seed []sear
 		emit(search.Batch{Items: mergedExtensionRows(rows), Replace: true})
 		appAnswered := false
 		var fallbacks fallbackGroup
-		m.SearchEach(ctx, q, func(result manager.SearchResult) {
+		m.SearchEachWithTargets(ctx, q, fallbacks.targets, func(result manager.SearchResult) {
 			if result.ExtensionID == appsbuiltin.ID {
 				appAnswered = true
 			}
@@ -141,6 +141,9 @@ func (e extensionSearch) SearchSeeded(ctx context.Context, q string, seed []sear
 			fallbacks.accept(result.ExtensionID, resultRows, rows)
 			emit(search.Batch{Items: mergedExtensionRows(rows), Replace: true})
 		})
+		if ctx.Err() != nil {
+			return
+		}
 		if !appAnswered {
 			delete(rows, appsbuiltin.ID)
 		}
@@ -214,7 +217,8 @@ func extensionRow(p *App, m *manager.Manager, extID, title string, item api.Item
 	item = extview.WithRevealShortcut(item, platform.ShellLabelsFor(p.goos).RevealInFileManager)
 	deps := p.extensionViewDeps(m)
 	row := search.Item{
-		Kind: title, Title: item.Title, Subtitle: item.Subtitle, Icon: iconOr(item.Icon, "puzzle"), Tone: "purple",
+		Source: extID,
+		Kind:   title, Title: item.Title, Subtitle: item.Subtitle, Icon: iconOr(item.Icon, "puzzle"), Tone: "purple",
 		Score: scoreExtension, LastUsed: item.LastUsedMs, Detail: extview.DetailFor(deps, extID, item.Detail),
 		QueryFallback: item.QueryFallback, Answers: item.AnswersQuery, Names: slices.Concat(item.Aliases, item.Keywords),
 		DragPaths: api.DragPaths(item), DragImage: api.DragImagePath(item),

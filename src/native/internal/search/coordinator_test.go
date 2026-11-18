@@ -96,7 +96,7 @@ func TestEqualScoresKeepProviderOrder(t *testing.T) {
 	}
 }
 
-func TestRowsWithTheSameIDAndKindAreMergedOnce(t *testing.T) {
+func TestRowsWithTheSameIDFromDifferentProvidersRemainDistinct(t *testing.T) {
 	c := newSyncCoordinator(t)
 	a := fixedRows("a", Item{ID: "/x/one", Kind: KindFiles, Title: "one", Score: 5})
 	b := fixedRows("b",
@@ -106,9 +106,8 @@ func TestRowsWithTheSameIDAndKindAreMergedOnce(t *testing.T) {
 		Item{Kind: KindSnippets, Title: "no id either", Score: 2},
 	)
 	snap, _ := c.Query("one", []Provider{a, b})
-	// The first provider's row for an ID and Kind is kept; the rows without an ID are never merged. Sectioning
-	// then groups the rest by kind, so the snippets come before the clipboard row.
-	if got, want := titles(snap.Items), []string{"one", "no id", "no id either", "same id, other kind"}; !equalStrings(got, want) {
+	// Provider-qualified IDs stay distinct; sectioning groups the remaining rows by kind.
+	if got, want := titles(snap.Items), []string{"one again", "no id", "no id either", "one", "same id, other kind"}; !equalStrings(got, want) {
 		t.Fatalf("rows = %v, want %v", got, want)
 	}
 }

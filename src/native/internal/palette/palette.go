@@ -102,10 +102,13 @@ type Palette struct {
 	entryBoundary int
 	query         string
 	// caretToEnd is set when the query was replaced: the input takes the caret to the end of the text once.
-	caretToEnd   bool
-	results      []search.Item
-	chosen       int
-	choicePinned bool
+	caretToEnd    bool
+	results       []search.Item
+	chosen        int
+	choicePinned  bool
+	choiceLost    bool
+	rowsVersion   uint64
+	choiceVersion uint64
 	// pointerChose is set when the pointer moved the cursor in this frame, so the footer reveal leaves the scroll alone.
 	pointerChose bool
 	list         ui.ListState
@@ -177,6 +180,9 @@ type Palette struct {
 type presentedChoice struct {
 	view                   *View
 	query, id, kind, title string
+	provider, source       string
+	publication, version   uint64
+	invalid                bool
 	shows                  int
 	action                 search.Action
 	actions                []search.Action
@@ -246,6 +252,7 @@ func (p *Palette) Chosen() int { return p.chosen }
 func (p *Palette) choose(i int) {
 	p.defaultEnter = nil
 	p.choicePinned = true
+	p.choiceVersion = p.rowsVersion
 	p.clampChoice(i)
 	p.scrollChoiceIntoView()
 }
@@ -255,6 +262,7 @@ func (p *Palette) choose(i int) {
 func (p *Palette) choosePointed(i int) {
 	p.defaultEnter = nil
 	p.choicePinned = true
+	p.choiceVersion = p.rowsVersion
 	p.clampChoice(i)
 	p.pointerChose = true
 }

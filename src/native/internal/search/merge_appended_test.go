@@ -72,8 +72,8 @@ func TestCoordinatorKeepsTheAppendedBatchAfterTheRankedRows(t *testing.T) {
 		return []Item{scored("hot", 0), scored("fire", 0)}
 	})
 	snap, _ := c.Query("warm", []Provider{second, ranked})
-	if got := rowIDs(snap.Items); len(got) != 2 || got[0] != "fire" || got[1] != "hot" {
-		t.Fatalf("rows = %v, want the ranked fire row, then the appended hot row", got)
+	if got := rowIDs(snap.Items); len(got) != 3 || got[0] != "fire" || got[1] != "hot" || got[2] != "fire" {
+		t.Fatalf("rows = %v, want the ranked row, then both distinct appended rows", got)
 	}
 }
 

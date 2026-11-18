@@ -34,3 +34,14 @@ func TestFlatMergeStillCutsToTheLimit(t *testing.T) {
 		t.Fatalf("flat merge kept %d rows, want 30", got)
 	}
 }
+
+func TestDistinctProvidersAndExtensionsDoNotDedupeCollidingIDs(t *testing.T) {
+	rows := dedupe([]Item{
+		{Provider: "aggregate", Source: "one", Kind: "Search", ID: "same"},
+		{Provider: "aggregate", Source: "two", Kind: "Search", ID: "same"},
+		{Provider: "other", Source: "one", Kind: "Search", ID: "same"},
+	})
+	if len(rows) != 3 {
+		t.Fatalf("distinct origins merged: %+v", rows)
+	}
+}

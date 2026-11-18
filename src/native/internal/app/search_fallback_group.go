@@ -8,8 +8,18 @@ import (
 
 // fallbackGroup publishes both built-in query fallbacks together, without holding other results.
 type fallbackGroup struct {
+	expected map[string]bool
 	answered map[string]bool
 	pending  map[string][]search.Item
+}
+
+func (g *fallbackGroup) targets(ids []string) {
+	g.expected = map[string]bool{}
+	for _, id := range ids {
+		if id == aichats.ID || id == websearch.ID {
+			g.expected[id] = true
+		}
+	}
 }
 
 func (g *fallbackGroup) accept(id string, items []search.Item, rows map[string][]search.Item) {
@@ -29,7 +39,7 @@ func (g *fallbackGroup) accept(id string, items []search.Item, rows map[string][
 			rows[id] = append(rows[id], item)
 		}
 	}
-	if g.answered[aichats.ID] && g.answered[websearch.ID] {
+	if (!g.expected[aichats.ID] || g.answered[aichats.ID]) && (!g.expected[websearch.ID] || g.answered[websearch.ID]) {
 		g.flush(rows)
 	}
 }

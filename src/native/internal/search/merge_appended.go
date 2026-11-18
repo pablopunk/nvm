@@ -57,12 +57,12 @@ func withoutRows(items, rows []Item) []Item {
 	taken := make(map[dedupeKey]bool, len(rows))
 	for _, row := range rows {
 		if row.ID != "" {
-			taken[dedupeKey{row.ID, row.Kind}] = true
+			taken[keyForDedupe(row)] = true
 		}
 	}
 	out := make([]Item, 0, len(items))
 	for _, it := range items {
-		if it.ID == "" || !taken[dedupeKey{it.ID, it.Kind}] {
+		if it.ID == "" || !taken[keyForDedupe(it)] {
 			out = append(out, it)
 		}
 	}

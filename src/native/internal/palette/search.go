@@ -89,24 +89,36 @@ func (p *Palette) showRows(v *View, q string, rows []search.Item, settled, pendi
 		return
 	}
 	newQuery := p.shownView != v || p.shownQuery != q
+	if !newQuery && p.presented.view == v && p.presented.query == q {
+		present := false
+		if p.presented.publication != 0 {
+			count := 0
+			for _, row := range rows {
+				if row.Provider == p.presented.provider && row.Source == p.presented.source && row.Publication == p.presented.publication {
+					count++
+				}
+			}
+			present = count == 1
+		}
+		if !present {
+			p.presented.invalid = true
+		}
+	}
 	before := p.chosen
 	if newQuery {
-		p.chosen, p.choicePinned = 0, false
-	} else if selected := p.chosenItem(); p.choicePinned && selected != nil && selected.ID != "" {
-		found := false
-		for i := range rows {
-			if rows[i].ID == selected.ID && rows[i].Kind == selected.Kind {
-				p.chosen, found = i, true
-				break
-			}
-		}
-		if !found {
-			p.chosen, p.choicePinned = 0, false
+		p.chosen, p.choicePinned, p.choiceLost = 0, false, false
+	} else if selected := p.chosenItem(); p.choicePinned && selected != nil {
+		oldIndex, newIndex := uniqueRowIndex(p.results, *selected), uniqueRowIndex(rows, *selected)
+		if oldIndex >= 0 && newIndex >= 0 {
+			p.chosen = newIndex
+		} else {
+			p.chosen, p.choicePinned, p.choiceLost = 0, false, true
 		}
 	} else if !p.choicePinned {
 		p.chosen = 0
 	}
 	p.shownView, p.shownQuery = v, q
+	p.rowsVersion++
 	p.results, p.settled, p.pending = rows, settled, pending
 	p.chooseRequested(v)
 	p.clampChoice(p.chosen)
@@ -138,4 +150,21 @@ func (p *Palette) chooseRequested(v *View) {
 		}
 	}
 	v.SelectID = ""
+}
+
+// uniqueRowIndex finds an unambiguous provider-qualified ID. Anonymous rows cannot be tracked across updates.
+func uniqueRowIndex(rows []search.Item, item search.Item) int {
+	if item.ID == "" {
+		return -1
+	}
+	found := -1
+	for i, row := range rows {
+		if row.ID == item.ID && row.Kind == item.Kind && row.Provider == item.Provider && row.Source == item.Source {
+			if found >= 0 {
+				return -1
+			}
+			found = i
+		}
+	}
+	return found
 }

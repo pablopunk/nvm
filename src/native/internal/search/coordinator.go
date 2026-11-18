@@ -79,23 +79,23 @@ type ProviderStats struct {
 type Coordinator struct {
 	opts Options
 
-	mu                sync.Mutex
-	publishMu         sync.Mutex
-	revision          uint64
-	publishedRevision uint64
-	gen               int
-	query             string
-	cancel            context.CancelFunc // cancels the providers of the current generation
-	slots             []*slot            // one per provider of the current generation, in provider order
-	pending           int                // slots not finished yet
-	emitted           bool               // a snapshot of the current generation has been produced
-	warmSettled       bool               // this query had a complete snapshot before refresh
-	cache             *queryCache
-	stats             map[string]*ProviderStats
-	shown             map[string][]Item // rows of the last snapshot, by provider
-	superseded        map[string][]Item // rows of the snapshot the previous query ended on
-	matcher           *queryMatcher     // matches the rows of matcherQuery; nil for a blank query
-	matcherQuery      string
+	mu                    sync.Mutex
+	publishMu             sync.Mutex
+	revision, publication uint64
+	publishedRevision     uint64
+	gen                   int
+	query                 string
+	cancel                context.CancelFunc // cancels the providers of the current generation
+	slots                 []*slot            // one per provider of the current generation, in provider order
+	pending               int                // slots not finished yet
+	emitted               bool               // a snapshot of the current generation has been produced
+	warmSettled           bool               // this query had a complete snapshot before refresh
+	cache                 *queryCache
+	stats                 map[string]*ProviderStats
+	shown                 map[string][]Item // rows of the last snapshot, by provider
+	superseded            map[string][]Item // rows of the snapshot the previous query ended on
+	matcher               *queryMatcher     // matches the rows of matcherQuery; nil for a blank query
+	matcherQuery          string
 }
 
 // slot is one provider's part of the current generation.

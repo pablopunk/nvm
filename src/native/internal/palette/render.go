@@ -194,7 +194,16 @@ func listRowKey(results []search.Item, i int) any {
 	}
 	item := results[i]
 	if item.ID != "" {
-		return fmt.Sprintf("id:%q:%q", item.Kind, item.ID)
+		duplicates := 0
+		for _, candidate := range results {
+			if candidate.ID == item.ID && candidate.Kind == item.Kind && candidate.Provider == item.Provider && candidate.Source == item.Source {
+				duplicates++
+			}
+		}
+		if duplicates > 1 {
+			return fmt.Sprintf("duplicate:%q:%q:%q:%q:%d:%d", item.Provider, item.Source, item.Kind, item.ID, item.Publication, i)
+		}
+		return fmt.Sprintf("id:%q:%q:%q:%q", item.Provider, item.Source, item.Kind, item.ID)
 	}
 	if item.LearnKey != "" {
 		return fmt.Sprintf("learn:%d:%q:%q", i, item.Kind, item.LearnKey)

@@ -72,8 +72,8 @@ func TestEnterAdmitsLastPresentedRowAcrossLateRanking(t *testing.T) {
 	view := &View{Title: "Root"}
 	p := New(Options{Root: view})
 	p.query = "pu"
-	old := search.Item{ID: "pull", Kind: "command", Title: "Show Pull Requests", Actions: []search.Action{action("pull")}}
-	best := search.Item{ID: "pulse", Kind: "app", Title: "Pulse", Actions: []search.Action{action("pulse")}}
+	old := search.Item{ID: "pull", Kind: "command", Publication: 1, Title: "Show Pull Requests", Actions: []search.Action{action("pull")}}
+	best := search.Item{ID: "pulse", Kind: "app", Publication: 2, Title: "Pulse", Actions: []search.Action{action("pulse")}}
 	p.showRows(view, "pu", []search.Item{old}, false, true)
 	p.recordPresentedChoice()
 	p.showRows(view, "pu", []search.Item{best, old}, true, false)
@@ -126,8 +126,8 @@ func TestEnterUsesPresentedActionWhenRowMutatesInPlace(t *testing.T) {
 	p.recordPresentedChoice()
 	p.showRows(view, "pu", []search.Item{makeRow("updated")}, true, false)
 	p.onEnter()
-	if ran != "shown" {
-		t.Fatalf("ran %q rather than presented action", ran)
+	if ran != "" {
+		t.Fatalf("undrawn replacement ran action %q", ran)
 	}
 	p.recordPresentedChoice()
 	p.onEnter()
@@ -155,5 +155,93 @@ func TestExplicitNavigationCancelsPendingEnter(t *testing.T) {
 	p.Choose(1)
 	if p.defaultEnter != nil {
 		t.Fatal("navigation retained a pending Enter")
+	}
+}
+
+func TestReplacementCannotInheritPresentedOrPinnedAction(t *testing.T) {
+	for _, tc := range []struct {
+		name             string
+		old, replacement search.Item
+	}{
+		{"same ID new publication", search.Item{Provider: "extensions", Source: "one", ID: "same", Kind: "command", Publication: 1}, search.Item{Provider: "extensions", Source: "one", ID: "same", Kind: "command", Publication: 2}},
+		{"different extension", search.Item{Provider: "extensions", Source: "one", ID: "same", Kind: "command", Publication: 1}, search.Item{Provider: "extensions", Source: "two", ID: "same", Kind: "command", Publication: 2}},
+		{"different provider", search.Item{Provider: "one", ID: "same", Kind: "command", Publication: 1}, search.Item{Provider: "two", ID: "same", Kind: "command", Publication: 2}},
+		{"missing ID and same title", search.Item{Provider: "one", Title: "same", Publication: 1}, search.Item{Provider: "one", Title: "same", Publication: 2}},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			var ran string
+			tc.old.Actions = []search.Action{{Title: "old", Dismiss: search.DismissNever, Run: func(search.Host) { ran = "old" }}}
+			tc.replacement.Actions = []search.Action{{Title: "new", Dismiss: search.DismissNever, Run: func(search.Host) { ran = "new" }}}
+			v := &View{Title: "Root"}
+			p := New(Options{Root: v})
+			p.query = "q"
+			p.showRows(v, "q", []search.Item{tc.old}, false, true)
+			p.Choose(0)
+			p.recordPresentedChoice()
+			p.showRows(v, "q", []search.Item{tc.replacement}, true, false)
+			p.onEnter()
+			if ran != "" {
+				t.Fatalf("before draw ran %q", ran)
+			}
+			p.recordPresentedChoice()
+			p.onEnter()
+			if ran != "new" {
+				t.Fatalf("after draw ran %q", ran)
+			}
+		})
+	}
+}
+
+func TestDuplicateIDsDoNotPreservePinnedChoice(t *testing.T) {
+	v := &View{Title: "Root"}
+	p := New(Options{Root: v})
+	p.query = "q"
+	old := search.Item{Provider: "provider", Source: "extension", Kind: "command", ID: "same", Publication: 1}
+	p.showRows(v, "q", []search.Item{old}, false, true)
+	p.Choose(0)
+	p.recordPresentedChoice()
+	p.showRows(v, "q", []search.Item{{Provider: "provider", Source: "extension", Kind: "command", ID: "same", Publication: 2}, {Provider: "provider", Source: "extension", Kind: "command", ID: "same", Publication: 3}}, true, false)
+	if p.choicePinned || p.admitPresentedChoice() {
+		t.Fatal("ambiguous replacement retained pinned action")
+	}
+}
+
+func TestRemovedPresentedPublicationCannotBeRevivedBeforeFrame(t *testing.T) {
+	v := &View{Title: "Root"}
+	p := New(Options{Root: v})
+	p.query = "q"
+	old := search.Item{Provider: "provider", ID: "same", Publication: 1}
+	p.showRows(v, "q", []search.Item{old}, false, true)
+	p.recordPresentedChoice()
+	p.showRows(v, "q", []search.Item{{Provider: "provider", ID: "other", Publication: 2}}, false, true)
+	p.showRows(v, "q", []search.Item{old}, true, false)
+	if p.admitPresentedChoice() {
+		t.Fatal("removed publication was revived before a frame")
+	}
+	p.recordPresentedChoice()
+	if !p.admitPresentedChoice() {
+		t.Fatal("drawn row was not admitted")
+	}
+}
+
+func TestRemovedPinnedChoiceDoesNotFallBackToPriorPresentedRow(t *testing.T) {
+	var ran bool
+	v := &View{Title: "Root"}
+	p := New(Options{Root: v})
+	p.query = "q"
+	first := search.Item{ID: "first", Publication: 1, Actions: []search.Action{{Title: "First", Dismiss: search.DismissNever, Run: func(search.Host) { ran = true }}}}
+	chosen := search.Item{ID: "chosen", Publication: 2}
+	p.showRows(v, "q", []search.Item{first, chosen}, false, true)
+	p.recordPresentedChoice()
+	p.Choose(1)
+	p.showRows(v, "q", []search.Item{first}, true, false)
+	p.onEnter()
+	if ran {
+		t.Fatal("removed pinned row fell back to previously presented action")
+	}
+	p.recordPresentedChoice()
+	p.onEnter()
+	if !ran {
+		t.Fatal("newly drawn default did not become actionable")
 	}
 }

@@ -23,7 +23,11 @@ func isAnswer(it Item) bool { return it.Answers }
 func isQueryFallback(it Item) bool { return it.QueryFallback }
 
 // dedupeKey identifies a row for de-duplication.
-type dedupeKey struct{ id, kind string }
+type dedupeKey struct{ id, kind, provider, source string }
+
+func keyForDedupe(item Item) dedupeKey {
+	return dedupeKey{item.ID, item.Kind, item.Provider, item.Source}
+}
 
 // dedupe keeps the first row of each ID and Kind. Rows without an ID are never merged: two snippets or
 // two quicklinks may share a Kind and have no ID of their own.
@@ -32,7 +36,7 @@ func dedupe(items []Item) []Item {
 	out := items[:0]
 	for _, it := range items {
 		if it.ID != "" {
-			key := dedupeKey{it.ID, it.Kind}
+			key := keyForDedupe(it)
 			if seen[key] {
 				continue
 			}

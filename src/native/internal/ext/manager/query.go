@@ -64,6 +64,12 @@ func (m *Manager) SearchEach(ctx context.Context, query string, each func(Search
 	m.eachWhere(ctx, protocol.MethodSearch, query, everyTarget, each)
 }
 
+// SearchEachWithTargets announces the exact eligible runtime snapshot before delivering answers. The target
+// announcement and answers run on the caller's goroutine; cancellation stops delivery.
+func (m *Manager) SearchEachWithTargets(ctx context.Context, query string, targets func([]string), each func(SearchResult)) {
+	m.eachWhereTargets(ctx, protocol.MethodSearch, query, everyTarget, targets, each)
+}
+
 // RootsEach is Roots with each answer handed to each as it arrives, as SearchEach does for Search.
 func (m *Manager) RootsEach(ctx context.Context, each func(SearchResult)) {
 	m.eachWhere(ctx, protocol.MethodRoot, "", everyTarget, each)
@@ -87,12 +93,26 @@ func (m *Manager) fanOutWhere(ctx context.Context, method, query string, keep fu
 // eachWhere calls method on the targets that keep accepts, in parallel, each bounded by the budget of method, and hands
 // every answer to each in the order the answers arrive.
 func (m *Manager) eachWhere(ctx context.Context, method, query string, keep func(id string) bool, each func(SearchResult)) {
+	m.eachWhereTargets(ctx, method, query, keep, nil, each)
+}
+
+func (m *Manager) eachWhereTargets(ctx context.Context, method, query string, keep func(string) bool, announce func([]string), each func(SearchResult)) {
 	all, budget := m.targetsFor(method)
 	targets := all[:0:0]
 	for _, target := range all {
 		if keep(target.id) {
 			targets = append(targets, target)
 		}
+	}
+	if ctx.Err() != nil {
+		return
+	}
+	if announce != nil {
+		ids := make([]string, 0, len(targets))
+		for _, target := range targets {
+			ids = append(ids, target.id)
+		}
+		announce(ids)
 	}
 	results := make(chan SearchResult, len(targets))
 	for _, target := range targets {
@@ -101,7 +121,15 @@ func (m *Manager) eachWhere(ctx context.Context, method, query string, keep func
 		}(target)
 	}
 	for range targets {
-		each(<-results)
+		select {
+		case <-ctx.Done():
+			return
+		case result := <-results:
+			if ctx.Err() != nil {
+				return
+			}
+			each(result)
+		}
 	}
 }
 
