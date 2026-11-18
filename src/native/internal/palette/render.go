@@ -23,6 +23,7 @@ func (p *Palette) View(c *ui.Context) {
 	theme.Background = ui.Transparent
 	ui.Themed(c, theme).Fill().Children(func() { p.viewThemed(c) })
 	p.recordPresentedChoice()
+	p.resolveDefaultEnter(p.cur(), strings.TrimSpace(p.query), p.shownView == p.cur() && p.shownQuery == strings.TrimSpace(p.query) && p.settled)
 	p.revealRenderedWindow()
 	if p.opts.OnNavigation != nil {
 		p.reportNavigationFrame(frame)
@@ -108,9 +109,6 @@ func (p *Palette) searchRow(c *ui.Context, v *View) {
 	if events.Submitted {
 		p.onEnter()
 	}
-	// SearchRow has committed this frame's text and dispatched its change/submit events.
-	// Only now can a deferred Enter safely use the selected row for that query.
-	p.resolveDefaultEnter(v, strings.TrimSpace(p.query), p.shownView == v && p.shownQuery == strings.TrimSpace(p.query) && p.settled)
 }
 
 func (p *Palette) listBody(c *ui.Context) {

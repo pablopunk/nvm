@@ -142,13 +142,17 @@ func (p *Palette) onEnter() {
 	v := p.cur()
 	q := strings.TrimSpace(p.query)
 	diag.ActionTrace("enter", logx.F{"menu_open": p.actionsOpen, "same_view": p.shownView == v, "same_query": p.shownQuery == q, "body": v.Body != nil})
-	if v.Body == nil && !p.actionsOpen && (p.shownView != v || p.shownQuery != q) {
+	unseen := v.Providers != nil && !p.choicePinned && (p.presented.view != v || p.presented.query != q || p.presented.shows != p.shows)
+	if v.Body == nil && !p.actionsOpen && (p.shownView != v || p.shownQuery != q || unseen) {
 		p.defaultEnter = &defaultEnterIntent{view: v, query: q, shows: p.shows}
-		if v.Providers != nil {
-			p.defaultEnter.gen = p.coordinator(v).Gen() + 1
+		if p.shownView == v && p.shownQuery == q && v.Providers != nil {
+			p.defaultEnter.gen = p.coordinator(v).Gen()
+		} else {
+			if v.Providers != nil {
+				p.defaultEnter.gen = p.coordinator(v).Gen() + 1
+			}
+			p.search()
 		}
-		p.search()
-		p.resolveDefaultEnter(v, q, p.settled)
 		return
 	}
 	switch {
@@ -183,8 +187,14 @@ func (p *Palette) resolveDefaultEnter(v *View, q string, settled bool) {
 	if i == nil || !settled || i.view != v || i.query != q || i.shows != p.shows || p.cur() != v || p.shownView != v || p.shownQuery != q || strings.TrimSpace(p.query) != q || !p.Visible() || p.actionsOpen || i.gen != 0 && (v.coord == nil || v.coord.Gen() != i.gen) {
 		return
 	}
+	if p.presented.view != v || p.presented.query != q || p.presented.shows != p.shows {
+		return
+	}
 	p.defaultEnter = nil
-	p.runDefault()
+	if p.presented.hasAction {
+		p.rememberQuery(q)
+		p.runRowAction(p.presented.learnKey, p.presented.action)
+	}
 }
 
 // runMenuAction closes the action menu and runs its action at index i, when there is one.

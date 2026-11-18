@@ -146,3 +146,14 @@ func TestActionMenuOwnerIncludesKind(t *testing.T) {
 		t.Fatal("different row kinds share an action menu owner")
 	}
 }
+
+func TestExplicitNavigationCancelsPendingEnter(t *testing.T) {
+	view := &View{Title: "Root"}
+	p := New(Options{Root: view})
+	p.showRows(view, "q", []search.Item{{ID: "a"}, {ID: "b"}}, false, true)
+	p.defaultEnter = &defaultEnterIntent{view: view, query: "q"}
+	p.Choose(1)
+	if p.defaultEnter != nil {
+		t.Fatal("navigation retained a pending Enter")
+	}
+}

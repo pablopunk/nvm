@@ -244,6 +244,7 @@ func (p *Palette) Chosen() int { return p.chosen }
 
 // choose moves the cursor to row i from the keyboard or a program, and scrolls the row into view.
 func (p *Palette) choose(i int) {
+	p.defaultEnter = nil
 	p.choicePinned = true
 	p.clampChoice(i)
 	p.scrollChoiceIntoView()
@@ -252,6 +253,7 @@ func (p *Palette) choose(i int) {
 // choosePointed moves the cursor to the row under a moving pointer. The pointer chose a row it can already see, so
 // the list never scrolls for it: hovering the last or first visible row leaves the offset alone.
 func (p *Palette) choosePointed(i int) {
+	p.defaultEnter = nil
 	p.choicePinned = true
 	p.clampChoice(i)
 	p.pointerChose = true
