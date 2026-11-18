@@ -213,3 +213,59 @@ func TestRapidNarrowingCarriesTheLastImmediateSeed(t *testing.T) {
 		<-p.calls
 	}
 }
+
+type seededAggregate struct {
+	refreshControl
+	seeds chan []Item
+}
+
+func (p seededAggregate) SeedNarrowing(q string, previous []Item) []Item {
+	return narrowingProvider{p.refreshControl}.SeedNarrowing(q, previous)
+}
+
+func (p seededAggregate) SearchSeeded(ctx context.Context, q string, seed []Item, emit func(Batch)) {
+	select {
+	case p.seeds <- seed:
+	case <-ctx.Done():
+		return
+	}
+	// An unrelated source publishes while the app source is still pending.
+	emit(Batch{Items: append(append([]Item(nil), seed...), Item{ID: "command", Title: "Command"}), Replace: true})
+	p.refreshControl.Search(ctx, q, emit)
+}
+
+func TestSeededAggregateKeepsRowsThroughOtherSourcePublication(t *testing.T) {
+	sink := newSnapshotSink()
+	c := NewCoordinator(Options{Clock: fake.NewClock(), OnSnapshot: sink.OnSnapshot, Flat: true, Tiered: true})
+	t.Cleanup(c.Cancel)
+	p := seededAggregate{refreshControl: refreshControl{calls: make(chan chan Batch, 4)}, seeds: make(chan []Item, 4)}
+	c.Query("p", []Provider{p})
+	<-p.seeds
+	first := <-p.calls
+	first <- Batch{Items: []Item{{ID: "pulse", Kind: KindApplications, Title: "Pulse"}}, Replace: true, Final: true}
+	sink.untilSettled(t, c.Gen())
+	warm, ok := c.Query("pu", []Provider{p})
+	if !ok || !containsTitle(warm.Items, "Pulse") {
+		t.Fatal("missing narrowing seed")
+	}
+	seed := <-p.seeds
+	if !containsTitle(seed, "Pulse") {
+		t.Fatal("aggregate did not receive seed")
+	}
+	current := <-p.calls
+	for {
+		snap := sink.next(t)
+		if snap.Gen != c.Gen() {
+			continue
+		}
+		if !containsTitle(snap.Items, "Pulse") {
+			t.Fatal("unrelated publication removed seed")
+		}
+		break
+	}
+	current <- Batch{Replace: true, Final: true}
+	settled := sink.untilSettled(t, c.Gen())
+	if containsTitle(settled[len(settled)-1].Items, "Pulse") {
+		t.Fatal("authoritative replacement did not remove seed")
+	}
+}
