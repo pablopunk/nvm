@@ -134,3 +134,53 @@ func TestRootRowCacheCancelledPassCannotSettle(t *testing.T) {
 		t.Fatalf("cancelled pass removed cached rows: removed=%v rows=%v", removed, c.rows)
 	}
 }
+
+func TestCatalogRefreshPublishesOneCompleteSnapshot(t *testing.T) {
+	var c rootRowCache
+	fillRootCache(&c, "a", "b")
+	c.rows["a"] = manager.SearchResult{ExtensionID: "a", Title: "old a"}
+	c.rows["b"] = manager.SearchResult{ExtensionID: "b", Title: "old b"}
+	scope, epoch := c.takeScope()
+	staged := map[string]manager.SearchResult{"a": {ExtensionID: "a", Title: "new a"}}
+	before := c.cachedOutside(nil)
+	if before[0].Title != "old a" || before[1].Title != "old b" {
+		t.Fatalf("partial refresh leaked: %+v", before)
+	}
+	staged["b"] = manager.SearchResult{ExtensionID: "b", Title: "new b"}
+	c.commitPass(context.Background(), epoch, scope, staged)
+	after := c.cachedOutside(nil)
+	if after[0].Title != "new a" || after[1].Title != "new b" {
+		t.Fatalf("complete refresh = %+v", after)
+	}
+}
+
+func TestCatalogRefreshRejectsCancellationAndReset(t *testing.T) {
+	for _, reset := range []bool{false, true} {
+		var c rootRowCache
+		fillRootCache(&c, "a")
+		_, epoch := c.takeScope()
+		ctx, cancel := context.WithCancel(context.Background())
+		if reset {
+			c.reset()
+		} else {
+			cancel()
+		}
+		changed := c.commitPass(ctx, epoch, nil, map[string]manager.SearchResult{"a": {ExtensionID: "a", Title: "obsolete"}})
+		cancel()
+		if len(changed) != 0 || c.cachedOutside(nil)[0].Title == "obsolete" {
+			t.Fatal("obsolete catalog was published")
+		}
+	}
+}
+
+func TestNewCatalogPassSupersedesOlderPass(t *testing.T) {
+	var c rootRowCache
+	fillRootCache(&c, "a")
+	_, old := c.takeScope()
+	_, current := c.takeScope()
+	c.commitPass(context.Background(), current, nil, map[string]manager.SearchResult{"a": {ExtensionID: "a", Title: "new"}})
+	c.commitPass(context.Background(), old, nil, map[string]manager.SearchResult{"a": {ExtensionID: "a", Title: "old"}})
+	if got := c.cachedOutside(nil)[0].Title; got != "new" {
+		t.Fatalf("superseded pass replaced catalog: %q", got)
+	}
+}

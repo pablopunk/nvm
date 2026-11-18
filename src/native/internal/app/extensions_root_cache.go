@@ -38,31 +38,58 @@ func (c *rootRowCache) reset() {
 	c.epoch++
 }
 
-// stream revalidates root rows independently after the caller paints the complete cached snapshot. The pass is complete
-// only when its context was not cancelled; then the extensions it did not hear from lose their rows.
+// stream stages a complete refresh before publishing it to subsequent queries. An interrupted pass leaves the
+// previous catalog intact; observers never capture a mixture based on extension completion order.
 func (c *rootRowCache) stream(ctx context.Context, m *manager.Manager, emit func(manager.SearchResult)) {
 	scope, epoch := c.takeScope()
-	answered := map[string]bool{}
-	receive := func(result manager.SearchResult) {
-		answered[result.ExtensionID] = true
-		if c.remember(ctx, epoch, result) {
-			emit(result)
-		}
-	}
+	answers := map[string]manager.SearchResult{}
+	receive := func(result manager.SearchResult) { answers[result.ExtensionID] = result }
 	if scope == nil {
 		m.RootsEach(ctx, receive)
 	} else {
 		m.RootsOfEach(ctx, scope, receive)
 	}
-	for _, id := range c.settle(ctx, epoch, scope, answered) {
-		emit(manager.SearchResult{ExtensionID: id})
+	for _, result := range c.commitPass(ctx, epoch, scope, answers) {
+		emit(result)
 	}
+}
+
+// commitPass publishes a whole refresh under one lock. Failed calls retain their prior rows; extensions absent from
+// a completed pass lose theirs. A cancelled or reset pass cannot replace the catalog.
+func (c *rootRowCache) commitPass(ctx context.Context, epoch uint64, scope map[string]bool, answers map[string]manager.SearchResult) []manager.SearchResult {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	if ctx.Err() != nil || epoch != c.epoch {
+		return nil
+	}
+	if c.rows == nil {
+		c.rows = map[string]manager.SearchResult{}
+	}
+	var changed []manager.SearchResult
+	for id := range c.rows {
+		if _, answered := answers[id]; !answered && (scope == nil || scope[id]) {
+			delete(c.rows, id)
+			changed = append(changed, manager.SearchResult{ExtensionID: id})
+		}
+	}
+	for id, result := range answers {
+		if result.Failure == nil {
+			c.rows[id] = result
+			changed = append(changed, result)
+		}
+	}
+	if scope == nil {
+		c.filled = true
+	}
+	sort.Slice(changed, func(i, j int) bool { return changed[i].ExtensionID < changed[j].ExtensionID })
+	return changed
 }
 
 // takeScope returns the pending extensions and clears them, or nil when the root asks every extension.
 func (c *rootRowCache) takeScope() (map[string]bool, uint64) {
 	c.mu.Lock()
 	defer c.mu.Unlock()
+	c.epoch++
 	scope := c.pending
 	c.pending = nil
 	if !c.filled || len(scope) == 0 {
