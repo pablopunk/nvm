@@ -92,11 +92,9 @@ type Coordinator struct {
 	warmSettled       bool               // this query had a complete snapshot before refresh
 	cache             *queryCache
 	stats             map[string]*ProviderStats
-	shown             map[string][]Item        // rows of the last snapshot, by provider
-	superseded        map[string][]Item        // rows of the snapshot the previous query ended on
-	committed         []Item                   // rows on screen for this generation, in screen order
-	committedFrom     map[cachedItemKey]string // the provider of each committed row
-	matcher           *queryMatcher            // matches the rows of matcherQuery; nil for a blank query
+	shown             map[string][]Item // rows of the last snapshot, by provider
+	superseded        map[string][]Item // rows of the snapshot the previous query ended on
+	matcher           *queryMatcher     // matches the rows of matcherQuery; nil for a blank query
 	matcherQuery      string
 }
 
@@ -147,7 +145,6 @@ func (c *Coordinator) Query(q string, providers []Provider) (Snapshot, bool) {
 	}
 	c.pending = len(providers)
 	c.emitted = false
-	c.committed, c.committedFrom = nil, nil
 	c.superseded = c.shown
 	remembered, hit := c.cache.get(q)
 	c.warmSettled = hit && remembered.settled
@@ -163,7 +160,6 @@ func (c *Coordinator) Query(q string, providers []Provider) (Snapshot, bool) {
 			warm = Snapshot{Gen: gen, Query: q, Items: rows, Pending: true}
 			hit = true
 			c.emitted = true
-			c.commitLocked(rows)
 		}
 	}
 	if hit && warm.Items == nil {
@@ -173,7 +169,6 @@ func (c *Coordinator) Query(q string, providers []Provider) (Snapshot, bool) {
 		warm = Snapshot{Gen: gen, Query: q, Items: mergeCached(c.slots, c.limit(), q != "", c.opts.Flat, remembered.settled), Settled: remembered.settled}
 		if !c.opts.Synchronous {
 			c.emitted = true
-			c.commitLocked(warm.Items)
 		}
 	}
 	c.mu.Unlock()
@@ -313,9 +308,8 @@ func (c *Coordinator) snapshotLocked() Snapshot {
 	}
 	settled := c.pending == 0
 	fresh := mergeAppended(ranked, appended, c.limit(), c.query != "", c.opts.Flat, settled || c.warmSettled)
-	snap := Snapshot{revision: c.revision, Gen: c.gen, Query: c.query, Items: c.stableLocked(fresh), Settled: settled, Pending: c.pendingCallsLocked()}
+	snap := Snapshot{revision: c.revision, Gen: c.gen, Query: c.query, Items: fresh, Settled: settled, Pending: c.pendingCallsLocked()}
 	c.emitted = true
-	c.commitLocked(snap.Items)
 	providerRows := c.providerCache(fresh)
 	c.shown = c.providerCache(snap.Items)
 	if len(snap.Items) == 0 && !settled {

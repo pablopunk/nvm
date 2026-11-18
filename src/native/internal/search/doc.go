@@ -4,8 +4,8 @@
 //
 // The package draws nothing: an Item carries plain data, and a Detail closure is the only place a row
 // touches ui. The palette package decides how rows are shown.
-package search
-
+//
 // Typed root searches rank each available snapshot independently of provider arrival order. A provider may opt in to
 // carrying safe, matching rows into a narrower query; its first authoritative batch replaces those rows. The palette
 // follows the best ranked result until a user chooses one, and retains that choice by identity while it remains.
+package search
