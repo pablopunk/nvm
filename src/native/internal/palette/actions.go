@@ -77,6 +77,7 @@ func (p *Palette) recordPresentedChoice() {
 	if p.shownView != p.cur() || p.shownQuery != strings.TrimSpace(p.query) {
 		return
 	}
+	p.presented = presentedChoice{view: p.cur(), query: p.shownQuery, shows: p.shows}
 	if item := p.chosenItem(); item != nil {
 		action, hasAction := item.DefaultAction()
 		p.presented = presentedChoice{view: p.cur(), query: p.shownQuery, id: item.ID, kind: item.Kind, title: item.Title, shows: p.shows, action: action, actions: append([]search.Action(nil), item.Actions...), hasAction: hasAction, learnKey: item.LearnKey}

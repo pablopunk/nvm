@@ -1,6 +1,11 @@
 package clipboard
 
-import "strings"
+import (
+	"strings"
+	"unicode/utf8"
+)
+
+const excerptRunes = 96
 
 // matchExcerpt explains a match beyond the displayed title, without replacing the copied value.
 func matchExcerpt(text, title, query string) string {
@@ -8,23 +13,22 @@ func matchExcerpt(text, title, query string) string {
 		return ""
 	}
 	text = strings.Join(strings.Fields(text), " ")
-	runes, needle := []rune(text), []rune(query)
-	if len(needle) == 0 {
+	lower := strings.ToLower(text)
+	index := strings.Index(lower, strings.ToLower(query))
+	if index < 0 {
 		return ""
 	}
-	for i := 0; i+len(needle) <= len(runes); i++ {
-		if !strings.EqualFold(string(runes[i:i+len(needle)]), query) {
-			continue
-		}
-		start, end := max(0, i-20), min(len(runes), i+len(needle)+40)
-		excerpt := string(runes[start:end])
-		if start > 0 {
-			excerpt = "…" + excerpt
-		}
-		if end < len(runes) {
-			excerpt += "…"
-		}
-		return excerpt
+	// Unicode lowercasing preserves rune count, but can change UTF-8 byte widths.
+	runes := []rune(text)
+	match := utf8.RuneCountInString(lower[:index])
+	start := max(0, match-20)
+	end := min(len(runes), start+excerptRunes)
+	excerpt := string(runes[start:end])
+	if start > 0 {
+		excerpt = "…" + excerpt
 	}
-	return ""
+	if end < len(runes) {
+		excerpt += "…"
+	}
+	return excerpt
 }

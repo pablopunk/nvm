@@ -9,6 +9,27 @@ import (
 	"github.com/pablopunk/nvm/native/internal/search"
 )
 
+func TestDeferredEnterIsConsumedByPresentedEmptySettlement(t *testing.T) {
+	view := &View{Title: "Root"}
+	h := newHarness(t, view, true)
+	p := h.p
+	p.query = "empty"
+	p.showRows(view, "empty", nil, true, false)
+	p.defaultEnter = &defaultEnterIntent{view: view, query: "empty", shows: p.shows}
+	p.recordPresentedChoice()
+	p.resolveDefaultEnter(view, "empty", true)
+	if p.defaultEnter != nil {
+		t.Fatal("settled empty frame retained a deferred Enter")
+	}
+	ran := false
+	p.showRows(view, "empty", []search.Item{{ID: "later", Actions: []search.Action{{Title: "Run", Dismiss: search.DismissNever, Run: func(search.Host) { ran = true }}}}}, true, false)
+	p.recordPresentedChoice()
+	p.resolveDefaultEnter(view, "empty", true)
+	if ran {
+		t.Fatal("later row consumed an Enter from a prior empty settlement")
+	}
+}
+
 func TestDeferredEnterWaitsForMatchingQuery(t *testing.T) {
 	var mu sync.Mutex
 	var ran []string
