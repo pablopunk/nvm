@@ -11,6 +11,14 @@ func (m *Manager) SnapshotIdentity(id string) any {
 	if err != nil || e.builtin || e.runtime == nil || !m.isRunnable(e) {
 		return nil
 	}
+	return snapshotIdentityLocked(e)
+}
+
+// snapshotIdentityLocked returns the identity of the originating installation. Caller holds the manager lock.
+func snapshotIdentityLocked(e *entry) any {
+	if e.builtin {
+		return nil
+	}
 	if e.snapshotIdentity == nil {
 		e.snapshotIdentity = new(byte)
 	}

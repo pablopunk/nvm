@@ -16,9 +16,11 @@ import (
 // crashed, was not running, or returned an error; Items is then empty. A failure never hides other results.
 type SearchResult struct {
 	ExtensionID string
-	Title       string
-	Items       []api.Item
-	Failure     *api.Failure
+	// Origin is the opaque installation identity captured with the runtime, never serialized to an extension.
+	Origin  any `json:"-"`
+	Title   string
+	Items   []api.Item
+	Failure *api.Failure
 }
 
 // Search asks every enabled, running extension that declares SearchItems for its rows for query. Its calls are
@@ -139,6 +141,7 @@ type runtimeTarget struct {
 	title         string
 	commandTitles map[string]string
 	runtime       runner
+	origin        any
 }
 
 // targetsFor snapshots the enabled runtimes that declare method, and the budget of method. An extension that is
@@ -151,7 +154,7 @@ func (m *Manager) targetsFor(method string) ([]runtimeTarget, supervisor.Budget)
 	for _, key := range m.sortedKeysLocked() {
 		e := m.entries[key]
 		if e.runtime != nil && m.isRunnable(e) && offersMethod(e.runtime, e.runtime.Status().State, method) {
-			targets = append(targets, runtimeTarget{id: e.bundle.Manifest.ID, title: e.bundle.Manifest.Title, commandTitles: e.bundle.Manifest.CommandTitles, runtime: e.runtime})
+			targets = append(targets, runtimeTarget{id: e.bundle.Manifest.ID, title: e.bundle.Manifest.Title, commandTitles: e.bundle.Manifest.CommandTitles, runtime: e.runtime, origin: snapshotIdentityLocked(e)})
 		}
 	}
 	return targets, m.config.BudgetFor(method)
@@ -168,7 +171,7 @@ func isAnswerable(state supervisor.State) bool {
 }
 
 func (m *Manager) callOne(ctx context.Context, target runtimeTarget, method, query string, budget supervisor.Budget) SearchResult {
-	result := SearchResult{ExtensionID: target.id, Title: target.title}
+	result := SearchResult{ExtensionID: target.id, Title: target.title, Origin: target.origin}
 	callCtx, cancel := m.callContext(ctx, target.id, budget)
 	defer cancel()
 	response, err := target.runtime.Call(callCtx, method, query, nil)

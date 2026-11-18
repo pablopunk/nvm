@@ -11,7 +11,7 @@ func TestCachedExtensionActionRejectsDisabledInstallation(t *testing.T) {
 	m := newManagerOver(t, nil, "acme.good")
 	waitForState(t, m, "acme.good", supervisor.StateRunning)
 	var runs int
-	row := guardRootExtensionActions(m, "acme.good", search.Item{Actions: []search.Action{{Run: func(search.Host) { runs++ }}}})
+	row := guardRootExtensionActions(m, "acme.good", m.SnapshotIdentity("acme.good"), search.Item{Actions: []search.Action{{Run: func(search.Host) { runs++ }}}})
 	host := &recordingHost{}
 	row.Actions[0].Run(host)
 	if runs != 1 {

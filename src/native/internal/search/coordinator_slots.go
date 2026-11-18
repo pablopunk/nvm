@@ -14,7 +14,11 @@ func (c *Coordinator) watch(gen, idx int) {
 	done, budget := s.done, s.budget
 	c.mu.Unlock()
 	soft := c.opts.Clock.After(budget.Soft)
-	hard := c.opts.Clock.After(budget.Hard)
+	hardBudget := budget.Hard
+	if c.opts.SingleSnapshot && s.selfBudgeted {
+		hardBudget = max(hardBudget, AggregateHardBudget)
+	}
+	hard := c.opts.Clock.After(hardBudget)
 	select {
 	case <-done:
 		return
@@ -101,17 +105,22 @@ func (c *Coordinator) complete(gen, idx int, returned bool) {
 }
 
 // acceptsLocked reports whether a batch of generation gen for slot idx still merges. A batch of an older query, or one
-// that arrives after its provider returned, is dropped. A provider cut off as slow still merges until it returns.
+// that arrives after its provider returned, is dropped. In a streaming view a self-budgeted provider cut off as slow
+// still merges until it returns; a single-snapshot view accepts nothing after a slot finished.
 func (c *Coordinator) acceptsLocked(gen, idx int) bool {
 	if gen != c.gen || idx >= len(c.slots) {
 		return false
 	}
 	s := c.slots[idx]
+	if c.opts.SingleSnapshot {
+		return !s.returned && !s.finished
+	}
 	return !s.returned && ((s.slow && s.selfBudgeted) || !s.finished)
 }
 
-// cutOff ends the wait for a call that ran past the hard budget: its rows so far are kept, it is counted as slow, and
-// the merge does not wait for it. Only an aggregate that owns individual call deadlines keeps running to merge late results.
+// cutOff ends the wait for a call that ran past the hard budget: it is counted as slow and the merge does not wait for
+// it. A streaming view keeps its rows so far, and an aggregate that owns its call deadlines keeps running to merge late
+// results. A single-snapshot view drops the unfinished answer and cancels it, so its published list never changes.
 func (c *Coordinator) cutOff(gen, idx int) {
 	c.mu.Lock()
 	if gen != c.gen || idx >= len(c.slots) || c.slots[idx].finished {
@@ -121,16 +130,12 @@ func (c *Coordinator) cutOff(gen, idx int) {
 	s := c.slots[idx]
 	s.slow = true
 	c.statsLocked(s.id).Slow++
-	if c.opts.SingleSnapshot && s.selfBudgeted {
-		c.mu.Unlock()
-		return
-	}
 	if c.opts.SingleSnapshot && !s.returned {
 		s.items = nil
 		s.refreshing = false
 	}
 	c.finishLocked(s)
-	if !s.selfBudgeted && s.cancel != nil {
+	if (c.opts.SingleSnapshot || !s.selfBudgeted) && s.cancel != nil {
 		s.cancel()
 	}
 	if !c.readyLocked() {

@@ -98,7 +98,7 @@ func (m *Manager) startEntry(e *entry) {
 		commands, known := m.snapshots.get(e.bundle.Manifest.ID, e.bundle.Hash)
 		if methods, dormant := dormantMethods(m.ports.Files, e.bundle.Dir); known && dormant {
 			runtime.StartDormant(methods)
-			m.commands.seed(e.bundle.Manifest.ID, CommandResult{ExtensionID: e.bundle.Manifest.ID, Title: e.bundle.Manifest.Title, Commands: commands})
+			m.commands.seed(e.bundle.Manifest.ID, CommandResult{ExtensionID: e.bundle.Manifest.ID, Title: e.bundle.Manifest.Title, Commands: commands, Origin: snapshotIdentityLocked(e)})
 			return
 		}
 	}

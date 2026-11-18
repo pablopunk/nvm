@@ -18,7 +18,7 @@ func (p *Palette) search() {
 	}
 	v := p.cur()
 	q := strings.TrimSpace(p.query)
-	if v.SingleSnapshot && p.shownView == v && p.shownQuery == q {
+	if rebased := p.rebaseFixedResults(v); v.SingleSnapshot && !rebased && p.shownView == v && p.shownQuery == q {
 		return
 	}
 	if p.actionsOpen && (p.shownView != v || p.shownQuery != q) {
@@ -36,6 +36,34 @@ func (p *Palette) search() {
 		p.showRows(v, q, snap.Items, snap.Settled, snap.Pending)
 	} else if p.shownView == v {
 		p.settled, p.pending = false, !v.SingleSnapshot
+	}
+}
+
+// rebaseFixedResults forgets the fixed results of a single-snapshot view whose Basis changed, and reports whether it
+// did, so the current query is searched again and replaced once rather than kept with stale decorations.
+func (p *Palette) rebaseFixedResults(v *View) bool {
+	if !v.SingleSnapshot || v.Basis == nil {
+		return false
+	}
+	basis := v.Basis()
+	if basis == v.basis {
+		return false
+	}
+	v.basis = basis
+	if v.coord != nil {
+		v.coord.Cancel()
+		v.coord.Invalidate()
+	}
+	return true
+}
+
+// ForgetCachedResults drops the remembered results of the stack's views that keep selects, after background state they
+// are built from changed. The rows on screen stay as they are; the next search of a query computes it afresh.
+func (p *Palette) ForgetCachedResults(keep func(*View) bool) {
+	for _, v := range p.stack {
+		if v.coord != nil && keep(v) {
+			v.coord.Invalidate()
+		}
 	}
 }
 

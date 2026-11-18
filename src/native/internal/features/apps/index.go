@@ -46,14 +46,17 @@ type Index struct {
 	// scanMu serializes scans and their saves, so a slow scan can never overwrite a newer list.
 	scanMu sync.Mutex
 
-	mu        sync.Mutex
-	idle      *sync.Cond
-	apps      []App
-	firstSeen FirstSeen
-	readOnly  bool
-	inFlight  bool
-	pending   bool
-	lastDone  time.Time
+	mu   sync.Mutex
+	idle *sync.Cond
+	apps []App
+	// completeSnapshot is set once the list holds a complete listing: a complete scan or the saved list. An incomplete
+	// scan only adds to the list, so it can never erase an app it could not see.
+	completeSnapshot bool
+	firstSeen        FirstSeen
+	readOnly         bool
+	inFlight         bool
+	pending          bool
+	lastDone         time.Time
 }
 
 // NewIndex returns an empty index. Call LoadCache to show the saved list, then RequestRefresh.
@@ -89,8 +92,10 @@ func (x *Index) LoadCache() error {
 		x.readOnly = true
 		return nil
 	}
-	if x.apps == nil {
-		x.apps = slices.Clone(snapshot.Apps)
+	if !x.completeSnapshot {
+		// A partial scan may finish while disk loading is in flight. Keep its discoveries and the last complete cache.
+		x.apps = DedupeAndSort(append(slices.Clone(snapshot.Apps), x.apps...))
+		x.completeSnapshot = true
 	}
 	if snapshot.FirstSeen.ByID != nil {
 		x.firstSeen = cloneFirstSeen(snapshot.FirstSeen)
@@ -138,8 +143,15 @@ func (x *Index) baselineIfNeeded() {
 // adopt dates and dedupes a scan into the index, then saves the snapshot when it changed.
 func (x *Index) adopt(scan ScanResult, initializeBaseline bool) {
 	x.mu.Lock()
-	tracked, next, _ := TrackFirstSeen(scan.Apps, x.firstSeen, initializeBaseline, x.opts.Clock.Now().UnixMilli(), x.opts.Identity)
+	candidates := scan.Apps
+	if !scan.Complete {
+		candidates = append(slices.Clone(x.apps), scan.Apps...)
+	}
+	tracked, next, _ := TrackFirstSeen(candidates, x.firstSeen, initializeBaseline, x.opts.Clock.Now().UnixMilli(), x.opts.Identity)
 	x.apps = DedupeAndSort(tracked)
+	if scan.Complete {
+		x.completeSnapshot = true
+	}
 	x.firstSeen = next
 	snapshot := Snapshot{Version: SnapshotVersion, Apps: slices.Clone(x.apps), FirstSeen: cloneFirstSeen(next)}
 	save := !x.readOnly && x.opts.Cache != nil

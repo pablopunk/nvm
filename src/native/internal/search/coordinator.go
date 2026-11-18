@@ -17,6 +17,9 @@ const (
 	// HardBudget is how long a provider call may run before it is marked slow and stops holding up the snapshot.
 	// Its rows that arrive later still merge into the same query.
 	HardBudget = 100 * time.Millisecond
+	// AggregateHardBudget bounds an aggregate whose children have independent deadlines, including host work
+	// outside those deadlines. Timed-out partial aggregates are discarded from fixed results.
+	AggregateHardBudget = time.Second
 	// FirstSnapshot is the longest a query waits for its ranked providers before its first snapshot. Until then the
 	// screen keeps the previous rows, so a keystroke changes the list once instead of once per provider. When a
 	// provider has not answered by then, the snapshot shows what has, and its rows follow the rows on screen.

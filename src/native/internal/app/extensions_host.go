@@ -227,12 +227,14 @@ func (p *App) extensionCommandsChanged() {
 	p.extensionCommandRefresh.request(p.onUI, func() {
 		p.refreshGlobalShortcuts()
 		p.requestCompositorSync()
+		p.ForgetCachedResults(isExtensionStateView)
 		p.RefreshTop(isExtensionStateView)
 	})
 }
 
 func (p *App) redrawExtensionState() {
 	p.rootRows.reset()
+	p.ForgetCachedResults(isExtensionStateView)
 	p.refreshGlobalShortcuts()
 	p.requestCompositorSync() // turning an extension on or off changes which of its shortcuts can run
 	p.RefreshTop(isExtensionStateView)

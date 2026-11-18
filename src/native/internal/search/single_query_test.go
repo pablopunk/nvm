@@ -177,21 +177,23 @@ type selfBudgetedSingle struct{ singleProvider }
 
 func (selfBudgetedSingle) OwnsCallBudgets() {}
 
-func TestSingleSnapshotDoesNotPublishPartialSelfBudgetedAggregate(t *testing.T) {
+func TestSingleSnapshotCutsOffHungAggregateAndRejectsLateBatches(t *testing.T) {
 	sink := newSnapshotSink()
 	c := NewCoordinator(Options{Clock: fake.NewClock(), OnSnapshot: sink.OnSnapshot, Flat: true, SingleSnapshot: true})
 	defer c.Cancel()
 	p := selfBudgetedSingle{singleProvider{id: "aggregate", calls: make(chan chan singleAnswer, 1)}}
-	c.Query("q", []Provider{p})
+	healthy := fixedRows("healthy", Item{ID: "healthy", Score: 1})
+	c.Query("q", []Provider{p, healthy})
 	call := <-p.calls
-	answerSingle(call, []Item{{ID: "early", Score: 1}}, false)
+	answerSingle(call, []Item{{ID: "partial", Score: 2}}, false)
 	c.cutOff(c.Gen(), 0)
-	assertNoSnapshot(t, sink)
-	answerSingle(call, []Item{{ID: "late", Score: 2}}, true)
-	snaps := sink.untilSettled(t, c.Gen())
-	if got := rowIDs(snaps[len(snaps)-1].Items); !slices.Equal(got, []string{"late", "early"}) {
-		t.Fatalf("complete aggregate = %v", got)
+	snapshots := sink.untilSettled(t, c.Gen())
+	got := rowIDs(snapshots[len(snapshots)-1].Items)
+	if !slices.Equal(got, []string{"healthy"}) {
+		t.Fatalf("timed-out result = %v", got)
 	}
+	c.deliver(c.Gen(), 0, Batch{Items: []Item{{ID: "late"}}, Final: true})
+	assertNoSnapshot(t, sink)
 }
 
 type admissibleSeed struct {

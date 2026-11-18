@@ -14,6 +14,7 @@ import (
 // CommandResult is one running extension's durable commands. Failure is set as for SearchResult.
 type CommandResult struct {
 	ExtensionID string
+	Origin      any `json:"-"`
 	Title       string
 	Commands    []api.Command
 	Failure     *api.Failure
@@ -43,7 +44,7 @@ func (m *Manager) commandsWithin(ctx context.Context, budget supervisor.Budget) 
 }
 
 func (m *Manager) commandsOf(ctx context.Context, target runtimeTarget, budget supervisor.Budget) CommandResult {
-	result := CommandResult{ExtensionID: target.id, Title: target.title}
+	result := CommandResult{ExtensionID: target.id, Title: target.title, Origin: target.origin}
 	callCtx, cancel := m.callContext(ctx, target.id, budget)
 	defer cancel()
 	response, err := target.runtime.Call(callCtx, protocol.MethodCommands, "", nil)

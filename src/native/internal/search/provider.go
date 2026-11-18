@@ -42,8 +42,10 @@ type RootStreamer interface {
 
 // Budget is the time one call of a provider may take: Soft is when a call is logged as over budget and Hard is when
 // the call is marked slow and stops holding up the snapshot. Its rows that arrive later still merge into the query.
-// SelfBudgetedProvider aggregates calls that each enforce their own execution deadline. The coordinator
-// stops waiting at Hard but accepts their late batches until they finish or the query changes.
+// SelfBudgetedProvider aggregates calls that each enforce their own execution deadline. A streaming coordinator
+// stops waiting at Hard but accepts their late batches until they finish or the query changes. A single-snapshot
+// coordinator waits for the whole aggregate up to AggregateHardBudget, then cancels it and drops its rows, so a host
+// operation that outlives every child deadline cannot hold a query open.
 type SelfBudgetedProvider interface {
 	Provider
 	OwnsCallBudgets()

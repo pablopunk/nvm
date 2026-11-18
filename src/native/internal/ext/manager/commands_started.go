@@ -55,7 +55,7 @@ func (m *Manager) runnableTargets() []runtimeTarget {
 	var targets []runtimeTarget
 	for _, key := range m.sortedKeysLocked() {
 		if e := m.entries[key]; e.runtime != nil && m.isRunnable(e) {
-			targets = append(targets, runtimeTarget{id: e.bundle.Manifest.ID, title: e.bundle.Manifest.Title, commandTitles: e.bundle.Manifest.CommandTitles, runtime: e.runtime})
+			targets = append(targets, runtimeTarget{id: e.bundle.Manifest.ID, title: e.bundle.Manifest.Title, commandTitles: e.bundle.Manifest.CommandTitles, runtime: e.runtime, origin: snapshotIdentityLocked(e)})
 		}
 	}
 	return targets

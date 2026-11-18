@@ -199,7 +199,7 @@ func TestEmptyQueryKeepsScoreOrder(t *testing.T) {
 func TestTitlePrefixBeatsInfixAndContentAcrossKinds(t *testing.T) {
 	rows := []Item{
 		{ID: "content", Title: "Pulse message", Kind: KindClipboard, Content: true},
-		{ID: "infix", Title: "Affinity Publisher", Kind: KindFiles},
+		{ID: "infix", Title: "Heart Pulse Monitor", Kind: KindFiles},
 		{ID: "prefix", Title: "Pulse", Kind: KindApplications},
 	}
 	rankTiered(rows, newQueryMatcher("pul"), "pul", nil, 0)

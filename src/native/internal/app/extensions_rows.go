@@ -131,13 +131,9 @@ func (e extensionSearch) SearchSeeded(ctx context.Context, q string, seed []sear
 			}
 		}
 		emit(search.Batch{Items: mergedExtensionRows(rows), Replace: true})
-		appAnswered := false
 		var fallbacks fallbackGroup
 		m.SearchEachWithTargets(ctx, q, fallbacks.targets, func(result manager.SearchResult) {
-			if result.ExtensionID == appsbuiltin.ID {
-				appAnswered = true
-			}
-			if isCommandPlacedBuiltIn(result.ExtensionID) {
+			if isCommandPlacedBuiltIn(result.ExtensionID) || keepsCatalogRows(result) {
 				return
 			}
 			resultRows := searchRowsFor(e.p, m, q, result, e.in.shortcuts)
@@ -147,13 +143,16 @@ func (e extensionSearch) SearchSeeded(ctx context.Context, q string, seed []sear
 		if ctx.Err() != nil {
 			return
 		}
-		if !appAnswered {
-			delete(rows, appsbuiltin.ID)
-		}
 		fallbacks.flush(rows)
 		emit(search.Batch{Items: mergedExtensionRows(rows), Replace: true})
 	}
 	emit(search.Batch{Final: true})
+}
+
+// keepsCatalogRows reports an app built-in answer that cannot replace the installed-app catalog: a failed or late
+// answer is no evidence that a matching installed app is gone, so the catalog's name matches stand for it.
+func keepsCatalogRows(result manager.SearchResult) bool {
+	return result.ExtensionID == appsbuiltin.ID && result.Failure != nil
 }
 
 // commandRows lists the known commands that q finds, or the commands the root lists for the empty query. It never waits
@@ -188,7 +187,7 @@ const scoreQueryFallback = 40
 
 // searchRow is one search answer as a root row. A query fallback takes the fallback band whatever Score it declares.
 func searchRow(p *App, m *manager.Manager, result manager.SearchResult, item api.Item, bound map[string]string) search.Item {
-	row := extensionRow(p, m, result.ExtensionID, result.Title, item, bound)
+	row := extensionRow(p, m, result.ExtensionID, result.Title, result.Origin, item, bound)
 	if item.QueryFallback {
 		row.Score = scoreQueryFallback
 	}
@@ -206,7 +205,7 @@ func rootRowsFor(p *App, m *manager.Manager, result manager.SearchResult, bound 
 		if !m.OperationsSupported(item.Requires) {
 			continue
 		}
-		row := extensionRow(p, m, result.ExtensionID, result.Title, item, bound)
+		row := extensionRow(p, m, result.ExtensionID, result.Title, result.Origin, item, bound)
 		if !m.IsBuiltIn(result.ExtensionID) {
 			row.Score = scoreRootCommand
 		}
@@ -215,7 +214,7 @@ func rootRowsFor(p *App, m *manager.Manager, result manager.SearchResult, bound 
 	return out
 }
 
-func extensionRow(p *App, m *manager.Manager, extID, title string, item api.Item, bound map[string]string) search.Item {
+func extensionRow(p *App, m *manager.Manager, extID, title string, origin any, item api.Item, bound map[string]string) search.Item {
 	item = extview.WithPreviewActions(item)
 	item = extview.WithRevealShortcut(item, platform.ShellLabelsFor(p.goos).RevealInFileManager)
 	deps := p.extensionViewDeps(m)
@@ -246,7 +245,7 @@ func extensionRow(p *App, m *manager.Manager, extID, title string, item api.Item
 		p.shortcutTitles.remember(item.CustomizeAs, item.Title)
 		row = p.withShortcutActions(row, item.CustomizeAs, bound)
 	}
-	return guardRootExtensionActions(m, extID, p.withAuthoringActions(row, extID, ""))
+	return guardRootExtensionActions(m, extID, origin, p.withAuthoringActions(row, extID, ""))
 }
 
 // folderLearnKey namespaces a folder extension's learning key by its id, so its rows learn apart from built-in rows
