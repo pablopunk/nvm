@@ -6,6 +6,7 @@ import (
 	"bytes"
 	"context"
 	"encoding/binary"
+	"fmt"
 	"io"
 	"math"
 	"net/http"
@@ -98,10 +99,16 @@ func TestJourneyJ20DictationPipelineCarriesToneToTranscript(t *testing.T) {
 	module := loadJ20Source(t, fifo)
 	defer unloadJ20Module(t, module)
 
+	// A microphone delivers frames from the moment it opens, and Start waits for the first one, so the tone streams
+	// while Start runs, as a real device's input does.
+	fed := make(chan error, 1)
+	go func() { fed <- feedJ20Tone(fifo, 2) }()
 	if err := service.Start("nvm_rig_tone"); err != nil {
 		t.Fatalf("Start: %v", err)
 	}
-	feedJ20Tone(t, fifo, 2)
+	if err := <-fed; err != nil {
+		t.Fatal(err)
+	}
 	text, err := service.Stop()
 	if err != nil {
 		t.Fatalf("Stop: %v", err)
@@ -137,11 +144,10 @@ func unloadJ20Module(t *testing.T, module string) {
 }
 
 // feedJ20Tone writes seconds of tone in real time, one 20 ms frame at a time.
-func feedJ20Tone(t *testing.T, fifo string, seconds int) {
-	t.Helper()
+func feedJ20Tone(fifo string, seconds int) error {
 	pipe, err := os.OpenFile(fifo, os.O_WRONLY, 0)
 	if err != nil {
-		t.Fatalf("open fifo: %v", err)
+		return fmt.Errorf("open fifo: %w", err)
 	}
 	defer func() { _ = pipe.Close() }()
 	raw := make([]byte, 2*320)
@@ -151,8 +157,9 @@ func feedJ20Tone(t *testing.T, fifo string, seconds int) {
 			binary.LittleEndian.PutUint16(raw[2*i:], uint16(sample))
 		}
 		if _, err := pipe.Write(raw); err != nil {
-			t.Fatalf("write tone: %v", err)
+			return fmt.Errorf("write tone: %w", err)
 		}
 		time.Sleep(20 * time.Millisecond)
 	}
+	return nil
 }
