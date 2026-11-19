@@ -178,7 +178,9 @@ type Palette struct {
 
 // presentedChoice identifies the selected row in the last rendered frame.
 type presentedChoice struct {
-	view                   *View
+	view *View
+	// row is set when a row was drawn chosen; without one, the page's own actions apply, as for an empty state.
+	row                    bool
 	query, id, kind, title string
 	provider, source       string
 	publication, version   uint64

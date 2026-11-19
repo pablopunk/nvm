@@ -84,13 +84,13 @@ func (p *Palette) recordPresentedChoice() {
 	}
 	if item := p.chosenItem(); item != nil {
 		action, hasAction := item.DefaultAction()
-		p.presented = presentedChoice{view: p.cur(), query: p.shownQuery, id: item.ID, kind: item.Kind, title: item.Title, provider: item.Provider, source: item.Source, publication: item.Publication, version: p.rowsVersion, shows: p.shows, chosen: p.chosen, action: action, actions: append([]search.Action(nil), item.Actions...), hasAction: hasAction, learnKey: item.LearnKey}
+		p.presented = presentedChoice{view: p.cur(), row: true, query: p.shownQuery, id: item.ID, kind: item.Kind, title: item.Title, provider: item.Provider, source: item.Source, publication: item.Publication, version: p.rowsVersion, shows: p.shows, chosen: p.chosen, action: action, actions: append([]search.Action(nil), item.Actions...), hasAction: hasAction, learnKey: item.LearnKey}
 	}
 }
 
 func (p *Palette) usesPresentedActions() bool {
 	shown := p.presented
-	return shown.view == p.cur() && shown.query == strings.TrimSpace(p.query) && shown.shows == p.shows &&
+	return shown.row && shown.view == p.cur() && shown.query == strings.TrimSpace(p.query) && shown.shows == p.shows &&
 		(!p.choicePinned || shown.version == p.rowsVersion && shown.chosen == p.chosen)
 }
 
