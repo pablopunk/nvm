@@ -13,6 +13,10 @@ import (
 func TestBoundActionsAreTheOnesRunResolves(t *testing.T) {
 	p := goldenPalette(t)
 	p.Attach(&testWindow{})
+	// Running an extension action finishes on the UI thread; this test's goroutine is that thread, so the finishes it
+	// queues run here, after the runs, rather than on the extension's goroutine.
+	p.uiQueue = &queuedWindow{}
+	defer drainUIQueue(p)
 	ids := []string{
 		shortcuts.PaletteID, shortcuts.PaletteToggleID, shortcuts.CommandKeyboardShortcuts, shortcuts.CommandQuickNotes,
 		shortcuts.CommandFixSelectedText, "extension-action:window-management:layout.reasonable-size",
