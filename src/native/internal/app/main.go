@@ -79,14 +79,15 @@ type App struct {
 	recorder     *diag.Recorder
 	// analytics sends technical diagnostics when the consent switch is on; failures reports each safego failure
 	// through the recorder and then to analytics.
-	analytics     *analytics.Client
-	commandTiming *timing.Tracker
-	failures      *analytics.FailureReporter
-	updater       update.Updater
-	updates       *update.Service
-	updatesCtx    context.Context
-	stopUpdates   context.CancelFunc
-	appsvc        *appfeat.Services
+	analytics          *analytics.Client
+	commandTiming      *timing.Tracker
+	failures           *analytics.FailureReporter
+	updater            update.Updater
+	updates            *update.Service
+	updatesCtx         context.Context
+	stopUpdates        context.CancelFunc
+	appsvc             *appfeat.Services
+	appCatalogRevision atomic.Uint64
 	// systemSvc runs the OS commands and reads the places, panes and permissions; launchAtLogin is the sign-in start.
 	systemSvc     *systemfeat.Services
 	launchAtLogin settingsfeat.LaunchAtLogin

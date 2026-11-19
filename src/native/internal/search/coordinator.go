@@ -65,7 +65,8 @@ type Options struct {
 	Tiered bool
 	// Flat lists the rows in score order with no section labels, as 1.x's root list does, for every query.
 	Flat bool
-	// SingleSnapshot publishes one complete result per displayed query; refreshes only update its cache.
+	// SingleSnapshot publishes one complete result set per typed query: its rows and their order stay as published,
+	// and a refresh only updates the content of the rows already shown. The empty query is not fixed.
 	SingleSnapshot bool
 }
 
@@ -84,23 +85,24 @@ type Coordinator struct {
 	opts   Options
 	single singleQueryState
 
-	mu                    sync.Mutex
-	publishMu             sync.Mutex
-	revision, publication uint64
-	publishedRevision     uint64
-	gen                   int
-	query                 string
-	cancel                context.CancelFunc // cancels the providers of the current generation
-	slots                 []*slot            // one per provider of the current generation, in provider order
-	pending               int                // slots not finished yet
-	emitted               bool               // a snapshot of the current generation has been produced
-	warmSettled           bool               // this query had a complete snapshot before refresh
-	cache                 *queryCache
-	stats                 map[string]*ProviderStats
-	shown                 map[string][]Item // rows of the last snapshot, by provider
-	superseded            map[string][]Item // rows of the snapshot the previous query ended on
-	matcher               *queryMatcher     // matches the rows of matcherQuery; nil for a blank query
-	matcherQuery          string
+	mu                          sync.Mutex
+	publishMu                   sync.Mutex
+	revision, publication       uint64
+	cacheEpoch, queryCacheEpoch uint64
+	publishedRevision           uint64
+	gen                         int
+	query                       string
+	cancel                      context.CancelFunc // cancels the providers of the current generation
+	slots                       []*slot            // one per provider of the current generation, in provider order
+	pending                     int                // slots not finished yet
+	emitted                     bool               // a snapshot of the current generation has been produced
+	warmSettled                 bool               // this query had a complete snapshot before refresh
+	cache                       *queryCache
+	stats                       map[string]*ProviderStats
+	shown                       map[string][]Item // rows of the last snapshot, by provider
+	superseded                  map[string][]Item // rows of the snapshot the previous query ended on
+	matcher                     *queryMatcher     // matches the rows of matcherQuery; nil for a blank query
+	matcherQuery                string
 }
 
 // slot is one provider's part of the current generation.
@@ -149,6 +151,7 @@ func (c *Coordinator) Invalidate() {
 	c.mu.Lock()
 	defer c.mu.Unlock()
 	c.cache.clear()
+	c.cacheEpoch++
 }
 
 // Gen returns the generation of the current query. A snapshot is current when its Gen equals this value.
@@ -257,25 +260,33 @@ func (c *Coordinator) snapshotLocked() Snapshot {
 		}
 	}
 	settled := c.pending == 0
+	fixed := c.fixedLocked()
 	limit := c.limit()
-	if c.opts.SingleSnapshot {
+	if fixed {
 		limit = 0
 	}
 	fresh := mergeAppended(ranked, appended, limit, c.query != "", c.opts.Flat, settled || c.warmSettled)
-	if c.opts.SingleSnapshot {
+	shown := fresh
+	if fixed {
 		fresh = firstN(c.single.refine(c.query, fresh), c.limit())
+		shown = fresh
+		if visible := c.single.visible; visible != nil && visible.Query == c.query {
+			shown = updateInPlace(visible.Items, fresh)
+		}
 	}
-	snap := Snapshot{revision: c.revision, Gen: c.gen, Query: c.query, Items: fresh, Settled: settled, Pending: c.pendingCallsLocked()}
+	snap := Snapshot{revision: c.revision, Gen: c.gen, Query: c.query, Items: shown, Settled: settled, Pending: c.pendingCallsLocked()}
 	c.emitted = true
 	providerRows := c.providerCache(fresh)
-	if c.opts.SingleSnapshot {
+	if fixed {
 		providerRows = c.completeProviderCache()
 	}
 	c.shown = c.providerCache(snap.Items)
 	if len(snap.Items) == 0 && !settled {
 		snap.Carried = c.carriedLocked()
 	}
-	c.cache.put(c.query, cachedRows{items: fresh, providers: providerRows, settled: snap.Settled || c.warmSettled})
+	if c.queryCacheEpoch == c.cacheEpoch {
+		c.cache.put(c.query, cachedRows{items: fresh, providers: providerRows, settled: snap.Settled || c.warmSettled})
+	}
 	return snap
 }
 
@@ -307,11 +318,15 @@ func (c *Coordinator) publish(snap Snapshot) {
 	c.publishMu.Lock()
 	defer c.publishMu.Unlock()
 	c.mu.Lock()
-	if snap.Gen != c.gen || snap.revision <= c.publishedRevision || (c.opts.SingleSnapshot && c.single.visible != nil) {
+	if snap.Gen != c.gen || snap.revision <= c.publishedRevision {
 		c.mu.Unlock()
 		return
 	}
-	if c.opts.SingleSnapshot {
+	if c.opts.SingleSnapshot && snap.Query != "" {
+		if visible := c.single.visible; visible != nil && (visible.Query != snap.Query || sameDisplay(visible.Items, snap.Items)) {
+			c.mu.Unlock()
+			return
+		}
 		c.single.setVisible(snap)
 	}
 	c.publishedRevision = snap.revision
@@ -319,6 +334,12 @@ func (c *Coordinator) publish(snap Snapshot) {
 	if c.opts.OnSnapshot != nil {
 		c.opts.OnSnapshot(snap)
 	}
+}
+
+// fixedLocked reports whether the current query keeps one result set: a typed query of a single-snapshot view. The empty
+// query lists the root's catalog, which fills in as its sources load. The caller holds c.mu.
+func (c *Coordinator) fixedLocked() bool {
+	return c.opts.SingleSnapshot && c.query != ""
 }
 
 func (c *Coordinator) limit() int {

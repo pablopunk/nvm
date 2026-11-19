@@ -11,8 +11,9 @@ import (
 )
 
 // awaitFixtureCommand installs extension id, types query while its commands are still being learned, and returns the
-// row titled title once a fresh search of query lists it. The rows on screen are a fixed result: background command
-// discovery never changes them while the query stays the same, and reopening the palette searches the query again.
+// row titled title once the palette lists it. A typed query keeps a fixed set of rows: background command discovery
+// never adds to it while the query stays the same, and reopening the palette searches the query again. The empty query
+// lists the root's catalog, which fills in as the commands are learned.
 func awaitFixtureCommand(t *testing.T, id, query, title string) (*App, *manager.Manager, search.Item) {
 	t.Helper()
 	p := goldenPalette(t)
@@ -44,7 +45,7 @@ func awaitFixtureCommand(t *testing.T, id, query, title string) (*App, *manager.
 		if p.Query() != query {
 			t.Fatalf("background command discovery replaced query %q with %q", query, p.Query())
 		}
-		if got := rowTitles(p); !slices.Equal(got, shown) {
+		if got := rowTitles(p); query != "" && !slices.Equal(got, shown) {
 			t.Fatalf("background command discovery changed the rows of %q from %v to %v", query, shown, got)
 		}
 		p.Show()

@@ -48,13 +48,11 @@ type View struct {
 	Flat bool
 	// Tiered ranks typed queries by match tier, then class and usage (search.Options.Tiered).
 	Tiered bool
-	// SingleSnapshot keeps each typed result fixed until the query changes.
+	// SingleSnapshot keeps the rows of each typed result, and their order, until the query changes; refreshes update
+	// the content of those rows in place. The empty query is not fixed.
 	SingleSnapshot bool
-	// Basis fingerprints the host state a SingleSnapshot view decorates its rows from, such as bound shortcuts and
-	// aliases. When the user changes that state the fixed results are stale, so the next search recomputes the current
-	// query once and forgets the cached ones. Nil means the rows depend only on their providers.
-	Basis func() uint64
-	basis uint64
+	// revalidateShown asks for one more refresh of the typed query on screen once its first result is shown.
+	revalidateShown bool
 	// OnSubmit receives the input text when Enter is pressed in a Body view.
 	OnSubmit  func(q string)
 	HideInput bool

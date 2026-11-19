@@ -18,7 +18,8 @@ func (p *Palette) search() {
 	}
 	v := p.cur()
 	q := strings.TrimSpace(p.query)
-	if rebased := p.rebaseFixedResults(v); v.SingleSnapshot && !rebased && p.shownView == v && p.shownQuery == q {
+	if v.SingleSnapshot && q != "" && p.shownView == v && p.shownQuery == q {
+		p.revalidateShownResult(v, q)
 		return
 	}
 	if p.actionsOpen && (p.shownView != v || p.shownQuery != q) {
@@ -39,22 +40,18 @@ func (p *Palette) search() {
 	}
 }
 
-// rebaseFixedResults forgets the fixed results of a single-snapshot view whose Basis changed, and reports whether it
-// did, so the current query is searched again and replaced once rather than kept with stale decorations.
-func (p *Palette) rebaseFixedResults(v *View) bool {
-	if !v.SingleSnapshot || v.Basis == nil {
-		return false
+// revalidateShownResult asks the providers again for the typed query on screen. Its rows and their order stay; only
+// their content follows the providers, such as a status, an icon or an action that arrived later. While the query's
+// first result is still on its way, the request is kept and runs once that result is shown.
+func (p *Palette) revalidateShownResult(v *View, q string) {
+	snap, ready := p.coordinator(v).Query(q, v.Providers())
+	if !ready {
+		v.revalidateShown = true
+		return
 	}
-	basis := v.Basis()
-	if basis == v.basis {
-		return false
+	if !search.SameDisplay(p.results, snap.Items) {
+		p.showRows(v, q, snap.Items, snap.Settled, snap.Pending)
 	}
-	v.basis = basis
-	if v.coord != nil {
-		v.coord.Cancel()
-		v.coord.Invalidate()
-	}
-	return true
 }
 
 // ForgetCachedResults drops the remembered results of the stack's views that keep selects, after background state they
@@ -97,6 +94,10 @@ func (p *Palette) applySnapshot(v *View, s search.Snapshot) {
 		p.carrySupersededRows(v, s)
 	}
 	p.showRows(v, s.Query, s.Items, s.Settled, s.Pending)
+	if v.revalidateShown && s.Settled && s.Query == strings.TrimSpace(p.query) {
+		v.revalidateShown = false
+		p.revalidateShownResult(v, s.Query)
+	}
 }
 
 // carrySupersededRows keeps on screen, for an empty unsettled snapshot of a new query, only the previous query's

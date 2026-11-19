@@ -41,22 +41,33 @@ func (p *App) startAppServices() {
 		},
 		Changed: p.onAppsChanged,
 	})
-	safego.Go("apps.cache", func(context.Context) {
-		if err := p.appsvc.Index.LoadCache(); err != nil {
-			logx.Default().Warn("apps.cache.unreadable", logx.F{"error": err.Error()})
-		}
-		p.onAppsChanged()
-	})
+	safego.Go("apps.cache", func(context.Context) { p.warmAppCatalog() })
 }
 
-// onAppsChanged asks the UI thread to rebuild the rows that show apps: the applications built-in runs again, and the
-// visible rows are searched again. Safe from any goroutine; a no-op before the window exists.
+// warmAppCatalog loads the saved snapshot before starting a scan, without delaying the palette's first paint.
+func (p *App) warmAppCatalog() {
+	if err := p.appsvc.Index.LoadCache(); err != nil {
+		logx.Default().Warn("apps.cache.unreadable", logx.F{"error": err.Error()})
+	}
+	p.onAppsChanged()
+	p.appsvc.Index.RequestRefresh()
+}
+
+// onAppsChanged marks app rows for refresh and invalidates future root searches only when the installed catalog
+// changed. The current fixed query remains visible. Safe from any goroutine.
 func (p *App) onAppsChanged() {
 	if p.panel == nil {
+		p.appCatalogRevision.Store(p.appsvc.Index.Revision())
 		return
 	}
 	p.panel.Update(func() {
 		p.rootRows.markPending(appsbuiltin.ID)
+		revision := p.appsvc.Index.Revision()
+		if revision != p.appCatalogRevision.Swap(revision) {
+			if p.Palette != nil {
+				p.ForgetCachedResults(isRootView)
+			}
+		}
 		p.ReloadRows()
 	})
 }

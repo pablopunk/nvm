@@ -214,3 +214,31 @@ func TestDedupeAndSortIdenticalNamesKeepOneRowWithItsPath(t *testing.T) {
 		t.Fatalf("apps = %+v, want one row for the last copy", apps)
 	}
 }
+
+func TestCatalogRevisionChangesOnlyWhenInstalledAppsChange(t *testing.T) {
+	loom := App{ID: "dev.loom", Name: "Loom", Path: "/Applications/Loom.app"}
+	scanner := &scriptedScanner{results: []scriptedResult{{apps: []App{loom}, complete: true}, {apps: []App{loom}, complete: true}, {apps: nil, complete: true}}}
+	cache := &MemoryCache{}
+	_ = cache.Save(Snapshot{Version: SnapshotVersion, FirstSeen: FirstSeen{ByID: map[string]int64{}, Initialized: true}})
+	index := NewIndex(IndexOptions{Scan: scanner.scan, Cache: cache, Clock: fake.NewClock()})
+	mustLoad(t, index)
+	if err := index.Scan(); err != nil {
+		t.Fatal(err)
+	}
+	first := index.Revision()
+	if first == 0 {
+		t.Fatal("installed catalog did not advance revision")
+	}
+	if err := index.Scan(); err != nil {
+		t.Fatal(err)
+	}
+	if index.Revision() != first {
+		t.Fatal("unchanged scan invalidated cached results")
+	}
+	if err := index.Scan(); err != nil {
+		t.Fatal(err)
+	}
+	if index.Revision() == first {
+		t.Fatal("removal did not advance revision")
+	}
+}

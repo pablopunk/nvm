@@ -11,11 +11,11 @@ func (c *Coordinator) watch(gen, idx int) {
 		return
 	}
 	s := c.slots[idx]
-	done, budget := s.done, s.budget
+	done, budget, fixed := s.done, s.budget, c.fixedLocked()
 	c.mu.Unlock()
 	soft := c.opts.Clock.After(budget.Soft)
 	hardBudget := budget.Hard
-	if c.opts.SingleSnapshot && s.selfBudgeted {
+	if fixed && s.selfBudgeted {
 		hardBudget = max(hardBudget, AggregateHardBudget)
 	}
 	hard := c.opts.Clock.After(hardBudget)
@@ -86,7 +86,7 @@ func (c *Coordinator) complete(gen, idx int, returned bool) {
 		c.mu.Unlock()
 		return
 	}
-	if c.opts.SingleSnapshot && !returned && !s.refreshing {
+	if c.fixedLocked() && !returned && !s.refreshing {
 		s.items = nil
 	}
 	if s.refreshing && returned {
@@ -112,7 +112,7 @@ func (c *Coordinator) acceptsLocked(gen, idx int) bool {
 		return false
 	}
 	s := c.slots[idx]
-	if c.opts.SingleSnapshot {
+	if c.fixedLocked() {
 		return !s.returned && !s.finished
 	}
 	return !s.returned && ((s.slow && s.selfBudgeted) || !s.finished)
@@ -130,12 +130,12 @@ func (c *Coordinator) cutOff(gen, idx int) {
 	s := c.slots[idx]
 	s.slow = true
 	c.statsLocked(s.id).Slow++
-	if c.opts.SingleSnapshot && !s.returned {
+	if c.fixedLocked() && !s.returned {
 		s.items = nil
 		s.refreshing = false
 	}
 	c.finishLocked(s)
-	if (c.opts.SingleSnapshot || !s.selfBudgeted) && s.cancel != nil {
+	if (c.fixedLocked() || !s.selfBudgeted) && s.cancel != nil {
 		s.cancel()
 	}
 	if !c.readyLocked() {

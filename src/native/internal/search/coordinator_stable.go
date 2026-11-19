@@ -1,8 +1,8 @@
 package search
 
-// readyLocked waits for every source in single-snapshot mode; streaming views may publish before appended sources.
+// readyLocked waits for every source of a fixed query; streaming views may publish before appended sources.
 func (c *Coordinator) readyLocked() bool {
-	if c.opts.SingleSnapshot {
+	if c.fixedLocked() {
 		return c.pending == 0
 	}
 	if c.emitted || c.opts.Synchronous {

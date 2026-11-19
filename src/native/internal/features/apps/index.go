@@ -52,6 +52,7 @@ type Index struct {
 	// completeSnapshot is set once the list holds a complete listing: a complete scan or the saved list. An incomplete
 	// scan only adds to the list, so it can never erase an app it could not see.
 	completeSnapshot bool
+	revision         uint64
 	firstSeen        FirstSeen
 	readOnly         bool
 	inFlight         bool
@@ -76,6 +77,13 @@ func (x *Index) Apps() []App {
 	return slices.Clone(x.apps)
 }
 
+// Revision changes only when the installed-app snapshot changes, not when running status is refreshed.
+func (x *Index) Revision() uint64 {
+	x.mu.Lock()
+	defer x.mu.Unlock()
+	return x.revision
+}
+
 // LoadCache shows the saved list until the first scan lands. A snapshot from a newer build is ignored and the
 // index stays read-only, so that data is never overwritten. A scan that already finished wins over the cache.
 func (x *Index) LoadCache() error {
@@ -94,7 +102,11 @@ func (x *Index) LoadCache() error {
 	}
 	if !x.completeSnapshot {
 		// A partial scan may finish while disk loading is in flight. Keep its discoveries and the last complete cache.
-		x.apps = DedupeAndSort(append(slices.Clone(snapshot.Apps), x.apps...))
+		next := DedupeAndSort(append(slices.Clone(snapshot.Apps), x.apps...))
+		if !slices.Equal(x.apps, next) {
+			x.revision++
+		}
+		x.apps = next
 		x.completeSnapshot = true
 	}
 	if snapshot.FirstSeen.ByID != nil {
@@ -148,7 +160,11 @@ func (x *Index) adopt(scan ScanResult, initializeBaseline bool) {
 		candidates = append(slices.Clone(x.apps), scan.Apps...)
 	}
 	tracked, next, _ := TrackFirstSeen(candidates, x.firstSeen, initializeBaseline, x.opts.Clock.Now().UnixMilli(), x.opts.Identity)
-	x.apps = DedupeAndSort(tracked)
+	apps := DedupeAndSort(tracked)
+	if !slices.Equal(x.apps, apps) {
+		x.revision++
+	}
+	x.apps = apps
 	if scan.Complete {
 		x.completeSnapshot = true
 	}

@@ -7,21 +7,23 @@ import (
 
 // Query starts the search for q with the given providers and returns the rows ready at once: the rows
 // remembered for q (ok), or, in Synchronous mode, the complete result. Without a remembered result the
-// caller shows nothing new until the first snapshot arrives through OnSnapshot. In SingleSnapshot mode a cold
-// query publishes only when every source has completed or been cut off, and an exact cache hit never changes visibly.
+// caller shows nothing new until the first snapshot arrives through OnSnapshot. In SingleSnapshot mode a typed
+// query publishes only when every source has completed or been cut off. Its rows then stay, in their order: asking
+// again for the query on screen, or an exact cache hit, revalidates the providers and only updates those rows' content.
 // Query never waits for a provider. An empty q asks the providers for their root rows.
 func (c *Coordinator) Query(q string, providers []Provider) (Snapshot, bool) {
 	c.mu.Lock()
-	if c.opts.SingleSnapshot && c.query == q && c.cancel != nil {
-		if c.single.visible != nil {
-			snap := *c.single.visible
+	fixed := c.opts.SingleSnapshot && q != ""
+	revalidate := false
+	if fixed && c.query == q && c.cancel != nil {
+		if visible := c.single.visible; visible == nil || visible.Query != q {
+			// The query's first result is still on its way; it reads the state as its providers answer.
 			c.mu.Unlock()
-			return snap, true
+			return Snapshot{}, false
 		}
-		c.mu.Unlock()
-		return Snapshot{}, false
+		revalidate = true
 	}
-	if c.opts.SingleSnapshot {
+	if c.opts.SingleSnapshot && !revalidate {
 		c.single.begin(q)
 		if previous := c.single.previous; previous != nil && len(previous.Items) > 0 {
 			for _, provider := range providers {
@@ -38,6 +40,7 @@ func (c *Coordinator) Query(q string, providers []Provider) (Snapshot, bool) {
 	ctx, cancel := context.WithCancel(context.Background())
 	c.cancel = cancel
 	c.query = q
+	c.queryCacheEpoch = c.cacheEpoch
 	c.slots = make([]*slot, len(providers))
 	for i, p := range providers {
 		c.slots[i] = &slot{id: p.ID(), appended: isAppended(p), started: c.opts.Clock.Now(), budget: budgetOf(p), selfBudgeted: ownsCallBudgets(p), done: make(chan struct{}), refreshing: true}
@@ -46,6 +49,10 @@ func (c *Coordinator) Query(q string, providers []Provider) (Snapshot, bool) {
 	c.emitted = false
 	c.superseded = c.shown
 	remembered, hit := c.cache.get(q)
+	if revalidate {
+		// The rows on screen anchor the refresh; the cache is not shown again.
+		hit = false
+	}
 	c.warmSettled = hit && remembered.settled
 	var warm Snapshot
 	if !c.opts.SingleSnapshot && !hit && q != "" && previousQuery != "" && strings.HasPrefix(q, previousQuery) && q != previousQuery {
@@ -67,11 +74,11 @@ func (c *Coordinator) Query(q string, providers []Provider) (Snapshot, bool) {
 			s.items = append([]Item(nil), remembered.providers[s.id]...)
 		}
 		limit := c.limit()
-		if c.opts.SingleSnapshot {
+		if fixed {
 			limit = 0
 		}
 		warm = Snapshot{Gen: gen, Query: q, Items: mergeCached(c.slots, limit, q != "", c.opts.Flat, remembered.settled), Settled: remembered.settled}
-		if c.opts.SingleSnapshot {
+		if fixed {
 			warm.Items = firstN(c.single.refine(q, warm.Items), c.limit())
 			c.single.setVisible(warm)
 		}
@@ -80,6 +87,12 @@ func (c *Coordinator) Query(q string, providers []Provider) (Snapshot, bool) {
 			c.shown = c.providerCache(warm.Items)
 		}
 	}
+	if revalidate {
+		warm = *c.single.visible
+		warm.Gen = gen
+		hit = true
+		c.emitted = true
+	}
 	c.mu.Unlock()
 
 	if c.opts.Synchronous {
@@ -87,7 +100,7 @@ func (c *Coordinator) Query(q string, providers []Provider) (Snapshot, bool) {
 			c.invoke(ctx, gen, i, p, q)
 		}
 		snap := c.current(gen)
-		if c.opts.SingleSnapshot {
+		if fixed {
 			c.mu.Lock()
 			c.single.setVisible(snap)
 			c.mu.Unlock()
@@ -96,7 +109,7 @@ func (c *Coordinator) Query(q string, providers []Provider) (Snapshot, bool) {
 	}
 	if len(providers) == 0 {
 		snap := c.current(gen)
-		if c.opts.SingleSnapshot {
+		if fixed {
 			c.mu.Lock()
 			c.single.setVisible(snap)
 			c.mu.Unlock()
@@ -106,7 +119,7 @@ func (c *Coordinator) Query(q string, providers []Provider) (Snapshot, bool) {
 	for i, p := range providers {
 		c.start(ctx, gen, i, p, q)
 	}
-	if !c.opts.SingleSnapshot {
+	if !fixed {
 		go c.firstSnapshotTimer(gen)
 	}
 	if !hit {

@@ -234,3 +234,25 @@ func TestNarrowingRetainsMatchingLeaderOutsideProviderLimitUnlessRevoked(t *test
 		c.Cancel()
 	}
 }
+
+func TestInvalidatedInflightResultCannotRestoreOldQueryCache(t *testing.T) {
+	sink := newSnapshotSink()
+	c := NewCoordinator(Options{Clock: fake.NewClock(), OnSnapshot: sink.OnSnapshot, Flat: true, SingleSnapshot: true})
+	defer c.Cancel()
+	p := singleProvider{id: "apps", calls: make(chan chan singleAnswer, 3)}
+	c.Query("lo", []Provider{p})
+	old := <-p.calls
+	c.Invalidate()
+	answerSingle(old, []Item{{ID: "stale", Title: "Stale"}}, true)
+	sink.untilSettled(t, c.Gen())
+	c.Cancel()
+	if _, ready := c.Query("lo", []Provider{p}); ready {
+		t.Fatal("invalidated in-flight result repopulated the cache")
+	}
+	next := <-p.calls
+	answerSingle(next, []Item{{ID: "loom", Title: "Loom"}}, true)
+	snapshots := sink.untilSettled(t, c.Gen())
+	if got := rowIDs(snapshots[len(snapshots)-1].Items); !slices.Equal(got, []string{"loom"}) {
+		t.Fatalf("fresh catalog = %v", got)
+	}
+}

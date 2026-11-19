@@ -1,5 +1,7 @@
 package palette
 
+import "strings"
+
 // SetStack replaces the navigation stack without leaving the views on it. The host uses it to start from a
 // given state, and the goldens use it to render one.
 func (p *Palette) SetStack(views ...*View) {
@@ -145,7 +147,7 @@ func (p *Palette) NotifyTopDataChanged(extensionID string) {
 // ReloadRows revalidates the visible rows from the UI thread after host data changes. Cached snapshots stay
 // available for instant navigation; every search revalidates its providers.
 func (p *Palette) ReloadRows() {
-	if p.cur().SingleSnapshot {
+	if p.cur().SingleSnapshot && strings.TrimSpace(p.query) != "" {
 		p.search()
 		return
 	}

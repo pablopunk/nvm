@@ -65,3 +65,30 @@ func TestPassiveRefreshKeepsTheWarmRootWhileProvidersRevalidate(t *testing.T) {
 		})
 	}
 }
+
+// TestFixedRootRefreshUpdatesShownRowsButNotTheirSet refreshes a typed root query after its catalog changed. The row on
+// screen takes its new content at once; the row the catalog added waits for the next search of the query.
+func TestFixedRootRefreshUpdatesShownRowsButNotTheirSet(t *testing.T) {
+	var updated atomic.Bool
+	provider := search.NewRowsProvider("apps", func(_ context.Context, q string) []search.Item {
+		if q == "" {
+			return nil
+		}
+		if updated.Load() {
+			return []search.Item{{ID: "app", Kind: search.KindApplications, Title: "New app"}, {ID: "added", Kind: search.KindApplications, Title: "Added app"}}
+		}
+		return []search.Item{{ID: "app", Kind: search.KindApplications, Title: "Old app"}}
+	})
+	root := &View{Title: "root", Flat: true, SingleSnapshot: true, Providers: func() []search.Provider { return []search.Provider{provider} }}
+	h := newHarness(t, root, false)
+	h.p.SetQuery("lo")
+	h.awaitRows(func(titles []string) bool { return len(titles) == 1 && titles[0] == "Old app" })
+	updated.Store(true)
+	h.p.ForgetCachedResults(func(v *View) bool { return v == root })
+	h.p.ReloadRows()
+	h.awaitRows(func(titles []string) bool { return len(titles) == 1 && titles[0] == "New app" })
+	h.p.SetQuery("other")
+	h.awaitRows(func(titles []string) bool { return len(titles) == 2 })
+	h.p.SetQuery("lo")
+	h.awaitRows(func(titles []string) bool { return len(titles) == 2 })
+}
