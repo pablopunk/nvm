@@ -110,6 +110,7 @@ jobs:
 
       - name: Run the bench
         run: |
+          set -o pipefail
           caffeinate -dimsu -w $$ &
           zsh src/native/scripts/bench/macos/ci.sh "$B" "$BLOCKS" 2>&1 | tee "$B/upload/bench.log"
 

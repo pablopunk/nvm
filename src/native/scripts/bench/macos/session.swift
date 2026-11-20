@@ -257,7 +257,13 @@ final class Session {
         let shown = (r.map { seq[$0].f } ?? seq.last?.f ?? base)
         let lat = t1.map { ($0 - t0) * 1000 }
         let lowerMs = t1 == nil ? nil : (tLower - t0) * 1000
-        let txt = "lower_bound_ms=\(lowerMs.map { String(format: "%.1f", $0) } ?? "-") first_match_ms=\(firstMatch) late_changes=\(changes) frames=\(seq.count) idle_ticks=\(ticks.count) dispatch_ms=\(String(format: "%.2f", (tDispatchEnd - t0) * 1000)) sequence=[\(transitions.joined(separator: " >> "))]" + gapText + " last_text=" + (shown.map { lines($0).map(\.text).prefix(12).joined(separator: " | ") } ?? "")
+        let lowerText: String = lowerMs.map { String(format: "%.1f", $0) } ?? "-"
+        let dispatchText: String = String(format: "%.2f", (tDispatchEnd - t0) * 1000)
+        let sequenceText: String = transitions.joined(separator: " >> ")
+        let shownText: String = shown.map { lines($0).map(\.text).prefix(12).joined(separator: " | ") } ?? ""
+        var txt = "lower_bound_ms=\(lowerText) first_match_ms=\(firstMatch) late_changes=\(changes)"
+        txt += " frames=\(seq.count) idle_ticks=\(ticks.count) dispatch_ms=\(dispatchText) sequence=[\(sequenceText)]"
+        txt += gapText + " last_text=" + shownText
         record(TrialRecord(version: c.version, launch: c.launch, scenario: scenario, index: i, warmup: warm, tStart: t0, tEnd: t1, latencyMs: lat, status: status, framesSeen: seq.count, detail: txt, load1: load, thermal: thermal, lowerMs: lowerMs))
         if i == c.warmups { savePNG(shown, "\(scenario)-endpoint") }
         if t1 == nil { savePNG(shown, "\(scenario)-\(i)-failed") }
