@@ -21,6 +21,8 @@ run = {
         f"Alternating AB/BA blocks, disposable profiles with identical 51,000-file fixtures, one 60-second priming launch per profile, profiles excluded from Spotlight; observer key-to-frame floor median {floor} ms.",
         f"Bounds are ScreenCaptureKit frame and idle-sample times of the palette region, from CGEvent dispatch start; frames are classified by Vision OCR after each capture window. "
         f"Second Settings row from the explore pass: '{rows['v1']}' (v1), '{rows['v2']}' (v2). A palette shown at launch is dismissed with Escape before the hidden phase. The action menu is not measured (v1 has none).",
+        "The stable-list signature is all OCR text below the input (titles, subtitles, right-hand values, footer), stricter than Linux's row titles; "
+        "a version that changes that text after its first matching frame has its endpoint moved later or failed as unstable.",
     ],
 }
 json.dump(run, open(f"{OUT}/run.json", "w"), indent=2, ensure_ascii=False); open(f"{OUT}/run.json", "a").write("\n")
