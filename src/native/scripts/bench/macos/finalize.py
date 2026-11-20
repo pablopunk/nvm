@@ -9,46 +9,62 @@ ncpu, mem = int(sh("sysctl", "-n", "hw.ncpu")), int(sh("sysctl", "-n", "hw.memsi
 model, osv = sh("sysctl", "-n", "machdep.cpu.brand_string"), sh("sw_vers", "-productVersion")
 rows = {v: open(f"{B}/explore/second-row-{v}.txt").read().strip() for v in ("v1", "v2")}
 floor = sh("python3", "-I", "-c", "import csv,statistics,sys;r=[float(x['latency_ms']) for x in csv.DictReader(open(sys.argv[1])) if x['status']=='ok'];print(f'{statistics.median(r):.1f}' if r else '-')", f"{B}/runs/observer-floor.csv")
+def pct(xs, q):
+    xs = sorted(xs); k = (len(xs) - 1) * q; f = int(k)
+    return xs[f] if f + 1 >= len(xs) else xs[f] + (xs[f + 1] - xs[f]) * (k - f)
+
+
 def capture_gap_note(out):
-    """Capture gaps of 300 ms or more after dispatch, the no-input control before dispatch, and the probe window's frames
-    inside the gaps (the probe is redrawn at 120 Hz by the harness and captured by its own stream)."""
+    """How often the app's stream had no frame and no idle sample for 300 ms or more, after the key and in the 1 s
+    no-input window before it: if both are common, a silent stream is not evidence of a stall."""
     rows = [json.loads(l) for l in open(f"{out}/trials.jsonl")]
     measured = [r for r in rows if not r["warmup"] and r["endpoint"] != "calculator" and "capture_gap_ms" in r]
     parts = []
     for v in ("v1", "v2"):
         mine = [r for r in measured if r["version"] == v]
-        gaps = [r for r in mine if r["capture_gap_ms"] >= 300]
-        pre = [r for r in mine if r.get("pre_dispatch_gap_ms", 0) >= 300]
-        parts.append(f"{v} {len(gaps)}/{len(mine)} after dispatch, {len(pre)}/{len(mine)} in the 1 s no-input window before it")
-    return "Capture gaps of 300 ms or more (no frame and no idle sample from the app's stream): " + "; ".join(parts) + ". " + probe_note(B)
+        if not mine: continue
+        after = sum(r["capture_gap_ms"] >= 300 for r in mine) / len(mine) * 100
+        before = sum(r.get("pre_dispatch_gap_ms", 0) >= 300 for r in mine) / len(mine) * 100
+        parts.append(f"{v} {after:.0f}% of attempts after the key and {before:.0f}% in the 1 s no-input window before it")
+    return ("ScreenCaptureKit idle samples are sparse on this VM: the app's stream went 300 ms or more without a frame or idle sample in "
+            + "; ".join(parts) + ", so a silent stream is not evidence of a stall. " + probe_note(B))
+
+
+def probe_flips(b, v):
+    """(all flip delays, delays of flips made before a change that came 400 ms or more after the key, slow attempts)."""
+    import glob, re
+    every, before_slow, slow = [], [], 0
+    for p in glob.glob(f"{b}/runs/{v}-b*-run/trials.jsonl"):
+        for line in open(p):
+            r = json.loads(line)
+            m = re.search(r"probe_flips=\[([^\]]*)\]", r.get("detail", ""))
+            if not r["scenario"].endswith("-probe") or not m or r.get("latencyMs") is None: continue
+            is_slow = r["latencyMs"] >= 400
+            slow += is_slow
+            for item in filter(None, m.group(1).split(",")):
+                offset, delay = item.split(":")
+                if delay == "none": continue
+                every.append(float(delay))
+                if is_slow and float(offset) < r["latencyMs"] - 20: before_slow.append(float(delay))
+    return every, before_slow, slow
 
 
 def probe_note(b):
-    """Diagnostic Down/Enter attempts after the measured trials: when the app's change appeared 400 ms or more after the
-    key, how quickly the probe window's flips scheduled before that change reached the screen."""
-    import glob, re
-    parts = []
+    """Diagnostic Down/Enter attempts after the measured trials, with a harness window flipped 5 times at +150 to +550 ms."""
+    base, slow_parts = [], []
     for v in ("v1", "v2"):
-        slow, delays, missing = 0, [], 0
-        for p in glob.glob(f"{b}/runs/{v}-b*-run/trials.jsonl"):
-            for line in open(p):
-                r = json.loads(line)
-                if not r["scenario"].endswith("-probe") or r.get("latencyMs") is None or r["latencyMs"] < 400: continue
-                m = re.search(r"probe_flips=\[([^\]]*)\]", r.get("detail", ""))
-                if not m: continue
-                slow += 1
-                for item in filter(None, m.group(1).split(",")):
-                    offset, delay = item.split(":")
-                    if float(offset) >= r["latencyMs"] - 20: continue
-                    if delay == "none": missing += 1
-                    else: delays.append(float(delay))
-        if slow:
-            parts.append(f"{v}: {slow} diagnostic attempts changed 400 ms or more after the key; probe flips made before that change "
-                         f"reached the screen after a median of {statistics.median(delays):.0f} ms" + (f" ({missing} never shown)" if missing else "") if delays else
-                         f"{v}: {slow} slow diagnostic attempts, no probe flip before the change")
+        every, before_slow, slow = probe_flips(b, v)
+        if every: base.append(f"{v} median {statistics.median(every):.0f} ms, p90 {pct(every, .9):.0f} ms")
+        if slow and before_slow:
+            slow_parts.append(f"in the {slow} {v} attempts whose change came 400 ms or more after the key, flips made before that change "
+                              f"took a median of {statistics.median(before_slow):.0f} ms (p90 {pct(before_slow, .9):.0f} ms)")
         else:
-            parts.append(f"{v}: no diagnostic attempt changed 400 ms or more after the key")
-    return "Probe diagnostics (6 extra attempts per block, a harness window flipped 5 times at +150 to +550 ms): " + "; ".join(parts) + "."
+            slow_parts.append(f"no {v} diagnostic attempt changed 400 ms or more after the key")
+    return ("Probe diagnostics (6 extra Down/Enter attempts per block; a harness window flipped 5 times at +150 to +550 ms, captured by its own stream): "
+            "flips reached the probe's stream after " + "; ".join(base) + " (the VM's compositor and capture delay, part of every upper bound); "
+            + "; ".join(slow_parts) + ".")
+
+
 run = {
     "platform": "macos", "title": "macOS (GitHub-hosted VM)",
     "machine": f"GitHub-hosted macos-15 runner: {model} virtual machine, {ncpu} vCPU, {mem:.0f} GB, no GPU acceleration, macOS {osv}.",
