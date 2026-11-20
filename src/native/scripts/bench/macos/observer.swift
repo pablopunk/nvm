@@ -226,6 +226,7 @@ final class Capture: NSObject, SCStreamOutput {
     private var stream: SCStream?
     private let lock = NSLock()
     private var frames: [Frame] = []
+    private var ticks: [Double] = []
     private(set) var latest: Frame?
     var recording = false
     var mode = ""
@@ -274,9 +275,11 @@ final class Capture: NSObject, SCStreamOutput {
 
     func stream(_ stream: SCStream, didOutputSampleBuffer sb: CMSampleBuffer, of type: SCStreamOutputType) {
         guard let attachments = CMSampleBufferGetSampleAttachmentsArray(sb, createIfNecessary: false) as? [[SCStreamFrameInfo: Any]],
-              let raw = attachments.first?[.status] as? Int, SCFrameStatus(rawValue: raw) == .complete,
-              let pb = CMSampleBufferGetImageBuffer(sb) else { return }
+              let raw = attachments.first?[.status] as? Int else { return }
         let t = CMTimeGetSeconds(CMSampleBufferGetPresentationTimeStamp(sb))
+        // An idle sample means the captured content did not change: the previous frame was still on screen at t.
+        if SCFrameStatus(rawValue: raw) == .idle { lock.lock(); if recording && t.isFinite { ticks.append(t) }; lock.unlock(); return }
+        guard SCFrameStatus(rawValue: raw) == .complete, let pb = CMSampleBufferGetImageBuffer(sb) else { return }
         CVPixelBufferLockBaseAddress(pb, .readOnly)
         let bpr = CVPixelBufferGetBytesPerRow(pb), h = CVPixelBufferGetHeight(pb), w = CVPixelBufferGetWidth(pb)
         let data = Data(bytes: CVPixelBufferGetBaseAddress(pb)!, count: bpr * h)
@@ -289,9 +292,10 @@ final class Capture: NSObject, SCStreamOutput {
         lock.unlock()
     }
 
-    func begin() { lock.lock(); frames = []; recording = true; lock.unlock() }
+    func begin() { lock.lock(); frames = []; ticks = []; recording = true; lock.unlock() }
+    func takeTicks() -> [Double] { lock.lock(); let t = ticks; ticks = []; lock.unlock(); return t }
     func take() -> [Frame] { lock.lock(); let f = frames; frames = []; lock.unlock(); return f }
-    func end() { lock.lock(); recording = false; frames = []; lock.unlock() }
+    func end() { lock.lock(); recording = false; frames = []; ticks = []; lock.unlock() }
     func current() -> Frame? { lock.lock(); defer { lock.unlock() }; return latest }
 }
 

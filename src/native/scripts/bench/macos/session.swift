@@ -103,7 +103,11 @@ final class Session {
 
     func paletteVisible() -> Bool { !treeWindows(pid).isEmpty }
 
-    func lines(_ f: Frame) -> [TextLine] { ocr(f) }
+    var ocrCache: [Double: [TextLine]] = [:]
+    func lines(_ f: Frame) -> [TextLine] {
+        if let l = ocrCache[f.t] { return l }
+        let l = ocr(f); ocrCache[f.t] = l; return l
+    }
     func has(_ ls: [TextLine], _ needle: String) -> Bool { ls.contains { $0.text.lowercased().contains(needle.lowercased()) } }
     func settingsResults(_ ls: [TextLine]) -> Bool { has(ls, c.searchSecondRow) && ls.contains { $0.text.trimmingCharacters(in: .whitespaces) == "Settings" } }
     func typeSettingsAndWait() -> Bool {
@@ -189,7 +193,6 @@ final class Session {
         return ls.filter { $0.box.minY >= top.box.minY - 2 && $0.confidence >= 0.5 }.map { normalizeTitle($0.text) }.joined(separator: "|")
     }
 
-    @discardableResult
     /// Ordered OCR rows below the input row (the input row holds the caret and a rotating placeholder).
     func rowsSignature(_ f: Frame) -> String {
         let ls = lines(f).filter { $0.confidence >= 0.5 }.sorted { $0.box.minY < $1.box.minY }
@@ -197,7 +200,11 @@ final class Session {
         return ls.filter { $0.box.minY > input.box.maxY + 4 }.map { normalizeTitle($0.text) }.joined(separator: "|")
     }
 
-    func trial(_ scenario: String, _ i: Int, holdS: Double = 2.5, setup: () -> Bool, act: () -> Double, until: @escaping (Frame) -> Bool, stable: ((Frame) -> String)? = nil) -> Bool {
+    /// Records every frame from dispatch to dispatch + holdS without OCR (so the observer does not compete with the
+    /// app for CPU), then classifies them: R is the first frame of the final signature run; it must satisfy `until`
+    /// and stay unchanged for at least 1 s before the capture ends. Lower bound: the latest frame or idle tick before R.
+    @discardableResult
+    func trial(_ scenario: String, _ i: Int, holdS: Double = 2.5, setup: () -> Bool, act: () -> Double, until: @escaping (Frame) -> Bool, stable: @escaping (Frame) -> String) -> Bool {
         let ok = setup()
         let (load, thermal) = loadAndThermal()
         let warm = i < c.warmups
@@ -210,55 +217,48 @@ final class Session {
             note("ABORT \(scenario)[\(i)]: \(why)"); unsafe = true
             return false
         }
-        let baseSig = stable.flatMap { fn in cap.current().map(fn) } ?? ""
-        var firstChange: Double?
+        let base = cap.current()
         cap.begin()
         let t0 = act()
         let tDispatchEnd = hostNow()
-        let (t1raw, seen, fraw) = waitFrame(since: t0, timeout: c.timeoutS) { f in
-            if firstChange == nil, let fn = stable, fn(f) != baseSig { firstChange = f.t }
-            return until(f)
-        }
-        var t1 = t1raw, f = fraw
-        var tLower: Double? = lastMiss
-        var stability = ""
-        if let fn = stable, let tm = t1raw, let fm = fraw {
-            // Hold: keep observing until max(match + 1 s, dispatch end + 2 s); R moves past any later list change.
-            // Stable-list rule: observe at least holdS after dispatch and at least 1 s after the last signature change.
-            var seq: [(Double, String, Bool, Frame)] = [(tm, fn(fm), true, fm)]
-            var lastChangeT = tm
-            while hostNow() < min(max(tDispatchEnd + holdS, lastChangeT + 1.0), tDispatchEnd + holdS + 5.0) + 0.05 {
-                for g in cap.take() where g.t > tm {
-                    let sig = fn(g)
-                    if sig != seq.last!.1 { lastChangeT = g.t }
-                    seq.append((g.t, sig, until(g), g))
-                }
-                usleep(5000)
-            }
-            let heldS = hostNow() - lastChangeT
-            let finalSig = seq.last!.1
-            var changes = 0
-            for k in 1..<seq.count where seq[k].1 != seq[k - 1].1 { changes += 1 }
-            let lastDiff = seq.lastIndex { $0.1 != finalSig }
-            let rIdx = lastDiff.map { $0 + 1 } ?? 0
-            if rIdx < seq.count && seq[rIdx].2 && heldS >= 1.0 { t1 = seq[rIdx].0; f = seq[rIdx].3; if rIdx > 0 { tLower = seq[rIdx - 1].0 } } else { t1 = nil; f = nil }
-            stability += " held_s=\(String(format: "%.2f", heldS))"
-            stability = " first_match_ms=\(String(format: "%.1f", (tm - t0) * 1000)) late_changes=\(changes) frames_held=\(seq.count) first_change_ms=\(firstChange.map { String(format: "%.1f", ($0 - t0) * 1000) } ?? "-") dispatch_ms=\(String(format: "%.2f", (tDispatchEnd - t0) * 1000)) final_list=\(finalSig.prefix(200))"
-            if changes > 0 { stability += " RESHUFFLED" }
-            var transitions: [String] = []
-            for k in 0..<seq.count where k == 0 || seq[k].1 != seq[k - 1].1 {
-                transitions.append(String(format: "%.1fms=", (seq[k].0 - t0) * 1000) + seq[k].1.split(separator: "|").count.description + "lines:" + String(seq[k].1.prefix(160)))
-            }
-            stability += " sequence=[" + transitions.joined(separator: " >> ") + "]"
-        }
+        while hostNow() < tDispatchEnd + holdS { usleep(5000) }
+        let tCapEnd = hostNow()
+        let frames = cap.take().filter { $0.t >= t0 }.sorted { $0.t < $1.t }
+        let ticks = cap.takeTicks().filter { $0 >= t0 }
         cap.end()
+        let seq = frames.map { f in (t: f.t, sig: stable(f), ok: until(f), f: f) }
+        var status = "ok"
+        var r: Int?
+        if seq.isEmpty {
+            status = base.map(until) == true ? "no-change-already-at-endpoint" : "no-frame"
+        } else {
+            let finalSig = seq.last!.sig
+            let rIdx = seq.lastIndex { $0.sig != finalSig }.map { $0 + 1 } ?? 0
+            if !seq[rIdx].ok { status = "final-state-mismatch" }
+            else if tCapEnd - seq[rIdx].t < 1.0 { status = "unstable" }
+            else { r = rIdx }
+        }
+        let t1 = r.map { seq[$0].t }
+        var tLower = t0
+        if let r, let t1 {
+            if r > 0 { tLower = max(tLower, seq[r - 1].t) }
+            tLower = max(tLower, ticks.filter { $0 < t1 }.max() ?? t0)
+        }
+        let changes = seq.isEmpty ? 0 : (1..<seq.count).filter { seq[$0].sig != seq[$0 - 1].sig }.count
+        let firstMatch = seq.first { $0.ok }.map { String(format: "%.1f", ($0.t - t0) * 1000) } ?? "-"
+        var transitions: [String] = []
+        for k in seq.indices where k == 0 || seq[k].sig != seq[k - 1].sig {
+            transitions.append(String(format: "%.1fms=", (seq[k].t - t0) * 1000) + "\(seq[k].ok ? "match" : "miss"):" + String(seq[k].sig.prefix(120)))
+        }
+        let shown = (r.map { seq[$0].f } ?? seq.last?.f ?? base)
         let lat = t1.map { ($0 - t0) * 1000 }
-        let lowerMs = t1 == nil ? nil : max(0, ((tLower ?? t0) - t0) * 1000)
-        let lower = lowerMs.map { String(format: "%.1f", $0) } ?? "-"
-        let txt = "lower_bound_ms=\(lower)" + stability + " " + (f.map { lines($0).map(\.text).prefix(12).joined(separator: " | ") } ?? "")
-        record(TrialRecord(version: c.version, launch: c.launch, scenario: scenario, index: i, warmup: warm, tStart: t0, tEnd: t1, latencyMs: lat, status: t1 == nil ? (t1raw == nil ? "timeout" : "unstable-or-final-mismatch") : "ok", framesSeen: seen, detail: txt, load1: load, thermal: thermal, lowerMs: lowerMs))
-        if i == c.warmups { savePNG(f, "\(scenario)-endpoint") }
-        note("\(scenario)[\(i)] \(t1 == nil ? "TIMEOUT" : String(format: "%.1f ms", lat!)) frames=\(seen)")
+        let lowerMs = t1 == nil ? nil : (tLower - t0) * 1000
+        let txt = "lower_bound_ms=\(lowerMs.map { String(format: "%.1f", $0) } ?? "-") first_match_ms=\(firstMatch) late_changes=\(changes) frames=\(seq.count) idle_ticks=\(ticks.count) dispatch_ms=\(String(format: "%.2f", (tDispatchEnd - t0) * 1000)) sequence=[\(transitions.joined(separator: " >> "))] last_text=" + (shown.map { lines($0).map(\.text).prefix(12).joined(separator: " | ") } ?? "")
+        record(TrialRecord(version: c.version, launch: c.launch, scenario: scenario, index: i, warmup: warm, tStart: t0, tEnd: t1, latencyMs: lat, status: status, framesSeen: seq.count, detail: txt, load1: load, thermal: thermal, lowerMs: lowerMs))
+        if i == c.warmups { savePNG(shown, "\(scenario)-endpoint") }
+        if t1 == nil { savePNG(shown, "\(scenario)-\(i)-failed") }
+        ocrCache.removeAll()
+        note("\(scenario)[\(i)] \(lat.map { String(format: "%.1f ms", $0) } ?? status) frames=\(seq.count) ticks=\(ticks.count)")
         return t1 != nil
     }
 
@@ -274,10 +274,11 @@ final class Session {
         let sem = DispatchSemaphore(value: 0)
 
         // Cold process start: spawn, then press the hotkey every 100 ms until the palette paints its root.
-        let tSpawn = spawn()
+        _ = spawn()
         sampler = MemorySampler(root: pid, path: c.outDir + "/memory.csv", intervalMs: 100)
         note("spawned pid=\(pid) exe=\(c.exe)")
         sampler.phase = "launch-settle"; sleep(8)
+        if paletteVisible() { note("palette visible at launch: Escape, then 2 s settle"); hide(); sampler.phase = "hide-settle"; sleep(2) }
         let hiddenBefore = !paletteVisible()
         sampler.phase = "hidden"; sleep(2)
         sampler.phase = "post-hidden"
@@ -288,24 +289,20 @@ final class Session {
         sem.wait()
         if let capErr { note("capture failed: \(capErr)"); finish(); return }
         note("capture mode=\(cap.mode)")
+        // First open: one hotkey press, then wait for the window and the root text; press again only after 10 s.
         var attempts = 0
         let tFirstKey = hostNow()
         var tPaint: Double?
-        var tWindow: Double?
-        let startDeadline = Date().addingTimeInterval(60)
-        cap.begin()
-        while tPaint == nil && Date() < startDeadline {
-            if !paletteVisible() { sendCombo(c.hotkey); attempts += 1 }
-            let r = waitFrame(since: tSpawn, timeout: 0.1) { [self] f in
-                if tWindow == nil, paletteVisible() { tWindow = hostNow() }
-                return tWindow != nil && has(lines(f), c.rootText)
-            }
-            tPaint = r.0
+        let startDeadline = hostNow() + 60
+        var tPress = 0.0
+        while tPaint == nil && hostNow() < startDeadline {
+            if !paletteVisible() && hostNow() - tPress > 10 { tPress = sendCombo(c.hotkey); attempts += 1 }
+            usleep(200_000)
+            if paletteVisible(), let f = snapshotNow(), has(lines(f), c.rootText) { tPaint = f.t }
         }
-        cap.end()
         let (load, thermal) = loadAndThermal()
-        record(TrialRecord(version: c.version, launch: c.launch, scenario: "first-open", index: 0, warmup: false, tStart: tFirstKey, tEnd: tPaint, latencyMs: tPaint.map { ($0 - tFirstKey) * 1000 }, status: tPaint == nil ? "timeout" : "ok", framesSeen: attempts, detail: "hotkey attempts=\(attempts) window_seen_ms=\(tWindow.map { String(format: "%.0f", ($0 - tSpawn) * 1000) } ?? "-")", load1: load, thermal: thermal))
-        note("cold start paint=\(tPaint.map { String(format: "%.0f ms", ($0 - tSpawn) * 1000) } ?? "TIMEOUT") attempts=\(attempts)")
+        record(TrialRecord(version: c.version, launch: c.launch, scenario: "first-open", index: 0, warmup: false, tStart: tFirstKey, tEnd: tPaint, latencyMs: tPaint.map { ($0 - tFirstKey) * 1000 }, status: tPaint == nil ? "timeout" : "ok", framesSeen: attempts, detail: "hotkey attempts=\(attempts) coarse (200 ms polling)", load1: load, thermal: thermal))
+        note("first open=\(tPaint.map { String(format: "%.0f ms", ($0 - tFirstKey) * 1000) } ?? "TIMEOUT") attempts=\(attempts)")
         palette = treeWindows(pid).first
         savePNG(snapshotNow(), "cold-start-root")
         if tPaint == nil || c.calibrateOnly { finish(); return }
@@ -350,7 +347,7 @@ final class Session {
             trial("S3-query-clear", i, setup: { [self] in
                 guard resetToRoot() else { return false }
                 return typeSettingsAndWait()
-            }, act: { let t = sendCombo("cmd+a"); sendCombo("delete"); return t },
+            }, act: { let t = sendCombo("cmd+a"); usleep(30_000); sendCombo("delete"); return t },
                   until: { [self] f in let l = lines(f); return has(l, c.rootText) && !has(l, c.searchSecondRow) }, stable: { [self] f in rowsSignature(f) })
         }
         sampler.phase = "S4-rownav"
