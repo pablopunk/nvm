@@ -417,7 +417,8 @@ final class Session {
             var text = ""
             while t1 == nil && hostNow() - t0 < c.timeoutS {
                 let (cc, s) = clipboardState()
-                if cc != before { text = s ?? ""; if text.filter(\.isNumber) == expected { t1 = hostNow() } else { break } }
+                // An app may clear the pasteboard before writing: an empty read after a change keeps polling.
+                if cc != before, let s, !s.isEmpty { text = s; if text.filter(\.isNumber) == expected { t1 = hostNow() } else { break } }
                 usleep(500)
             }
             let status = !shown ? "setup-failed" : (t1 == nil ? (text.isEmpty ? "timeout" : "wrong-clipboard") : "ok")

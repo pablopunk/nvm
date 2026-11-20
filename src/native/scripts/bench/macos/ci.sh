@@ -5,6 +5,9 @@
 set -eu
 B=$1; BLOCKS=$2; H=${0:A:h}
 mkdir -p $B/harness $B/runs $B/explore
+# Spotlight skips folders named *.noindex: without this it indexes every 51,000-file profile copy and loads the VM.
+mkdir -p $B/profiles.noindex $B/fixture-master.noindex
+ln -sfn $B/profiles.noindex $B/profiles; ln -sfn $B/fixture-master.noindex $B/fixture-master
 cp $H/*.swift $H/*.sh $H/*.py $B/harness/
 (cd $B/harness && swiftc -O -o nvmbench main.swift observer.swift session.swift calib.swift explore.swift)
 python3 -I $B/harness/gen_fixture.py $B/fixture-master

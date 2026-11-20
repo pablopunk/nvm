@@ -18,7 +18,7 @@ run = {
     "attempts_note": f"{3 * BLOCKS} across {BLOCKS} alternating process block{'s' if BLOCKS > 1 else ''}",
     "notes": [
         "A virtual machine, not a real Mac: absolute numbers differ from hardware; compare v1 with v2 within this run only. "
-        f"Alternating AB/BA blocks, disposable profiles with identical 51,000-file fixtures, one 60-second priming launch per profile; observer key-to-frame floor median {floor} ms.",
+        f"Alternating AB/BA blocks, disposable profiles with identical 51,000-file fixtures, one 60-second priming launch per profile, profiles excluded from Spotlight; observer key-to-frame floor median {floor} ms.",
         f"Bounds are ScreenCaptureKit frame and idle-sample times of the palette region, from CGEvent dispatch start; frames are classified by Vision OCR after each capture window. "
         f"Second Settings row from the explore pass: '{rows['v1']}' (v1), '{rows['v2']}' (v2). A palette shown at launch is dismissed with Escape before the hidden phase. The action menu is not measured (v1 has none).",
     ],
