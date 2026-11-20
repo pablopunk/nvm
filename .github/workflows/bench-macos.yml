@@ -1,0 +1,149 @@
+name: Bench macOS v1 vs v2
+
+# Packaged v1 (Electron release) against a packaged v2 CI build on a GitHub-hosted Apple Silicon VM, with the
+# protocol in src/native/docs/comparison/benchmarks-2026-11-19/methodology.md. Nothing is built from v1 or v2
+# source here: both packages are downloaded and their digests checked. Only the observer harness is compiled.
+
+on:
+  # workflow_dispatch only works once this file is on the default branch; until then a push to a bench branch
+  # that touches the harness runs it with the inputs in src/native/scripts/bench/macos/push-inputs.env.
+  push:
+    branches: ['bench/macos-*']
+    paths:
+      - '.github/workflows/bench-macos.yml'
+      - 'src/native/scripts/bench/macos/**'
+  workflow_dispatch:
+    inputs:
+      v2_run_id:
+        description: Native packages run that built the v2 macOS package
+        default: '44573477996'
+      v1_tag:
+        description: v1 release tag
+        default: 'v2026.1031.2'
+      blocks:
+        description: AB/BA process blocks (1 for a smoke run, 10 for the full protocol)
+        default: '10'
+
+permissions:
+  contents: read
+  actions: read
+
+jobs:
+  bench:
+    name: macOS bench
+    runs-on: macos-15
+    timeout-minutes: 330
+    env:
+      GH_TOKEN: ${{ github.token }}
+      NB_SHORT: /tmp/nb
+      BENCH_IDLE_GUARD: '0'
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Resolve inputs
+        env:
+          IN_RUN: ${{ inputs.v2_run_id }}
+          IN_TAG: ${{ inputs.v1_tag }}
+          IN_BLOCKS: ${{ inputs.blocks }}
+        run: |
+          if [ "$GITHUB_EVENT_NAME" = push ]; then . src/native/scripts/bench/macos/push-inputs.env
+          else V2_RUN_ID=$IN_RUN; V1_TAG=$IN_TAG; BLOCKS=$IN_BLOCKS; fi
+          printf 'V2_RUN_ID=%s\nV1_TAG=%s\nBLOCKS=%s\nB=%s\n' "$V2_RUN_ID" "$V1_TAG" "$BLOCKS" "$RUNNER_TEMP/bench" | tee -a "$GITHUB_ENV"
+
+      - name: Runner facts
+        run: |
+          mkdir -p "$B/provenance" "$B/upload"
+          { sw_vers; sysctl -n machdep.cpu.brand_string hw.ncpu hw.memsize; system_profiler SPDisplaysDataType | grep -E 'Resolution|Metal|Chipset'
+            csrutil status; spctl --status || true; } | tee "$B/provenance/runner.txt"
+
+      - name: Download and verify v2 package
+        run: |
+          set -euo pipefail
+          P="$B/provenance"
+          gh api "repos/$GITHUB_REPOSITORY/actions/runs/$V2_RUN_ID" --jq '{id,head_sha,head_branch,conclusion,name}' | tee "$P/v2-run.json"
+          gh api "repos/$GITHUB_REPOSITORY/actions/runs/$V2_RUN_ID/artifacts" --jq '.artifacts[]|select(.name=="native-macos-arm64")' > "$P/v2-artifact.json"
+          ID=$(jq -r .id "$P/v2-artifact.json"); WANT=$(jq -r .digest "$P/v2-artifact.json" | sed 's/^sha256://')
+          mkdir -p "$B/dl/v2" && gh api "repos/$GITHUB_REPOSITORY/actions/artifacts/$ID/zip" > "$B/dl/v2-artifact.zip"
+          GOT=$(shasum -a 256 "$B/dl/v2-artifact.zip" | cut -d' ' -f1)
+          echo "artifact $ID digest want=$WANT got=$GOT" | tee "$P/v2-digest.txt"; [ "$WANT" = "$GOT" ]
+          ditto -x -k "$B/dl/v2-artifact.zip" "$B/dl/v2"
+          (cd "$B/dl/v2" && shasum -a 256 -c SHA256SUMS) | tee -a "$P/v2-digest.txt"
+          mkdir -p "$B/dl/v2x" "$B/apps/v2"
+          ditto -x -k "$B"/dl/v2/*.zip "$B/dl/v2x"
+          ditto "$B"/dl/v2x/*.app "$B/apps/v2/Nevermind Next.app"
+          APP="$B/apps/v2/Nevermind Next.app"
+          { codesign --verify --strict --deep "$APP" && echo "codesign ok"
+            /usr/libexec/PlistBuddy -c 'Print :CFBundleIdentifier' -c 'Print :CFBundleShortVersionString' "$APP/Contents/Info.plist"
+            shasum -a 256 "$APP/Contents/MacOS/Nevermind Next"; } | tee -a "$P/v2-digest.txt"
+          jq -r .head_sha "$P/v2-run.json" > "$B/v2-sha.txt"
+
+      - name: Download and verify v1 package
+        run: |
+          set -euo pipefail
+          P="$B/provenance"; mkdir -p "$B/dl/v1" "$B/apps/v1"
+          gh release view "$V1_TAG" -R "$GITHUB_REPOSITORY" --json assets --jq '.assets[]|select(.name|endswith("-mac-arm64.zip"))|[.name,.digest]|@tsv' > "$P/v1-asset.tsv"
+          NAME=$(cut -f1 "$P/v1-asset.tsv"); WANT=$(cut -f2 "$P/v1-asset.tsv" | sed 's/^sha256://')
+          gh release download "$V1_TAG" -R "$GITHUB_REPOSITORY" -p "$NAME" -D "$B/dl/v1"
+          GOT=$(shasum -a 256 "$B/dl/v1/$NAME" | cut -d' ' -f1)
+          echo "$NAME want=$WANT got=$GOT" | tee "$P/v1-digest.txt"; [ "$WANT" = "$GOT" ]
+          ditto -x -k "$B/dl/v1/$NAME" "$B/dl/v1x"
+          ditto "$B/dl/v1x/Nevermind.app" "$B/apps/v1/Nevermind.app"
+          { codesign --verify --strict --deep "$B/apps/v1/Nevermind.app" && echo "codesign ok"
+            shasum -a 256 "$B/apps/v1/Nevermind.app/Contents/MacOS/Nevermind"; } | tee -a "$P/v1-digest.txt"
+
+      - name: Grant screen recording and input permissions
+        # Hosted macOS runners ship with SIP disabled, so TCC grants can be written directly (as the runner image
+        # does for its own tools). The observer runs from zsh under the runner, so both are granted.
+        run: |
+          set -u
+          NOW=$(date +%s)
+          for DB in "/Library/Application Support/com.apple.TCC/TCC.db" "$HOME/Library/Application Support/com.apple.TCC/TCC.db"; do
+            for SVC in kTCCServiceScreenCapture kTCCServiceAccessibility kTCCServicePostEvent kTCCServiceListenEvent; do
+              for CLIENT in "$B/harness/nvmbench" /bin/zsh /bin/bash /usr/local/opt/runner/provisioner/provisioner; do
+                sudo sqlite3 "$DB" "INSERT OR REPLACE INTO access VALUES('$SVC','$CLIENT',1,2,4,1,NULL,NULL,0,'UNUSED',NULL,0,$NOW,NULL,NULL,'UNUSED',$NOW);" \
+                  || echo "grant failed: $SVC $CLIENT in $DB"
+              done
+            done
+            sudo sqlite3 "$DB" "SELECT service, client, auth_value FROM access WHERE service IN ('kTCCServiceScreenCapture','kTCCServiceAccessibility','kTCCServicePostEvent')" | tee -a "$B/provenance/tcc.txt" || true
+          done
+
+      - name: Run the bench
+        run: |
+          caffeinate -dimsu -w $$ &
+          zsh src/native/scripts/bench/macos/ci.sh "$B" "$BLOCKS" 2>&1 | tee "$B/upload/bench.log"
+
+      - name: Export data, captions and manifest
+        if: always()
+        run: |
+          set -eu
+          python3 -I src/native/scripts/bench/macos/finalize.py "$B" "$B/data" "$BLOCKS" "$V1_TAG" "$(cat "$B/v2-sha.txt")"
+          python3 -I src/native/scripts/bench/macos/summarize.py "$B/data" | tee -a "$GITHUB_STEP_SUMMARY"
+          grep -h 'STOP\|rc=' "$B/upload/bench.log" | tail -60 >> "$GITHUB_STEP_SUMMARY" || true
+
+      - name: Upload data
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: bench-macos-data
+          path: ${{ runner.temp }}/bench/upload
+          if-no-files-found: warn
+          retention-days: 30
+
+      - name: Upload raw runs
+        # Session logs, OCR dumps, per-sample memory and screenshots of the runner image's own app list.
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: bench-macos-raw
+          path: |
+            ${{ runner.temp }}/bench/runs
+            ${{ runner.temp }}/bench/explore
+            ${{ runner.temp }}/bench/provenance
+          if-no-files-found: warn
+          retention-days: 14
+
+      - name: Stop leftover test processes
+        if: always()
+        run: |
+          pkill -f "$B/apps/" || true
