@@ -9,7 +9,7 @@ mkdir -p $B/harness $B/runs $B/explore
 mkdir -p $B/profiles.noindex $B/fixture-master.noindex
 ln -sfn $B/profiles.noindex $B/profiles; ln -sfn $B/fixture-master.noindex $B/fixture-master
 cp $H/*.swift $H/*.sh $H/*.py $B/harness/
-(cd $B/harness && swiftc -O -o nvmbench main.swift observer.swift session.swift calib.swift explore.swift)
+(cd $B/harness && swiftc -O -o nvmbench main.swift observer.swift session.swift calib.swift explore.swift titles.swift probe.swift)
 python3 -I $B/harness/gen_fixture.py $B/fixture-master
 DIGEST=$(python3 -I $B/harness/fixture_digest.py $B/fixture-master/Documents/bench)
 echo "fixture: $DIGEST"

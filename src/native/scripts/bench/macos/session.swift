@@ -40,6 +40,8 @@ final class Session {
     let c: SessionConfig
     var pid: Int32 = 0
     let cap = Capture()
+    let probeCap = Capture()
+    var probeOn = false
     var sampler: MemorySampler!
     var trialsOut: FileHandle!
     var log: FileHandle!
@@ -186,19 +188,8 @@ final class Session {
         return base.split(separator: " ").map { $0 == "al" ? "ai" : String($0) }.joined(separator: " ")
     }
 
-    /// Ordered result-list signature: normalized OCR lines at or below the first expected row title.
-    func listSignature(_ f: Frame) -> String {
-        let ls = lines(f).sorted { $0.box.minY < $1.box.minY }
-        guard let top = ls.first(where: { $0.text.trimmingCharacters(in: .whitespaces) == "Settings" }) else { return "" }
-        return ls.filter { $0.box.minY >= top.box.minY - 2 && $0.confidence >= 0.5 }.map { normalizeTitle($0.text) }.joined(separator: "|")
-    }
-
-    /// Ordered OCR rows below the input row (the input row holds the caret and a rotating placeholder).
-    func rowsSignature(_ f: Frame) -> String {
-        let ls = lines(f).filter { $0.confidence >= 0.5 }.sorted { $0.box.minY < $1.box.minY }
-        guard let input = ls.first else { return "" }
-        return ls.filter { $0.box.minY > input.box.maxY + 4 }.map { normalizeTitle($0.text) }.joined(separator: "|")
-    }
+    /// Stable-list signature, shared with Linux: the first nine row titles below the input row.
+    func titlesSignature(_ f: Frame) -> String { rowTitles(lines(f)).map(normalizeTitle).joined(separator: "|") }
 
     /// Records every frame from dispatch to dispatch + holdS without OCR (so the observer does not compete with the
     /// app for CPU), then classifies them: R is the first frame of the final signature run; it must satisfy `until`
@@ -219,14 +210,27 @@ final class Session {
         }
         let base = cap.current()
         cap.begin()
+        if probeOn { probeCap.begin() }
+        let tPre = hostNow()
+        usleep(1_000_000)  // no-input control window for capture gaps
         let t0 = act()
         let tDispatchEnd = hostNow()
         while hostNow() < tDispatchEnd + holdS { usleep(5000) }
         let tCapEnd = hostNow()
-        let frames = cap.take().filter { $0.t >= t0 }.sorted { $0.t < $1.t }
-        let ticks = cap.takeTicks().filter { $0 >= t0 }
+        let allFrames = cap.take()
+        let frames = allFrames.sorted { $0.t < $1.t }
+        let measured = frames.filter { $0.t >= t0 }
+        let allTicks = cap.takeTicks()
+        let ticks = allTicks.filter { $0 >= t0 }
+        let paletteEvents = allTicks + frames.map(\.t)
+        let probeFrames = probeOn ? probeCap.take().map(\.t) : []
+        if probeOn { probeCap.end() }
         cap.end()
-        let seq = frames.map { f in (t: f.t, sig: stable(f), ok: until(f), f: f) }
+        let preGap = largestGap(paletteEvents.filter { $0 < t0 }, from: tPre, to: t0)
+        let gap = largestGap(paletteEvents, from: t0, to: tCapEnd)
+        let probeInGap = probeFrames.filter { $0 > gap.start && $0 < gap.start + gap.length }.count
+        let gapText = String(format: " capture_gap_ms=%.1f capture_gap_at_ms=%.1f pre_dispatch_gap_ms=%.1f probe_frames_in_gap=%d probe_frames=%d", gap.length * 1000, (gap.start - t0) * 1000, preGap.length * 1000, probeInGap, probeFrames.filter { $0 >= t0 }.count)
+        let seq = measured.map { f in (t: f.t, sig: stable(f), ok: until(f), f: f) }
         var status = "ok"
         var r: Int?
         if seq.isEmpty {
@@ -253,7 +257,7 @@ final class Session {
         let shown = (r.map { seq[$0].f } ?? seq.last?.f ?? base)
         let lat = t1.map { ($0 - t0) * 1000 }
         let lowerMs = t1 == nil ? nil : (tLower - t0) * 1000
-        let txt = "lower_bound_ms=\(lowerMs.map { String(format: "%.1f", $0) } ?? "-") first_match_ms=\(firstMatch) late_changes=\(changes) frames=\(seq.count) idle_ticks=\(ticks.count) dispatch_ms=\(String(format: "%.2f", (tDispatchEnd - t0) * 1000)) sequence=[\(transitions.joined(separator: " >> "))] last_text=" + (shown.map { lines($0).map(\.text).prefix(12).joined(separator: " | ") } ?? "")
+        let txt = "lower_bound_ms=\(lowerMs.map { String(format: "%.1f", $0) } ?? "-") first_match_ms=\(firstMatch) late_changes=\(changes) frames=\(seq.count) idle_ticks=\(ticks.count) dispatch_ms=\(String(format: "%.2f", (tDispatchEnd - t0) * 1000)) sequence=[\(transitions.joined(separator: " >> "))]" + gapText + " last_text=" + (shown.map { lines($0).map(\.text).prefix(12).joined(separator: " | ") } ?? "")
         record(TrialRecord(version: c.version, launch: c.launch, scenario: scenario, index: i, warmup: warm, tStart: t0, tEnd: t1, latencyMs: lat, status: status, framesSeen: seq.count, detail: txt, load1: load, thermal: thermal, lowerMs: lowerMs))
         if i == c.warmups { savePNG(shown, "\(scenario)-endpoint") }
         if t1 == nil { savePNG(shown, "\(scenario)-\(i)-failed") }
@@ -310,6 +314,10 @@ final class Session {
         // Restart capture on the palette area only (smaller frames, faster OCR).
         Task { await cap.stop(); try! await cap.start(rect: palette!.insetBy(dx: -40, dy: -40), pid: pid); sem.signal() }
         sem.wait()
+        let probeRect = startProbeWindow()
+        Task { do { try await probeCap.start(rect: probeRect, pid: getpid()); probeOn = true } catch { note("probe capture failed: \(error)") }; sem.signal() }
+        sem.wait()
+        note("probe mode=\(probeCap.mode) on=\(probeOn)")
         sleep(1)
 
         // Search readiness (coarse, unmeasured): the shared "settings" query shows its two expected rows.
@@ -335,12 +343,12 @@ final class Session {
         sampler.phase = "S1-reopen"
         for i in 0..<n {
             let opened = trial("S1-hotkey-open", i, setup: { hide(); return !paletteVisible() }, act: { sendCombo(c.hotkey) },
-                  until: { [self] f in has(lines(f), c.rootText) }, stable: { [self] f in rowsSignature(f) })
+                  until: { [self] f in has(lines(f), c.rootText) }, stable: { [self] f in titlesSignature(f) })
             if opened && i >= c.warmups { sampler.phase = "open-\(i)"; sleep(2); sampler.phase = "S1-reopen" }
         }
         sampler.phase = "S2-search"
         for i in 0..<n {
-            trial("S2-search", i, holdS: 5.0, setup: resetToRoot, act: { typeText(c.settingsQuery) }, until: { [self] f in settingsResults(lines(f)) }, stable: { [self] f in listSignature(f) })
+            trial("S2-search", i, holdS: 5.0, setup: resetToRoot, act: { typeText(c.settingsQuery) }, until: { [self] f in settingsResults(lines(f)) }, stable: { [self] f in titlesSignature(f) })
         }
         sampler.phase = "S3-clear"
         for i in 0..<n {
@@ -348,7 +356,7 @@ final class Session {
                 guard resetToRoot() else { return false }
                 return typeSettingsAndWait()
             }, act: { let t = sendCombo("cmd+a"); usleep(30_000); sendCombo("delete"); return t },
-                  until: { [self] f in let l = lines(f); return has(l, c.rootText) && !has(l, c.searchSecondRow) }, stable: { [self] f in rowsSignature(f) })
+                  until: { [self] f in let l = lines(f); return has(l, c.rootText) && !has(l, c.searchSecondRow) }, stable: { [self] f in titlesSignature(f) })
         }
         sampler.phase = "S4-rownav"
         for i in 0..<n {
@@ -372,7 +380,7 @@ final class Session {
                 return bandDiff(f, b, y0: bands[0].0, y1: bands[0].1) > 4 && bandDiff(f, b, y0: bands[1].0, y1: bands[1].1) > 4
             }, stable: { [self] f in
                 guard let b = base else { return "" }
-                return "\(bandDiff(f, b, y0: bands[0].0, y1: bands[0].1) > 4)\(bandDiff(f, b, y0: bands[1].0, y1: bands[1].1) > 4)|" + rowsSignature(f)
+                return "\(bandDiff(f, b, y0: bands[0].0, y1: bands[0].1) > 4)\(bandDiff(f, b, y0: bands[1].0, y1: bands[1].1) > 4)|" + titlesSignature(f)
             })
         }
         sampler.phase = "S6-subview"
@@ -380,10 +388,10 @@ final class Session {
             trial("S6-subview-open", i, setup: { [self] in
                 guard resetToRoot() else { return false }
                 return typeSettingsAndWait()
-            }, act: { sendCombo("return") }, until: { [self] f in has(lines(f), c.settingsText) }, stable: { [self] f in rowsSignature(f) })
+            }, act: { sendCombo("return") }, until: { [self] f in has(lines(f), c.settingsText) }, stable: { [self] f in titlesSignature(f) })
             usleep(300_000)
             trial("S6-subview-back", i, setup: { [self] in has(lines(snapshotNow()!), c.settingsText) }, act: { sendCombo("escape") },
-                  until: { [self] f in let l = lines(f); return !has(l, c.settingsText) && (has(l, c.rootText) || has(l, c.settingsQuery)) }, stable: { [self] f in rowsSignature(f) })
+                  until: { [self] f in let l = lines(f); return !has(l, c.settingsText) && (has(l, c.rootText) || has(l, c.settingsQuery)) }, stable: { [self] f in titlesSignature(f) })
         }
         sampler.phase = "S7-calculator"
         for i in 0..<n {
@@ -454,7 +462,7 @@ final class Session {
         try? s.write(toFile: c.outDir + "/peaks.json", atomically: true, encoding: .utf8)
         quit()
         let sem = DispatchSemaphore(value: 0)
-        Task { await cap.stop(); sem.signal() }
+        Task { await cap.stop(); if probeOn { await probeCap.stop() }; sem.signal() }
         sem.wait()
         try? trialsOut.close()
         try? log.close()

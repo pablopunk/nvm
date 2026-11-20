@@ -10,6 +10,8 @@ case "clip-restore":
     let c = ClipboardSnapshot(); try! c.load(fromFile: args[2]); c.restore(); print("restored \(c.typeCount) typed items")
 case "explore":
     runExplore(configPath: args[2])
+case "titles":
+    printTitles(pngPaths: Array(args.dropFirst(2)))
 case "session":
     runSession(configPath: args[2])
 default:

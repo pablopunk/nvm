@@ -1,10 +1,18 @@
 # export_format.py <A> <outDir>: converts runs/<v>-bNN-run/{trials.jsonl,memory.csv} into the methodology's
 # trials.jsonl and memory.csv (no OCR text leaves this script: only numbers and status codes).
-import csv, json, os, statistics, sys
+import csv, json, os, re, statistics, sys
 from collections import defaultdict
 A, OUT = sys.argv[1], sys.argv[2]
 ENDPOINT = {"S1-hotkey-open": "open", "S2-search": "search", "S3-query-clear": "clear", "S4-row-down": "row_down",
             "S6-subview-open": "settings_open", "S6-subview-back": "settings_back", "S7-calc-copy": "calculator"}
+def capture_gap_fields(detail):
+    """Extra fields (ignored by the charts): the largest capture-event gap after dispatch, the no-input control gap
+    before dispatch, and how many probe-window frames the compositor presented inside the gap."""
+    fields = {}
+    for key in ("capture_gap_ms", "capture_gap_at_ms", "pre_dispatch_gap_ms", "probe_frames_in_gap"):
+        m = re.search(key + r"=([0-9.]+)", detail)
+        if m: fields[key] = float(m.group(1)) if "." in m.group(1) else int(m.group(1))
+    return fields
 runs = sorted(d for d in os.listdir(A + "/runs") if d.endswith("-run"))
 trials, mem = [], []
 for d in runs:
@@ -18,7 +26,8 @@ for d in runs:
         lo = (up if ep == "calculator" else r.get("lowerMs")) if ok else None
         trials.append({"platform": "macos", "version": v, "block": b, "trial": r["index"], "warmup": r["index"] == 0,
                        "endpoint": ep, "success": ok, "lower_ms": None if lo is None else round(lo, 2),
-                       "upper_ms": None if up is None else round(up, 2), "reason": None if ok else r["status"]})
+                       "upper_ms": None if up is None else round(up, 2), "reason": None if ok else r["status"],
+                       **capture_gap_fields(r.get("detail", ""))})
     checks = {r["scenario"]: r for r in recs}
     slow = {r["index"]: r for r in recs if r["scenario"] == "slow-typing-memory"}
     snaps = defaultdict(lambda: {"fp": 0, "rss": 0, "ok": True})
