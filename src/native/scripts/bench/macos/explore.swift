@@ -39,11 +39,14 @@ func runExplore(configPath: String) {
             s.note("STEP \(step) \(name) windows=\(treeWindows(s.pid)) clipboard=\(clipboardState().1 ?? "nil")\n\(text)")
             step += 1
         }
+        // One press, then wait: a second press queued before the window shows would toggle it closed again.
         var opened = false
-        for _ in 0..<300 where !opened {
-            sendCombo(c.hotkey)
+        var tPress = 0.0
+        let deadline = hostNow() + 60
+        while !opened && hostNow() < deadline {
+            if hostNow() - tPress > 10 { tPress = sendCombo(c.hotkey) }
             usleep(200_000)
-            opened = s.paletteVisible()
+            if s.paletteVisible() { usleep(1_000_000); opened = s.paletteVisible() }
         }
         let sem2 = DispatchSemaphore(value: 0)
         Task { await s.cap.stop(); try? await s.cap.start(rect: nil, pid: s.pid); sem2.signal() }

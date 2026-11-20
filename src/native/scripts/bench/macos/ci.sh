@@ -29,7 +29,7 @@ json.dump(c,open(sys.argv[1],"w"),indent=1)
 PY
   security unlock-keychain -p "$(<$KCPW)" $B/profiles/$ID/home/Library/Keychains/bench.keychain-db
   $B/harness/run_one.sh $B explore $B/runs/$ID/config.json; echo "$ID explore rc=$?"
-  python3 -I $B/harness/pick_second_row.py $B/runs/$ID/session.log >| $B/explore/second-row-$V.txt
+  python3 -I $B/harness/pick_second_row.py $B/runs/$ID/session.log >| $B/explore/second-row-$V.txt || { echo "STOP: explore $V found no second Settings row"; exit 8; }
   echo "$V row 2: $(<$B/explore/second-row-$V.txt)"
 }
 explore v2
