@@ -14,15 +14,41 @@ def capture_gap_note(out):
     inside the gaps (the probe is redrawn at 120 Hz by the harness and captured by its own stream)."""
     rows = [json.loads(l) for l in open(f"{out}/trials.jsonl")]
     measured = [r for r in rows if not r["warmup"] and r["endpoint"] != "calculator" and "capture_gap_ms" in r]
-    parts, probes = [], []
+    parts = []
     for v in ("v1", "v2"):
         mine = [r for r in measured if r["version"] == v]
         gaps = [r for r in mine if r["capture_gap_ms"] >= 300]
         pre = [r for r in mine if r.get("pre_dispatch_gap_ms", 0) >= 300]
-        probes += [r["probe_frames_in_gap"] / (r["capture_gap_ms"] / 1000) for r in gaps if "probe_frames_in_gap" in r]
         parts.append(f"{v} {len(gaps)}/{len(mine)} after dispatch, {len(pre)}/{len(mine)} in the 1 s no-input window before it")
-    rate = f"; during those gaps the probe window got a median of {statistics.median(probes):.0f} frames per second" if probes else ""
-    return "Capture gaps of 300 ms or more (no frame and no idle sample from the app's stream): " + "; ".join(parts) + rate + "."
+    return "Capture gaps of 300 ms or more (no frame and no idle sample from the app's stream): " + "; ".join(parts) + ". " + probe_note(B)
+
+
+def probe_note(b):
+    """Diagnostic Down/Enter attempts after the measured trials: when the app's change appeared 400 ms or more after the
+    key, how quickly the probe window's flips scheduled before that change reached the screen."""
+    import glob, re
+    parts = []
+    for v in ("v1", "v2"):
+        slow, delays, missing = 0, [], 0
+        for p in glob.glob(f"{b}/runs/{v}-b*-run/trials.jsonl"):
+            for line in open(p):
+                r = json.loads(line)
+                if not r["scenario"].endswith("-probe") or r.get("latencyMs") is None or r["latencyMs"] < 400: continue
+                m = re.search(r"probe_flips=\[([^\]]*)\]", r.get("detail", ""))
+                if not m: continue
+                slow += 1
+                for item in filter(None, m.group(1).split(",")):
+                    offset, delay = item.split(":")
+                    if float(offset) >= r["latencyMs"] - 20: continue
+                    if delay == "none": missing += 1
+                    else: delays.append(float(delay))
+        if slow:
+            parts.append(f"{v}: {slow} diagnostic attempts changed 400 ms or more after the key; probe flips made before that change "
+                         f"reached the screen after a median of {statistics.median(delays):.0f} ms" + (f" ({missing} never shown)" if missing else "") if delays else
+                         f"{v}: {slow} slow diagnostic attempts, no probe flip before the change")
+        else:
+            parts.append(f"{v}: no diagnostic attempt changed 400 ms or more after the key")
+    return "Probe diagnostics (6 extra attempts per block, a harness window flipped 5 times at +150 to +550 ms): " + "; ".join(parts) + "."
 run = {
     "platform": "macos", "title": "macOS (GitHub-hosted VM)",
     "machine": f"GitHub-hosted macos-15 runner: {model} virtual machine, {ncpu} vCPU, {mem:.0f} GB, no GPU acceleration, macOS {osv}.",

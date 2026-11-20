@@ -42,6 +42,7 @@ final class Session {
     let cap = Capture()
     let probeCap = Capture()
     var probeOn = false
+    var probeStarted = false
     var sampler: MemorySampler!
     var trialsOut: FileHandle!
     var log: FileHandle!
@@ -195,7 +196,7 @@ final class Session {
     /// app for CPU), then classifies them: R is the first frame of the final signature run; it must satisfy `until`
     /// and stay unchanged for at least 1 s before the capture ends. Lower bound: the latest frame or idle tick before R.
     @discardableResult
-    func trial(_ scenario: String, _ i: Int, holdS: Double = 2.5, setup: () -> Bool, act: () -> Double, until: @escaping (Frame) -> Bool, stable: @escaping (Frame) -> String) -> Bool {
+    func trial(_ scenario: String, _ i: Int, holdS: Double = 2.5, probeFlipsMs: [Double] = [], setup: () -> Bool, act: () -> Double, until: @escaping (Frame) -> Bool, stable: @escaping (Frame) -> String) -> Bool {
         let ok = setup()
         let (load, thermal) = loadAndThermal()
         let warm = i < c.warmups
@@ -210,10 +211,12 @@ final class Session {
         }
         let base = cap.current()
         cap.begin()
-        if probeOn { probeCap.begin() }
+        let probing = probeOn && !probeFlipsMs.isEmpty
+        if probing { probeCap.begin() }
         let tPre = hostNow()
         usleep(1_000_000)  // no-input control window for capture gaps
         let t0 = act()
+        let flips = probing ? scheduleProbeFlips(afterMs: probeFlipsMs) : nil
         let tDispatchEnd = hostNow()
         while hostNow() < tDispatchEnd + holdS { usleep(5000) }
         let tCapEnd = hostNow()
@@ -223,13 +226,13 @@ final class Session {
         let allTicks = cap.takeTicks()
         let ticks = allTicks.filter { $0 >= t0 }
         let paletteEvents = allTicks + frames.map(\.t)
-        let probeFrames = probeOn ? probeCap.take().map(\.t) : []
-        if probeOn { probeCap.end() }
+        let probeFrames = probing ? probeCap.take().map(\.t) : []
+        if probing { probeCap.end() }
         cap.end()
         let preGap = largestGap(paletteEvents.filter { $0 < t0 }, from: tPre, to: t0)
         let gap = largestGap(paletteEvents, from: t0, to: tCapEnd)
-        let probeInGap = probeFrames.filter { $0 > gap.start && $0 < gap.start + gap.length }.count
-        let gapText = String(format: " capture_gap_ms=%.1f capture_gap_at_ms=%.1f pre_dispatch_gap_ms=%.1f probe_frames_in_gap=%d probe_frames=%d", gap.length * 1000, (gap.start - t0) * 1000, preGap.length * 1000, probeInGap, probeFrames.filter { $0 >= t0 }.count)
+        var gapText = String(format: " capture_gap_ms=%.1f capture_gap_at_ms=%.1f pre_dispatch_gap_ms=%.1f", gap.length * 1000, (gap.start - t0) * 1000, preGap.length * 1000)
+        if let flips { gapText += " probe_flips=[" + probeFlipDelays(flips.times(), probeFrames: probeFrames, t0: t0) + "]" }
         let seq = measured.map { f in (t: f.t, sig: stable(f), ok: until(f), f: f) }
         var status = "ok"
         var r: Int?
@@ -320,10 +323,6 @@ final class Session {
         // Restart capture on the palette area only (smaller frames, faster OCR).
         Task { await cap.stop(); try! await cap.start(rect: palette!.insetBy(dx: -40, dy: -40), pid: pid); sem.signal() }
         sem.wait()
-        let probeRect = startProbeWindow()
-        Task { do { try await probeCap.start(rect: probeRect, pid: getpid()); probeOn = true } catch { note("probe capture failed: \(error)") }; sem.signal() }
-        sem.wait()
-        note("probe mode=\(probeCap.mode) on=\(probeOn)")
         sleep(1)
 
         // Search readiness (coarse, unmeasured): the shared "settings" query shows its two expected rows.
@@ -458,6 +457,7 @@ final class Session {
         sampler.phase = "after-cycle"; sleep(3)
         sampler.phase = "final"
         let afterAfter = !paletteVisible()
+        runProbeDiagnostics()
         record(TrialRecord(version: c.version, launch: c.launch, scenario: "after-cycle-check", index: 0, warmup: false, tStart: 0, tEnd: nil, latencyMs: nil, status: afterBefore && afterAfter ? "ok" : "palette-visible", framesSeen: 0, detail: "before=\(afterBefore) after=\(afterAfter)", load1: 0, thermal: 0))
         finish()
     }
@@ -468,7 +468,7 @@ final class Session {
         try? s.write(toFile: c.outDir + "/peaks.json", atomically: true, encoding: .utf8)
         quit()
         let sem = DispatchSemaphore(value: 0)
-        Task { await cap.stop(); if probeOn { await probeCap.stop() }; sem.signal() }
+        Task { await cap.stop(); if probeStarted { await probeCap.stop() }; sem.signal() }
         sem.wait()
         try? trialsOut.close()
         try? log.close()
