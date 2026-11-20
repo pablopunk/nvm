@@ -7,7 +7,7 @@ const crypto = require('node:crypto');
 // installer and archive, MyGo's install scripts, and one SHA256SUMS for the lot. Each update-<target>.json is the
 // manifest that installed apps read; its archive and delta URLs name the release that holds them, so promotion
 // retargets them (retargetUpdaterMetadata) and leaves every other byte as built.
-const SLUG = 'nevermind-next';
+const SLUG = 'nevermind';
 const UPDATE_TARGETS = [
   'darwin-arm64',
   'linux-amd64',
@@ -50,7 +50,7 @@ function expectedNightlyAssetNames(version) {
 // version is published, and none for the first.
 function deltaAsset(name, version) {
   const match =
-    /^nevermind-next-(\d+\.\d+\.\d+)-to-(\d+\.\d+\.\d+)-([a-z]+-[a-z0-9]+)\.delta$/.exec(
+    /^nevermind-(\d+\.\d+\.\d+)-to-(\d+\.\d+\.\d+)-([a-z]+-[a-z0-9]+)\.delta$/.exec(
       name,
     );
   if (!match || match[2] !== version || !UPDATE_TARGETS.includes(match[3]))
@@ -208,7 +208,7 @@ function verifyChecksums({ text, names, sha256Hex }) {
 function isReleaseAsset(name) {
   return (
     /\.(dmg|tar\.gz|deb|delta)$/.test(name) ||
-    /^nevermind-next-setup-.+\.exe$/.test(name) ||
+    /^nevermind-setup-.+\.exe$/.test(name) ||
     /^update-.+\.json$/.test(name) ||
     name === 'install.sh' ||
     name === 'install.ps1'

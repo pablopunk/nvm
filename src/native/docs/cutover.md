@@ -6,7 +6,12 @@ WP5.6, not a code change.
 
 Names used below. **1.x** is the Electron app. Its released strings are date-stamped (`2026.1104.1`, see
 `docs/release-promotion.md`), so "1.x" is the product label, not the version. **2.0** is this Go app, shipped as
-"Nevermind Next" (`src/native/mygo.json`) until the owner says otherwise.
+"Nevermind" (`src/native/mygo.json`).
+
+**Superseded.** 2.0 replaces 1.x instead of installing beside it (PR #280), so the overlap plan below is kept as the
+record of what was considered. 2.0 took 1.x's name and bundle identifier: "Nevermind", `nevermind`,
+`com.pablopunk.nvm`. Its builds named "Nevermind Next" move their data folder and keychain entries to the new names on
+first launch.
 
 ## 1. Side-by-side install
 
@@ -15,9 +20,9 @@ can see:
 
 | Item | 1.x | 2.0 (today) | Source |
 |---|---|---|---|
-| Bundle identifier | `com.pablopunk.nvm` | `com.pablopunk.nvm.next` (permanent once shipped) | `mygo.json`, `release.md` |
-| App name, binary, slug | Nevermind | Nevermind Next, `nevermind-next`, `nevermind-next` | `mygo.json` |
-| Local data | the Electron user-data folder; `~/.config/nevermind` for `config.json` and `extensions/` | `~/.config/nevermind` (shared, 1.x format) for `config.json` and `extensions/`; machine-local state in the OS user-data folder: `~/Library/Application Support/Nevermind Next`, `$XDG_DATA_HOME` or `~/.local/share/nevermind-next`, `%APPDATA%\Nevermind Next` | `portable/`, `platform/folders`, `app/store.go`, `extension-paths.ts` |
+| Bundle identifier | `com.pablopunk.nvm` | `com.pablopunk.nvm` | `mygo.json`, `release.md` |
+| App name, binary, slug | Nevermind | Nevermind, `nevermind`, `nevermind` | `mygo.json` |
+| Local data | the Electron user-data folder; `~/.config/nevermind` for `config.json` and `extensions/` | `~/.config/nevermind` (shared, 1.x format) for `config.json` and `extensions/`; machine-local state in the OS user-data folder: `~/Library/Application Support/Nevermind`, `$XDG_DATA_HOME` or `~/.local/share/nevermind`, `%APPDATA%\Nevermind` | `portable/`, `platform/folders`, `app/store.go`, `extension-paths.ts` |
 | Keychain service | 1.x entries | `nvm-native` | `auth/vault.go` |
 | URL scheme | `nvm` | `nvm` today (collision, section 2) | `deep-link.ts`, `mygo.json` |
 | Update feed | GitHub releases `v...`, read through `release-pointers` and GitHub's latest stable | the same releases and pointers as 1.x | `release.md` |
@@ -59,8 +64,7 @@ change is additive under `docs/backend-api-compatibility.md`, and it needs no 1.
 Other rules that stay: 2.0 accepts a link only from its own scheme and host (`auth`); a link cannot move the user to
 an untrusted origin (`ParseDeepLink`, `internal/backend/auth/deeplink.go`).
 
-**Identity name.** "Nevermind Next" stays for the overlap. Renaming to "Nevermind" at cutover is possible without
-changing the bundle identifier. The bundle identifier cannot change after the first public release.
+**Identity name.** Decided (D1): 2.0 is "Nevermind" with `com.pablopunk.nvm`, the name and identifier 1.x had.
 
 ## 3. Data
 
@@ -240,8 +244,7 @@ All of these must be true before stable is announced as the replacement:
 
 Each decision blocks a step above. Recommendations are in brackets.
 
-1. **D1 Identity.** Keep "Nevermind Next" and `com.pablopunk.nvm.next` for the overlap? Rename to "Nevermind" at cutover?
-   [Keep the bundle identifier, which cannot change; rename only at cutover.]
+1. **D1 Identity.** Decided: 2.0 replaces 1.x as "Nevermind" with `com.pablopunk.nvm`; there is no overlap.
 2. **D2 URL scheme.** Use `nvm-next` through the `callbackScheme` option (B2), with paste-code as the interim? [Yes.]
 3. **D3 Backend identity.** Approve the client-name split (`nevermind-next`) and its three environment variables, and
    read the production values of `NEVERMIND_MIN_DESKTOP_VERSION`, `NEVERMIND_LATEST_DESKTOP_VERSION` and

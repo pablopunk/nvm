@@ -33,7 +33,7 @@ var goldenNow = time.Date(2026, time.November, 3, 10, 0, 0, 0, time.UTC)
 const goldenOS = "linux"
 
 // goldenData is the machine-local folder the goldens show. Nothing is written there: no fixture saves.
-const goldenData = "/nvm-fixture/data/nevermind-next"
+const goldenData = "/nvm-fixture/data/nevermind"
 
 // goldenHome is the process's home folder, the one the standard places and the fixture file tree resolve under.
 func goldenHome(t *testing.T) string {

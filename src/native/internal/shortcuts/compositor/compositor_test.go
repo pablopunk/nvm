@@ -22,15 +22,15 @@ func TestDesiredForBindsThePaletteAndActionsThroughTheCommandLine(t *testing.T) 
 		shortcuts.PaletteID:         "Control+Alt+K",
 		"app:/opt/My App.desktop":   "Alt+A",
 		shortcuts.CommandSnippets:   "",
-	}, Identity{Executable: "/opt/Nevermind Next/nvm", Classes: []string{"nvm"}})
+	}, Identity{Executable: "/opt/My Apps/nvm", Classes: []string{"nvm"}})
 	var got []string
 	for _, b := range d.Binds {
 		got = append(got, b.Accelerator+" => "+b.Command)
 	}
 	want := []string{
-		"Control+Alt+K => '/opt/Nevermind Next/nvm' run palette-toggle",
-		"Alt+A => '/opt/Nevermind Next/nvm' run 'app:/opt/My App.desktop'",
-		"Alt+N => '/opt/Nevermind Next/nvm' run command:quick-notes",
+		"Control+Alt+K => '/opt/My Apps/nvm' run palette-toggle",
+		"Alt+A => '/opt/My Apps/nvm' run 'app:/opt/My App.desktop'",
+		"Alt+N => '/opt/My Apps/nvm' run command:quick-notes",
 	}
 	if !slices.Equal(got, want) {
 		t.Fatalf("binds\n%s", strings.Join(got, "\n"))

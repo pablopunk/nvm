@@ -199,7 +199,7 @@ func launchEnvironment(parent []string, home, runtimeDir, socket, theme, backend
 
 // rigDataDir is the machine-local folder under home: the Linux user-data folder, which the rig reaches through XDG_DATA_HOME.
 func rigDataDir(home string) string {
-	return filepath.Join(home, ".local", "share", "nevermind-next")
+	return filepath.Join(home, ".local", "share", "nevermind")
 }
 
 // writeHotkeySettings writes the palette shortcut to the isolated config.json, the file 2.0 reads it from.

@@ -32,7 +32,7 @@ func newDeps(dial Dial) (Deps, *bytes.Buffer, *bytes.Buffer, *int) {
 	starts := 0
 	clock := &fakeClock{now: time.Now()} // socket deadlines come from this clock, so it starts at the real time
 	return Deps{
-		Program: "nevermind-next", Dial: dial,
+		Program: "nevermind", Dial: dial,
 		Start: func() error { starts++; return nil },
 		Now:   clock.Now, Wait: clock.Wait, Stdout: &out, Stderr: &errOut,
 	}, &out, &errOut, &starts
@@ -48,7 +48,7 @@ func TestIsCommand(t *testing.T) {
 
 func TestHelpAndUsage(t *testing.T) {
 	deps, out, errOut, _ := newDeps(refuse)
-	if code := Main([]string{"--help"}, deps); code != ExitOK || !strings.Contains(out.String(), "nevermind-next run <action-id>") {
+	if code := Main([]string{"--help"}, deps); code != ExitOK || !strings.Contains(out.String(), "nevermind run <action-id>") {
 		t.Fatalf("help: %d %q", code, out)
 	}
 	if code := Main([]string{"run"}, deps); code != ExitUsage || errOut.Len() == 0 {

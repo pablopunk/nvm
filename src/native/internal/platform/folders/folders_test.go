@@ -22,16 +22,16 @@ func TestLocalFolderFollowsEachOperatingSystem(t *testing.T) {
 		getenv func(string) string
 		want   string
 	}{
-		{"macOS", "darwin", noEnv, "/home/owner/Library/Application Support/Nevermind Next"},
-		{"Linux default", "linux", noEnv, "/home/owner/.local/share/nevermind-next"},
-		{"Linux XDG", "linux", envOf("XDG_DATA_HOME", "/data"), "/data/nevermind-next"},
-		{"Linux ignores a relative XDG", "linux", envOf("XDG_DATA_HOME", "relative"), "/home/owner/.local/share/nevermind-next"},
-		{"Windows", "windows", envOf("APPDATA", `C:\Users\owner\AppData\Roaming`), filepath.Join(`C:\Users\owner\AppData\Roaming`, "Nevermind Next")},
-		{"Windows without APPDATA", "windows", noEnv, filepath.Join(home, "AppData", "Roaming", "Nevermind Next")},
+		{"macOS", "darwin", noEnv, "/home/owner/Library/Application Support/Nevermind"},
+		{"Linux default", "linux", noEnv, "/home/owner/.local/share/nevermind"},
+		{"Linux XDG", "linux", envOf("XDG_DATA_HOME", "/data"), "/data/nevermind"},
+		{"Linux ignores a relative XDG", "linux", envOf("XDG_DATA_HOME", "relative"), "/home/owner/.local/share/nevermind"},
+		{"Windows", "windows", envOf("APPDATA", `C:\Users\owner\AppData\Roaming`), filepath.Join(`C:\Users\owner\AppData\Roaming`, "Nevermind")},
+		{"Windows without APPDATA", "windows", noEnv, filepath.Join(home, "AppData", "Roaming", "Nevermind")},
 	}
 	for _, tc := range tests {
 		t.Run(tc.name, func(t *testing.T) {
-			if got := Local(tc.goos, home, tc.getenv, "Nevermind Next", "nevermind-next"); got != tc.want {
+			if got := Local(tc.goos, home, tc.getenv, "Nevermind", "nevermind"); got != tc.want {
 				t.Errorf("Local = %q; want %q", got, tc.want)
 			}
 		})

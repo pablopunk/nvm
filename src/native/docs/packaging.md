@@ -18,7 +18,7 @@ the packages as run artifacts. It publishes nothing; see [release.md](release.md
   - `internal/app.releaseBuild=true` only for a run with `release=true`. It is the
     only build with an analytics endpoint.
   - A plain `go build` or `go run` leaves both at `false`.
-- `nevermind-next --build-flags` prints `packaged=… release=…` and exits without
+- `nevermind --build-flags` prints `packaged=… release=…` and exits without
   starting the app. `scripts/packaging/verify-package.sh` compares that output with
   what the run expects, for each runnable artifact.
 
@@ -44,11 +44,11 @@ not run JIT code.
 
 | Target | Runner | Output |
 |---|---|---|
-| darwin/arm64 | `macos-latest` | `Nevermind Next.app` and `nevermind-next-<version>-arm64.dmg` |
+| darwin/arm64 | `macos-latest` | `Nevermind.app` and `nevermind-<version>-arm64.dmg` |
 | darwin/amd64 | `macos-15-intel` | the same, for Intel |
 | linux/amd64 | `ubuntu-latest` | archive with `install.sh`, `.deb`, `PKGBUILD` |
 | linux/arm64 | `ubuntu-24.04-arm` | the same, for ARM64 |
-| windows/amd64 | `ubuntu-latest` (NSIS and osslsigncode installed) | `Nevermind Next.exe` and `nevermind-next-setup-<version>-amd64.exe` |
+| windows/amd64 | `ubuntu-latest` (NSIS and osslsigncode installed) | `Nevermind.exe` and `nevermind-setup-<version>-amd64.exe` |
 
 Linux and Windows packages build on any Linux machine: run
 `bash scripts/natives/build-libopus.sh`, then `go tool mygo build -platform linux/amd64`

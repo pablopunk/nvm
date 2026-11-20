@@ -1,7 +1,8 @@
 // Package folders names the directories the app reads and writes. The shared folder is the one 1.x also uses: it
 // holds config.json and extensions/, and nothing private or machine-local goes there, because the owner keeps it in
 // a public dotfiles repository. The local folder is the operating system's user-data folder for everything that
-// stays on this machine. Every function is pure: the caller passes the home folder, the environment and the app name.
+// stays on this machine. The naming functions are pure: the caller passes the home folder, the environment and the app
+// name. AdoptRenamed is the one function that touches the disk.
 package folders
 
 import (

@@ -190,23 +190,23 @@ jobs:
         working-directory: src/native
         run: |
           set -euo pipefail
-          bash scripts/packaging/verify-package.sh "dist/darwin-${{ matrix.arch }}/Nevermind Next.app/Contents/MacOS/Nevermind Next" "$RELEASE"
+          bash scripts/packaging/verify-package.sh "dist/darwin-${{ matrix.arch }}/Nevermind.app/Contents/MacOS/Nevermind" "$RELEASE"
           if [ "${{ steps.decide.outputs.sign }}" = true ]; then
-            codesign --verify --deep --strict --verbose=2 "dist/darwin-${{ matrix.arch }}/Nevermind Next.app"
+            codesign --verify --deep --strict --verbose=2 "dist/darwin-${{ matrix.arch }}/Nevermind.app"
           fi
           if [ "${{ steps.decide.outputs.notarize }}" = true ]; then
-            xcrun stapler validate "dist/darwin-${{ matrix.arch }}/nevermind-next-"*.dmg
-            spctl --assess --verbose=4 --type open --context context:primary-signature "dist/darwin-${{ matrix.arch }}/nevermind-next-"*.dmg
+            xcrun stapler validate "dist/darwin-${{ matrix.arch }}/nevermind-"*.dmg
+            spctl --assess --verbose=4 --type open --context context:primary-signature "dist/darwin-${{ matrix.arch }}/nevermind-"*.dmg
           fi
           if [ "$RELEASE" = true ] && [ -n "$UPDATE_PUBLIC_KEY" ]; then
-            bash scripts/packaging/verify-updates.sh "dist/darwin-${{ matrix.arch }}/Nevermind Next.app/Contents/MacOS/Nevermind Next" "$UPDATE_PUBLIC_KEY"
+            bash scripts/packaging/verify-updates.sh "dist/darwin-${{ matrix.arch }}/Nevermind.app/Contents/MacOS/Nevermind" "$UPDATE_PUBLIC_KEY"
           fi
 
       - name: Check the window helper is bundled for this architecture
         working-directory: src/native
         run: |
           set -euo pipefail
-          helper="dist/darwin-${{ matrix.arch }}/Nevermind Next.app/Contents/Resources/macos-selected-text"
+          helper="dist/darwin-${{ matrix.arch }}/Nevermind.app/Contents/Resources/macos-selected-text"
           want=arm64
           test -x "$helper" || { echo "The window helper is missing from the app bundle: $helper" >&2; exit 1; }
           lipo -archs "$helper" | grep -qx "$want" || { echo "The window helper is not a $want binary." >&2; exit 1; }
@@ -215,7 +215,7 @@ jobs:
         working-directory: src/native
         run: |
           set -euo pipefail
-          opus="dist/darwin-${{ matrix.arch }}/Nevermind Next.app/Contents/Resources/lib/libopus.dylib"
+          opus="dist/darwin-${{ matrix.arch }}/Nevermind.app/Contents/Resources/lib/libopus.dylib"
           want=arm64
           test -f "$opus" || { echo "libopus is missing from the app bundle, so dictation cannot encode: $opus" >&2; exit 1; }
           lipo -archs "$opus" | grep -qx "$want" || { echo "libopus is not a $want binary." >&2; exit 1; }
@@ -235,7 +235,7 @@ jobs:
       - name: Zip the preview app
         if: inputs.fast || github.event_name == 'pull_request'
         working-directory: src/native/dist/darwin-${{ matrix.arch }}
-        run: ditto -c -k --sequesterRsrc --keepParent "Nevermind Next.app" nevermind-next-fast.zip
+        run: ditto -c -k --sequesterRsrc --keepParent "Nevermind.app" nevermind-fast.zip
 
       - name: Checksums
         working-directory: src/native/dist/darwin-${{ matrix.arch }}
@@ -323,13 +323,13 @@ jobs:
         working-directory: src/native/dist/linux-${{ matrix.arch }}
         run: |
           set -euo pipefail
-          ../../scripts/packaging/verify-package.sh ./nevermind-next "$RELEASE"
+          ../../scripts/packaging/verify-package.sh ./nevermind "$RELEASE"
           if [ "$RELEASE" = true ] && [ -n "$UPDATE_PUBLIC_KEY" ]; then
-            ../../scripts/packaging/verify-updates.sh ./nevermind-next "$UPDATE_PUBLIC_KEY"
+            ../../scripts/packaging/verify-updates.sh ./nevermind "$UPDATE_PUBLIC_KEY"
           fi
-          tar -tzf nevermind-next-*-linux-${{ matrix.arch }}.tar.gz
-          dpkg-deb --info nevermind-next_*_${{ matrix.arch }}.deb
-          dpkg-deb --contents nevermind-next_*_${{ matrix.arch }}.deb
+          tar -tzf nevermind-*-linux-${{ matrix.arch }}.tar.gz
+          dpkg-deb --info nevermind_*_${{ matrix.arch }}.deb
+          dpkg-deb --contents nevermind_*_${{ matrix.arch }}.deb
 
       - name: Note the update feed
         env:
@@ -428,7 +428,7 @@ jobs:
         run: |
           set -euo pipefail
           if [ "$RELEASE" = true ] && [ -n "$UPDATE_PUBLIC_KEY" ]; then
-            bash scripts/packaging/verify-updates.sh "dist/windows-amd64/Nevermind Next.exe" "$UPDATE_PUBLIC_KEY"
+            bash scripts/packaging/verify-updates.sh "dist/windows-amd64/Nevermind.exe" "$UPDATE_PUBLIC_KEY"
           fi
 
       - name: Note the link flags

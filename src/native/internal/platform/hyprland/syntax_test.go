@@ -69,7 +69,7 @@ func TestParseAccelerator(t *testing.T) {
 	}
 }
 
-const exe = "/usr/bin/nevermind-next"
+const exe = "/usr/bin/nevermind"
 
 func TestRenderConfBindsAndRule(t *testing.T) {
 	out, skipped := Render(FormatConf, Version{0, 54, 0}, Desired{
@@ -78,12 +78,12 @@ func TestRenderConfBindsAndRule(t *testing.T) {
 			{Accelerator: "Alt+N", Command: exe + " run 'x#y'"},
 			{Accelerator: "Alt+M", Command: exe + " run '$HOME'"},
 		},
-		Appearance: Appearance{Undecorated: true, Classes: []string{"nevermind-next", "nvm"}},
+		Appearance: Appearance{Undecorated: true, Classes: []string{"nevermind", "nvm"}},
 	})
 	text := string(out)
 	for _, want := range []string{
-		"bind = CTRL ALT, K, exec, /usr/bin/nevermind-next run palette-toggle\n",
-		"windowrule = match:class (nevermind-next|nvm), border_size 0\n",
+		"bind = CTRL ALT, K, exec, /usr/bin/nevermind run palette-toggle\n",
+		"windowrule = match:class (nevermind|nvm), border_size 0\n",
 	} {
 		if !strings.Contains(text, want) {
 			t.Errorf("missing %q in\n%s", want, text)
@@ -100,15 +100,15 @@ func TestRenderConfBindsAndRule(t *testing.T) {
 func TestRenderLuaQuotesEverything(t *testing.T) {
 	out, skipped := Render(FormatLua, Version{0, 56, 0}, Desired{
 		Binds:      []Bind{{Accelerator: "Command+Shift+N", Command: exe + ` run 'a"b\c$d#e'`}},
-		Appearance: Appearance{Undecorated: true, Classes: []string{"nevermind-next"}},
+		Appearance: Appearance{Undecorated: true, Classes: []string{"nevermind"}},
 	})
 	text := string(out)
 	if len(skipped) != 0 {
 		t.Fatalf("skipped %v", skipped)
 	}
 	for _, want := range []string{
-		`hl.bind("SUPER + SHIFT + N", hl.dsp.exec_cmd("/usr/bin/nevermind-next run 'a\"b\\c$d#e'"))`,
-		`hl.window_rule({ name = "nevermind-undecorated", match = { class = "(nevermind-next)" }, border_size = 0 })`,
+		`hl.bind("SUPER + SHIFT + N", hl.dsp.exec_cmd("/usr/bin/nevermind run 'a\"b\\c$d#e'"))`,
+		`hl.window_rule({ name = "nevermind-undecorated", match = { class = "(nevermind)" }, border_size = 0 })`,
 	} {
 		if !strings.Contains(text, want) {
 			t.Errorf("missing %s in\n%s", want, text)

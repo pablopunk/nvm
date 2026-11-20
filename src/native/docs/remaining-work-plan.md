@@ -1,7 +1,7 @@
 # Native rewrite: remaining-work execution plan
 
 Status: active; user authorized execution. Initial workers: search cancellation, builder safety, and secrets/residual verification.
-Target: Nevermind Next on Pablo's Mac. PR https://github.com/pablopunk/nvm/pull/282 merged on 2026-11-10 at 10:40:40 UTC. Remaining work proceeds as follow-ups based on t3/investigate-mygo-docs, preserving the merged rewrite and later installed fixes.
+Target: Nevermind on Pablo's Mac. PR https://github.com/pablopunk/nvm/pull/282 merged on 2026-11-10 at 10:40:40 UTC. Remaining work proceeds as follow-ups based on t3/investigate-mygo-docs, preserving the merged rewrite and later installed fixes.
 Work classification: repository changes plus separate packaged Mac acceptance. Backend deployment, releases, external configuration and destructive operations are not implicit parts of this plan.
 
 ## Baseline and scope

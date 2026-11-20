@@ -6,6 +6,7 @@ import (
 	"os"
 	"path/filepath"
 	"runtime"
+	"sync"
 
 	"github.com/pablopunk/nvm/native/internal/ext/builtins/quicklinks"
 	"github.com/pablopunk/nvm/native/internal/platform/folders"
@@ -13,9 +14,18 @@ import (
 
 // The app's folder names: the macOS and Windows data folder is named after the app, and the Linux one after its slug.
 const (
-	appFolderName = "Nevermind Next"
-	appFolderSlug = "nevermind-next"
+	appFolderName = "Nevermind"
+	appFolderSlug = "nevermind"
 )
+
+// The folder names the app had while it was called Nevermind Next. The first launch under the current name moves that
+// folder over, so the owner's data survives the rename.
+const (
+	renamedFromFolderName = "Nevermind Next"
+	renamedFromFolderSlug = "nevermind-next"
+)
+
+var adoptRenamedDataDirOnce sync.Once
 
 // dataDir is the machine-local folder: the operating system's user-data folder, holding everything that never leaves
 // this machine. Golden tests swap it for a fixed path.
@@ -24,8 +34,23 @@ var dataDir = defaultDataDir
 func defaultDataDir() string {
 	home, _ := os.UserHomeDir()
 	d := folders.Local(runtime.GOOS, home, os.Getenv, appFolderName, appFolderSlug)
+	adoptRenamedDataDirOnce.Do(adoptRenamedDataDir)
 	_ = os.MkdirAll(d, 0o755)
 	return d
+}
+
+// adoptRenamedDataDir moves the Nevermind Next data folder to the current one when only the former exists.
+func adoptRenamedDataDir() {
+	home, _ := os.UserHomeDir()
+	previous := folders.Local(runtime.GOOS, home, os.Getenv, renamedFromFolderName, renamedFromFolderSlug)
+	current := folders.Local(runtime.GOOS, home, os.Getenv, appFolderName, appFolderSlug)
+	moved, err := folders.AdoptRenamed(previous, current)
+	switch {
+	case err != nil:
+		log.Printf("move data folder %s to %s: %v", previous, current, err)
+	case moved:
+		log.Printf("moved data folder %s to %s", previous, current)
+	}
 }
 
 func loadJSON(name string, v any) {

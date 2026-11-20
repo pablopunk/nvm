@@ -29,29 +29,29 @@ function writePackagingArtifacts(root, version, privateKey) {
   const jobs = {
     'native-macos-arm64': [
       'darwin-arm64',
-      `nevermind-next-${version}-arm64.dmg`,
+      `nevermind-${version}-arm64.dmg`,
       'install.sh',
     ],
     'native-linux-amd64': [
       'linux-amd64',
-      `nevermind-next_${version}_amd64.deb`,
+      `nevermind_${version}_amd64.deb`,
       'install.sh',
     ],
     'native-linux-arm64': [
       'linux-arm64',
-      `nevermind-next_${version}_arm64.deb`,
+      `nevermind_${version}_arm64.deb`,
       'install.sh',
     ],
     'native-windows-amd64': [
       'windows-amd64',
-      `nevermind-next-setup-${version}-amd64.exe`,
+      `nevermind-setup-${version}-amd64.exe`,
       'install.ps1',
     ],
   };
   for (const [job, [target, installer, script]] of Object.entries(jobs)) {
     const directory = path.join(root, job);
     fs.mkdirSync(directory, { recursive: true });
-    const archive = `nevermind-next-${version}-${target}.tar.gz`;
+    const archive = `nevermind-${version}-${target}.tar.gz`;
     const bytes = Buffer.from(`bytes:${archive}`);
     fs.writeFileSync(path.join(directory, archive), bytes);
     fs.writeFileSync(path.join(directory, installer), `bytes:${installer}`);

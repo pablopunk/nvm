@@ -68,7 +68,7 @@ func TestExecutableKeepsTheInstalledSymlink(t *testing.T) {
 		t.Skip("symlinks need privileges on Windows")
 	}
 	f := newLaunchFixture(t)
-	link := filepath.Join(f.bin, "nevermind-next")
+	link := filepath.Join(f.bin, "nevermind")
 	if err := os.Symlink(f.realExe, link); err != nil {
 		t.Fatal(err)
 	}
@@ -76,7 +76,7 @@ func TestExecutableKeepsTheInstalledSymlink(t *testing.T) {
 		t.Fatalf("started through the symlink: %q, want %q", got, link)
 	}
 	t.Setenv("PATH", f.bin)
-	if got := f.resolve(nil, f.realExe, "nevermind-next"); got != link {
+	if got := f.resolve(nil, f.realExe, "nevermind"); got != link {
 		t.Fatalf("started by name from PATH: %q, want %q", got, link)
 	}
 	if got := f.resolve(nil, f.realExe, f.otherExe); got != f.realExe {

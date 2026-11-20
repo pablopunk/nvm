@@ -25,7 +25,7 @@ import (
 // two binaries and links the key's public half and the feed's address into them.
 const (
 	rigUpdateSeedText = "nevermind rig update fake key (not a release key)"
-	rigUpdateFile     = "nevermind-next"
+	rigUpdateFile     = "nevermind"
 	rigUpdateManifest = "/update-linux-amd64.json"
 	rigUpdateArchive  = "/update-2.0.1.tar.gz"
 	rigUpdateWait     = 150 * time.Second

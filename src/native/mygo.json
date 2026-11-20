@@ -1,7 +1,7 @@
 {
-  "name": "Nevermind Next",
-  "slug": "nevermind-next",
-  "identifier": "com.pablopunk.nvm.next",
+  "name": "Nevermind",
+  "slug": "nevermind",
+  "identifier": "com.pablopunk.nvm",
   "version": "2.0.0-next.0",
   "copyright": "© 2026 Pablo Varela",
   "publisher": "Pablo Varela",
@@ -11,7 +11,7 @@
   "macos": {
     "minimumSystemVersion": "12.0",
     "entitlements": "packaging/entitlements.mac.plist",
-    "dmgTitle": "Nevermind Next",
+    "dmgTitle": "Nevermind",
     "infoPlist": {
       "LSUIElement": true,
       "NSMicrophoneUsageDescription": "Nevermind needs the microphone for local voice dictation.",
@@ -25,6 +25,6 @@
     "categories": ["Utility"],
     "depends": ["libsecret-1-0", "libayatana-appindicator3-1", "libgtk-layer-shell0", "pulseaudio-utils"],
     "webview": false,
-    "command": "nevermind-next"
+    "command": "nevermind"
   }
 }

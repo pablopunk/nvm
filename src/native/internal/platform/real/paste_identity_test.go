@@ -14,7 +14,7 @@ func TestFrontmostIdentityIsTheBundleOfAnotherApp(t *testing.T) {
 }
 
 func TestFrontmostIdentityIsUnknownWhenNevermindHasTheKeyboardOrNoAppIsInFront(t *testing.T) {
-	app := platform.WindowApp{PID: 9000, BundleID: "com.pablopunk.nvm.next"}
+	app := platform.WindowApp{PID: 9000, BundleID: "com.pablopunk.nvm"}
 	if got := frontmostIdentityOf(app, true, 9000); got != "" {
 		t.Fatalf("own identity = %q, want unknown", got)
 	}

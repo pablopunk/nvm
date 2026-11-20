@@ -30,3 +30,16 @@ func TestFingerprintKeyPersistsAndFailsClosed(t *testing.T) {
 		t.Fatal("ignored keychain failure")
 	}
 }
+
+func TestFingerprintKeyAdoptsTheKeyKeptUnderTheEarlierName(t *testing.T) {
+	kc := fake.NewKeychain()
+	expected := bytes.Repeat([]byte{7}, 32)
+	_ = kc.Set(renamedKeyService, keyAccount, expected)
+	key, err := FingerprintKey(kc, true, bytes.NewReader(nil))
+	if err != nil || !bytes.Equal(key, expected) {
+		t.Fatalf("key = %x, %v; want the key kept under the earlier name", key, err)
+	}
+	if _, err := kc.Get(renamedKeyService, keyAccount); err == nil {
+		t.Fatal("the earlier entry was kept")
+	}
+}

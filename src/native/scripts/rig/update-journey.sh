@@ -22,13 +22,13 @@ rm -rf "$dir" && mkdir -p "$dir/old" "$dir/new"
 if [ -n "${NVM_RIG_HOME:-}" ]; then rm -rf "$NVM_RIG_HOME" && mkdir -p "$NVM_RIG_HOME"; fi
 build() {
   local version=$1 out=$2
-  go build -tags automation -o "$out" -ldflags "-X $mygo.production=1 -X $mygo.packageName=Nevermind -X $mygo.packageVersion=$version -X $mygo.packageIdentifier=com.pablopunk.nvm.next -X $mygo.packageUpdateFeed=$feed -X $mygo.packageUpdateKey=$pub" ./cmd/nvm
+  go build -tags automation -o "$out" -ldflags "-X $mygo.production=1 -X $mygo.packageName=Nevermind -X $mygo.packageVersion=$version -X $mygo.packageIdentifier=com.pablopunk.nvm -X $mygo.packageUpdateFeed=$feed -X $mygo.packageUpdateKey=$pub" ./cmd/nvm
 }
-build 2.0.0-next.0 "$dir/old/nevermind-next"
-build 2.0.1 "$dir/new/nevermind-next"
+build 2.0.0-next.0 "$dir/old/nevermind"
+build 2.0.1 "$dir/new/nevermind"
 
-export NVM_RIG_UPDATE_OLD_BIN="$dir/old/nevermind-next"
-export NVM_RIG_UPDATE_BIN_NEW="$dir/new/nevermind-next"
+export NVM_RIG_UPDATE_OLD_BIN="$dir/old/nevermind"
+export NVM_RIG_UPDATE_BIN_NEW="$dir/new/nevermind"
 export NVM_RIG_UPDATE_PORT="$port"
 export NVM_RIG_HOME="${NVM_RIG_HOME:-}"
 export NVM_RIG_ARTIFACTS="${NVM_RIG_ARTIFACTS:-${RIG_ARTIFACTS:-$dir}/tests}"

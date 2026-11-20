@@ -8,14 +8,20 @@ import (
 	"github.com/pablopunk/nvm/native/internal/platform"
 )
 
-const keyService = "nevermind.next.builder-learnings"
+const keyService = "nevermind.builder-learnings"
 const keyAccount = "suppression-v1"
+
+// renamedKeyService is where the key was kept while the app was called Nevermind Next.
+const renamedKeyService = "nevermind.next.builder-learnings"
 
 // FingerprintKey obtains the installation's stable suppression key. Existing state without its key
 // fails closed: replacing the key would silently disable deletion protection. Call once during startup.
 func FingerprintKey(keychain platform.Keychain, hasState bool, random io.Reader) ([]byte, error) {
 	if keychain == nil {
 		return nil, platform.ErrUnsupported
+	}
+	if err := platform.AdoptRenamedSecret(keychain, renamedKeyService, keyService, keyAccount); err != nil {
+		return nil, err
 	}
 	key, err := keychain.Get(keyService, keyAccount)
 	if err == nil {

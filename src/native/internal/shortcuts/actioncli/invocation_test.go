@@ -8,12 +8,12 @@ import (
 
 func TestInvocationQuotesForTheShell(t *testing.T) {
 	cases := map[string]string{
-		"command:quick-notes":            "nevermind-next run command:quick-notes",
-		"app:/Applications/Some App.app": "nevermind-next run 'app:/Applications/Some App.app'",
-		"x'; rm -rf ~; echo '":           `nevermind-next run 'x'\''; rm -rf ~; echo '\'''`,
+		"command:quick-notes":            "nevermind run command:quick-notes",
+		"app:/Applications/Some App.app": "nevermind run 'app:/Applications/Some App.app'",
+		"x'; rm -rf ~; echo '":           `nevermind run 'x'\''; rm -rf ~; echo '\'''`,
 	}
 	for id, want := range cases {
-		if got := Invocation("nevermind-next", id, "linux"); got != want {
+		if got := Invocation("nevermind", id, "linux"); got != want {
 			t.Errorf("%q: %s", id, got)
 		}
 	}
