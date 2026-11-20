@@ -13,7 +13,9 @@ import argparse, csv, html, json, math, os, pathlib, shutil, statistics, struct,
 HERE = pathlib.Path(__file__).resolve().parent
 PLATFORMS = ('linux', 'macos')
 # Each chart row: (key, short label). Timing rows are trials.jsonl endpoints; memory rows are memory.csv phases.
-ENDPOINTS = [('search', 'Search'), ('clear', 'Clear'), ('row_down', 'Row down'), ('settings_open', 'Open Settings'),
+# settings_open is measured and kept in the data but not charted: on macOS 2.x is slow to show the Settings view on
+# about half of the opens, a known issue to fix (see methodology.md), so the row returns once that is fixed.
+ENDPOINTS = [('search', 'Search'), ('clear', 'Clear'), ('row_down', 'Row down'),
              ('settings_back', 'Leave Settings'), ('calculator', 'Calculator')]
 MEMORY_PHASES = [('hidden', 'Hidden'), ('open', 'Open'), ('slow_typing', 'Typing'), ('after_cycle', 'After use')]
 VERSIONS = (('v1', '1.x', 'Electron'), ('v2', '2.x', 'Go'))

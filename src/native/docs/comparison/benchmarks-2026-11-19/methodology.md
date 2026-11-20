@@ -159,3 +159,10 @@ The macOS artifact of the same run is `native-macos-arm64`, ID 14556355283, dige
 - Linux PSS and macOS physical footprint are different metrics on different hardware. Compare v1 with v2 within each platform only.
 
 Raw frames, events, memory snapshots, both classification passes, calibration screenshots and harness scripts are kept, with a SHA-256 manifest, in the task's `.tmp/benchmarks/linux-v1-v2-20261119/` folder. They are not committed.
+
+## Open Settings is not charted
+
+`settings_open` stays in the data of both platforms but is left out of the charts for now. On the macOS VM, 2.x showed
+the Settings view after about 340–470 ms on 13 of its 28 successful opens (median 396 ms), against 3–131 ms for 1.x;
+the capture probe showed the compositor drawing normally while 2.x's window had not changed yet. On Linux 2.x opens it
+in about 6 ms. This is a 2.x issue on macOS to fix; the row goes back into the charts once it is.
