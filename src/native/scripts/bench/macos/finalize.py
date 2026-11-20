@@ -56,8 +56,11 @@ def probe_note(b):
         every, before_slow, slow = probe_flips(b, v)
         if every: base.append(f"{v} median {statistics.median(every):.0f} ms, p90 {pct(every, .9):.0f} ms")
         if slow and before_slow:
+            same = statistics.median(before_slow) <= 1.5 * statistics.median(every)
+            verdict = (f", as fast as any flip, so the compositor and capture kept presenting and the late change came from {v}'s window"
+                       if same else ", slower than other flips, so the compositor or capture was delayed too")
             slow_parts.append(f"in the {slow} {v} attempts whose change came 400 ms or more after the key, flips made before that change "
-                              f"took a median of {statistics.median(before_slow):.0f} ms (p90 {pct(before_slow, .9):.0f} ms)")
+                              f"took a median of {statistics.median(before_slow):.0f} ms (p90 {pct(before_slow, .9):.0f} ms){verdict}")
         else:
             slow_parts.append(f"no {v} diagnostic attempt changed 400 ms or more after the key")
     return ("Probe diagnostics (6 extra Down/Enter attempts per block; a harness window flipped 5 times at +150 to +550 ms, captured by its own stream): "
