@@ -12,24 +12,31 @@ import argparse, csv, html, json, math, os, pathlib, shutil, statistics, struct,
 
 HERE = pathlib.Path(__file__).resolve().parent
 PLATFORMS = ('linux', 'macos')
-MEMORY_PHASES = [('hidden', 'Hidden, settled', None), ('open', 'Palette open, settled', None),
-                 ('slow_typing', 'Slow typing', '100 ms per character'), ('after_cycle', 'Hidden after a full cycle', None)]
-ENDPOINTS = [('search', 'Type “settings” → stable result list'), ('clear', 'Clear query → stable root list'),
-             ('row_down', 'Down arrow → next row selected'), ('settings_open', 'Enter on Settings → Settings view'),
-             ('settings_back', 'Escape → back out of Settings'), ('calculator', 'Calculator Enter → result on the clipboard')]
-CSS = ('body{margin:0;background:#fff;color:#162d36;font:16px Arial,sans-serif}*{box-sizing:border-box}main{padding:30px}'
-       'h1{font-size:30px;margin:0 0 8px;letter-spacing:-.6px}p{color:#52666e;line-height:1.5;margin:10px 0}.sub{font-size:15px}'
-       '.legend{display:flex;gap:25px;margin:20px 0;font-size:14px}.dot{display:inline-block;width:12px;height:12px;border-radius:3px;margin-right:7px}'
-       '.old{background:#77899e}.new{background:#008675}.cols{display:flex;gap:28px}.col{flex:1;min-width:0}'
-       '.col h2{font-size:19px;margin:6px 0 4px}.col .metric{font-size:13px;color:#52666e;margin-bottom:6px}'
-       '.row{display:grid;grid-template-columns:190px 1fr;gap:15px;margin:20px 0;align-items:center}.label{font-weight:bold;font-size:16px}'
-       '.bar{height:31px;border-radius:5px;line-height:31px;color:white;padding-left:12px;min-width:115px;font-size:14px;white-space:nowrap}'
-       '.bar.new{margin-top:6px}.foot{font-size:13px;line-height:1.6;border-top:1px solid #dce5e8;padding-top:15px}'
-       '.range{color:#52666e;font-size:12px;font-weight:normal;display:block;margin-top:5px}.source{font-size:12px;color:#52666e}'
-       '.timing{padding:16px 0;border-top:1px solid #dce5e8}.timing h2{font-size:19px;margin:0 0 12px}.pair{display:flex;gap:18px}'
-       '.plat{flex:1;min-width:0}.plat h3{font-size:13px;color:#52666e;margin:0 0 8px;text-transform:uppercase;letter-spacing:.6px}'
-       '.boxes{display:flex;gap:12px}.box{flex:1;border-radius:10px;background:#f1f5f6;padding:15px}.num{font-size:27px;font-weight:bold;margin:6px 0}'
-       '.bounds{font-size:13px;color:#52666e}.oldtext{color:#61758c}.newtext{color:#008675}.na{font-size:15px;color:#52666e;margin:12px 0}')
+# Each chart row: (key, short label). Timing rows are trials.jsonl endpoints; memory rows are memory.csv phases.
+ENDPOINTS = [('search', 'Search'), ('clear', 'Clear'), ('row_down', 'Row down'), ('settings_open', 'Open Settings'),
+             ('settings_back', 'Leave Settings'), ('calculator', 'Calculator')]
+MEMORY_PHASES = [('hidden', 'Hidden'), ('open', 'Open'), ('slow_typing', 'Typing'), ('after_cycle', 'After use')]
+VERSIONS = (('v1', '1.x', 'Electron'), ('v2', '2.x', 'Go'))
+# A "N× faster" tag needs both a clear ratio and, for timings, a gap of at least two 10 ms capture intervals.
+TAG_MIN_RATIO, TAG_MIN_GAP_MS = 1.5, 20
+CSS = (':root{--fg:#0a0a0a;--muted:#737373;--border:#e5e5e5;--v1:#a3a29b;--v2:#2a78d6;--tag-bg:#eaf2fc;--tag-fg:#184f95;'
+       '--sans:"Geist","Geist Variable",Inter,-apple-system,"Helvetica Neue","Liberation Sans",Arial,sans-serif;'
+       '--mono:"Geist Mono","SF Mono",Menlo,"Liberation Mono",monospace}'
+       '*{box-sizing:border-box}body{margin:0;background:#fff;color:var(--fg);font:16px/1.5 var(--sans);width:900px}'
+       'header{padding:36px 40px 26px;border-bottom:1px solid var(--border)}'
+       '.eyebrow{font-size:12px;letter-spacing:.08em;text-transform:uppercase;color:var(--muted);margin:0 0 10px}'
+       'h1{font-size:28px;font-weight:650;letter-spacing:-.02em;line-height:1.2;margin:0}'
+       '.legend{display:flex;gap:24px;margin:18px 0 0;padding:0;list-style:none;font-size:15px;font-weight:500}'
+       '.legend li{display:flex;align-items:center;gap:8px}.legend small{color:var(--muted);font-size:15px;font-weight:400}'
+       '.swatch{width:11px;height:11px;border-radius:3px}'
+       '.panels{display:grid;gap:48px;padding:30px 40px 34px}'
+       'h2{font-size:19px;font-weight:600;letter-spacing:-.01em;margin:0 0 4px}h2 span{color:var(--muted);font-weight:400}'
+       'figure{margin:20px 0 0}figcaption{display:flex;align-items:center;gap:10px;font-size:15px;font-weight:500;margin-bottom:4px}'
+       '.tag{font-size:13px;font-weight:600;color:var(--tag-fg);background:var(--tag-bg);border-radius:999px;padding:1px 9px}'
+       '.row{display:grid;grid-template-columns:34px 1fr 76px;gap:10px;align-items:center;padding:3px 0}'
+       '.who{font-size:14px;color:var(--muted)}.track{height:12px}.bar{display:block;height:100%;border-radius:0 4px 4px 0}'
+       '.val{text-align:right;font:15px var(--mono);font-variant-numeric:tabular-nums}.val.na{color:var(--muted)}'
+       'footer{border-top:1px solid var(--border);padding:16px 40px 22px;font-size:14px;color:var(--muted)}')
 
 
 def load(platform):
@@ -51,105 +58,78 @@ def nearest_rank(values, q):
 
 
 def timing(data, version, endpoint):
-    rel = [t for t in data['trials'] if t['version'] == version and t['endpoint'] == endpoint and not t['warmup']]
-    ok = [t for t in rel if t['success']]
+    """Median of the successful measured attempts; an interval endpoint is drawn at the midpoint of its median interval."""
+    ok = [t for t in data['trials'] if t['version'] == version and t['endpoint'] == endpoint and not t['warmup'] and t['success']]
     if not ok:
         return None
-    lo = [t['lower_ms'] for t in ok]; up = [t['upper_ms'] for t in ok]
-    return dict(attempts=len(rel), success=len(ok), lower=statistics.median(lo), upper=statistics.median(up),
-                p95_upper=nearest_rank(up, .95), point=all(t['lower_ms'] == t['upper_ms'] for t in ok))
+    lower = statistics.median(t['lower_ms'] for t in ok); upper = statistics.median(t['upper_ms'] for t in ok)
+    span = f'{lower:.0f} ms' if lower == upper else f'{lower:.0f}–{upper:.0f} ms'
+    return dict(value=(lower + upper) / 2, text=f'{(lower + upper) / 2:.0f} ms',
+                hover=f'median {span} · p95 {nearest_rank([t["upper_ms"] for t in ok], .95):.0f} ms · {len(ok)} attempts')
 
 
 def memory(data, version, phase):
+    """Median of the per-block medians."""
     vals = [float(r['value_mib']) for r in data['memory'] if r['version'] == version and r['phase'] == phase]
     if not vals:
         return None
-    return dict(median=statistics.median(vals), lo=min(vals), hi=max(vals), blocks=len(vals))
+    m = statistics.median(vals)
+    return dict(value=m, text=f'{m:.0f} MiB', hover=f'block medians {min(vals):.0f}–{max(vals):.0f} MiB · {len(vals)} blocks')
 
 
-def legend(datas):
-    v2 = sorted({d['run'].get('v2_label', 'v2') for d in datas})
-    v1 = sorted({d['run'].get('v1_label', 'v1') for d in datas})
-    return (f'<div class="legend"><span><i class="dot old"></i>{html.escape(" / ".join(v1))}</span>'
-            f'<span><i class="dot new"></i>{html.escape(" / ".join(v2))}</span></div>')
+def ratio_tag(old, new, word, min_gap):
+    if not old or not new or new['value'] <= 0 or old['value'] - new['value'] < min_gap:
+        return ''
+    ratio = old['value'] / new['value']
+    if ratio < TAG_MIN_RATIO:
+        return ''
+    return f'<span class="tag">{ratio:.1f}× {word}</span>'.replace('.0×', '×')
 
 
-def notes(datas):
-    parts = []
-    for d in datas:
-        r = d['run']
-        text = ' '.join(r.get('notes', []))
-        parts.append(f'<b>{html.escape(r.get("title", d["platform"]))}:</b> {html.escape(r.get("machine", ""))} {html.escape(text)}')
-    return '<br>'.join(parts)
+def bar_row(result, version, short, scale):
+    if not result:
+        return f'<div class="row"><span class="who">{short}</span><span class="track"></span><span class="val na">—</span></div>'
+    width = 100 * result['value'] / scale
+    return (f'<div class="row" title="{short} · {html.escape(result["hover"])}"><span class="who">{short}</span>'
+            f'<span class="track"><span class="bar" style="width:max({width:.2f}%,3px);background:var(--{version})"></span></span>'
+            f'<span class="val">{result["text"]}</span></div>')
 
 
-def source(datas):
-    dates = ', '.join(sorted({d['run'].get('collected', '') for d in datas if d['run'].get('collected')}))
-    return f'<div class="source">Source: pablopunk/nvm PR #280 · measurements collected {html.escape(dates)}</div>'
+def panel(data, rows, measure, word, min_gap):
+    results = {key: {v: measure(data, v, key) for v, _, _ in VERSIONS} for key, _ in rows}
+    scale = max((r['value'] for pair in results.values() for r in pair.values() if r), default=1) or 1
+    title = data['run'].get('title', data['platform'])
+    name, _, extra = title.partition(' (')
+    heading = f'{html.escape(name)}' + (f' <span>{html.escape(extra.rstrip(")"))}</span>' if extra else '')
+    figures = []
+    for key, label in rows:
+        pair = results[key]
+        tag = ratio_tag(pair['v1'], pair['v2'], word, min_gap)
+        bars = ''.join(bar_row(pair[v], v, short, scale) for v, short, _ in VERSIONS)
+        figures.append(f'<figure><figcaption>{label}{tag}</figcaption>{bars}</figure>')
+    return f'<section><h2>{heading}</h2>{"".join(figures)}</section>'
+
+
+def page(title, eyebrow, datas, rows, measure, word, min_gap, foot):
+    legend = ''.join(f'<li><span class="swatch" style="background:var(--{v})"></span>{short} <small>{kind}</small></li>' for v, short, kind in VERSIONS)
+    panels = ''.join(panel(d, rows, measure, word, min_gap) for d in datas)
+    body = (f'<header><p class="eyebrow">{eyebrow}</p><h1>{title}</h1><ul class="legend">{legend}</ul></header>'
+            f'<main class="panels" style="grid-template-columns:repeat({len(datas)},minmax(0,1fr))">{panels}</main><footer>{foot}</footer>')
+    return f'<!doctype html><html><head><meta charset="utf-8"><title>{title}</title><style>{CSS}</style></head><body>{body}</body></html>'
+
+
+EYEBROW = 'Nevermind 1.x vs 2.x'
 
 
 def memory_page(datas):
-    cols = []
-    for d in datas:
-        scale = max((m['median'] for v in ('v1', 'v2') for p, _, _ in MEMORY_PHASES if (m := memory(d, v, p))), default=1) / .9
-        rows = []
-        for phase, label, note in MEMORY_PHASES:
-            a, b = memory(d, 'v1', phase), memory(d, 'v2', phase)
-            sub = f'<span class="range">{note}</span>' if note else ''
-            if not a or not b:
-                rows.append(f'<div class="row"><div class="label">{label}{sub}</div><div class="na">not measured</div></div>'); continue
-            rows.append(f'<div class="row"><div class="label">{label}{sub}</div><div>'
-                        f'<div class="bar old" style="width:{100 * a["median"] / scale:.1f}%">{a["median"]:.0f} MiB</div>'
-                        f'<div class="bar new" style="width:{100 * b["median"] / scale:.1f}%">{b["median"]:.0f} MiB</div></div></div>')
-        r = d['run']
-        cols.append(f'<div class="col"><h2>{html.escape(r.get("title", d["platform"]))}</h2>'
-                    f'<div class="metric">{html.escape(r.get("memory_metric", ""))}</div>{"".join(rows)}</div>')
-    ranges = []
-    for d in datas:
-        bits = []
-        for phase, label, _ in MEMORY_PHASES:
-            a, b = memory(d, 'v1', phase), memory(d, 'v2', phase)
-            if a and b:
-                bits.append(f'{label.lower()} v1 {a["lo"]:.0f}–{a["hi"]:.0f}, v2 {b["lo"]:.0f}–{b["hi"]:.0f}')
-        ranges.append(f'{d["run"].get("title", d["platform"])} block-median ranges (MiB): ' + '; '.join(bits) + '.')
-    body = (f'<h1>Process-tree memory</h1><p class="sub">MiB · median of per-block medians · lower is better · compare versions within a platform; the metrics differ</p>'
-            f'{legend(datas)}<div class="cols">{"".join(cols)}</div><p class="sub">{html.escape(" ".join(ranges))}</p>'
-            f'<p class="foot">{notes(datas)}</p>{source(datas)}')
-    return page('Process-tree memory', body)
-
-
-def timing_box(t, cls, version):
-    if not t:
-        return f'<div class="box"><b>{version}</b><div class="na">not measured</div></div>'
-    if t['point']:
-        num = f'{t["upper"]:.0f} ms'; sub = f'median · p95 {t["p95_upper"]:.0f} ms'
-    else:
-        num = f'{t["lower"]:.0f}–{t["upper"]:.0f} ms'; sub = f'median interval · p95 ≤{t["p95_upper"]:.0f} ms'
-    return f'<div class="box"><b>{version}</b><div class="num {cls}">{num}</div><div class="bounds">{sub}<br>{t["success"]}/{t["attempts"]} attempts succeeded</div></div>'
+    metrics = {'linux': 'Linux PSS', 'macos': 'macOS physical footprint'}
+    foot = ' · '.join([metrics[d['platform']] for d in datas] + ['lower is better'])
+    return page('Memory, whole app', EYEBROW, datas, MEMORY_PHASES, memory, 'less', 0, foot)
 
 
 def responsiveness_page(datas):
-    sections = []
-    for endpoint, label in ENDPOINTS:
-        plats = []
-        for d in datas:
-            a, b = timing(d, 'v1', endpoint), timing(d, 'v2', endpoint)
-            head = f'<h3>{html.escape(d["run"].get("title", d["platform"]))}</h3>' if len(datas) > 1 else ''
-            boxes = f'<div class="boxes">{timing_box(a, "oldtext", "v1")}{timing_box(b, "newtext", "v2")}</div>'
-            plats.append(f'<div class="plat">{head}{boxes}</div>')
-        sections.append(f'<section class="timing"><h2>{label}</h2><div class="pair">{"".join(plats)}</div></section>')
-    counts = ', '.join(f'{d["run"].get("title", d["platform"])} {d["run"].get("attempts_note", "")}'.strip() for d in datas)
-    body = (f'<h1>Interaction responsiveness</h1><p class="sub">Measured attempts per version: {html.escape(counts)}</p>{legend(datas)}{"".join(sections)}'
-            '<p class="foot">Visual values are capture intervals: the lower bound is the start of the last capture before the final stable state, the upper bound '
-            'the end of its first capture, both measured from key dispatch start. The end of an action is the first frame after the last list change, held at '
-            'least 1 s. They bound observed content, not exact application execution or display scanout. Calculator: expression already entered, unique '
-            'clipboard sentinel verified before Enter, result varies per attempt; includes key injection and clipboard polling. p95 is nearest rank. '
-            f'No observer overhead was subtracted.<br>{notes(datas)}</p>{source(datas)}')
-    return page('Interaction responsiveness', body)
-
-
-def page(title, body):
-    return f'<!doctype html><html><head><meta charset="utf-8"><title>{title}</title><style>{CSS}</style></head><body><main>{body}</main></body></html>'
+    foot = 'Medians · screen timings use the midpoint of the median capture interval · lower is better'
+    return page('Key press to result', EYEBROW, datas, ENDPOINTS, timing, 'faster', TAG_MIN_GAP_MS, foot)
 
 
 def png_rows(path):
@@ -192,7 +172,7 @@ def render(html_path, png_path):
     with tempfile.TemporaryDirectory() as tmp:
         shot = pathlib.Path(tmp) / 'shot.png'
         subprocess.run([chromium, '--headless', '--disable-gpu', '--hide-scrollbars', f'--user-data-dir={tmp}/profile', '--force-device-scale-factor=2',
-                        '--window-size=1100,3000', f'--screenshot={shot}', html_path.as_uri()], check=True, capture_output=True)
+                        '--window-size=900,2000', f'--screenshot={shot}', html_path.as_uri()], check=True, capture_output=True)
         w, rows = png_rows(shot)
     white = bytes([255]) * len(rows[0]); last = max(i for i, r in enumerate(rows) if r != white)
     write_png(png_path, w, rows[:last + 1 + 40])

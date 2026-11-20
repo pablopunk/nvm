@@ -10,6 +10,18 @@ python3 src/native/docs/comparison/benchmarks-2026-11-19/charts.py
 
 To add macOS, copy its `trials.jsonl`, `memory.csv` and `run.json` into `data/macos/` and run the same command. It needs Python 3.9+ and Chromium (`CHROMIUM=/path/to/chrome` overrides the binary; `--no-png` writes only the HTML sources).
 
+## Reading the charts
+
+The images carry only the comparison; every caveat lives in this document.
+
+- Each bar is one median. Lower is better on both charts. Each platform panel has its own scale, shared by all of its rows.
+- A timing bar is the midpoint of the median capture interval: the median lower bound and the median upper bound, averaged. The calculator is a point measurement, so its bar is the median itself. Medians use successful measured attempts only; warmups and failures are left out. The intervals, p95 upper bounds and success counts are in the tables below and in each bar's hover text in the HTML source.
+- A memory bar is the median of the ten per-block medians. The block range is in the tables below and in the hover text.
+- An "N× faster" tag appears when 1.x takes at least 1.5 times as long as 2.x and at least 20 ms longer (two capture intervals). An "N× less" tag appears when 1.x uses at least 1.5 times as much memory. No tag means the gap is too small to call, not that 2.x lost.
+- The 0–12 ms results (one capture interval) show as 6 ms; they mean the change was visible in the first capture after dispatch.
+- Linux memory is PSS and macOS memory is physical footprint, on different machines. Compare 1.x with 2.x within one panel, never Linux with macOS.
+- Each platform's machine, capture method and run-specific limits are described in its section below. A platform added through `data/` needs its own section here; its `run.json` notes are not drawn in the images.
+
 ## Input format
 
 Put each platform's results in `data/<platform>/`, where the platform is `linux` or `macos`. The folder holds three files.
@@ -42,11 +54,11 @@ Extra fields are allowed and ignored. For a point measurement, such as the calcu
 | `settings_back` | Escape in the Settings view | the same rule, showing where each version returns |
 | `calculator` | Enter on an entered calculator expression | the clipboard first holds the expected result; a unique sentinel was read back before Enter |
 
-A platform may omit any endpoint; the chart then shows "not measured" for it. Visual bounds are capture intervals: `lower_ms` is the start of the last capture before the final stable state, or dispatch start if that is later; `upper_ms` is the end of the first capture showing it.
+A platform may omit any endpoint; the chart then shows a dash for it. Visual bounds are capture intervals: `lower_ms` is the start of the last capture before the final stable state, or dispatch start if that is later; `upper_ms` is the end of the first capture showing it.
 
 ### `memory.csv`
 
-A header row, then one row per version, block and phase. Each value is the median of the complete process-tree snapshots accepted in that block and phase. The chart reports the median of the block values and their range.
+A header row, then one row per version, block and phase. Each value is the median of the complete process-tree snapshots accepted in that block and phase. The chart reports the median of the block values; the range is in the hover text.
 
 | Column | Meaning |
 | --- | --- |
@@ -69,7 +81,7 @@ Extra columns, such as `rss_mib`, are allowed and ignored.
 
 ### `run.json`
 
-Captions for the charts.
+Facts about the run. The charts draw only `title`, as the panel heading (text in parentheses is shown muted); the rest records the run alongside the data and belongs in the platform's section below.
 
 ```json
 {
