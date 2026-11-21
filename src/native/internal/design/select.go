@@ -21,7 +21,7 @@ func Select(c *ui.Context, d SelectData) int {
 		color = k.Faint
 	}
 	chosen := -1
-	button := ui.ButtonBase(c).Padding(3, 8).Radius(6).Disabled(d.Disabled)
+	button := ui.ButtonBase(c).Height(footerButtonHeight).Padding(0, 10).Radius(footerButtonHeight / 2).Disabled(d.Disabled)
 	if !d.Disabled && button.Hovered() {
 		button.Background(k.Interactive)
 	}
