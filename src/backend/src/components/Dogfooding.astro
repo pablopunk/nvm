@@ -11,14 +11,15 @@ import { Sparkles } from '@lucide/astro';
   <div class="dogfooding__visual" aria-label="Example of an extension asking Nevermind AI to summarize a note">
     <div class="dogfooding__window-bar">
       <span class="dogfooding__dots" aria-hidden="true"><i></i><i></i><i></i></span>
-      <span>your-extension.ts</span>
+      <span>main.go</span>
       <span class="dogfooding__window-label">Extension API</span>
     </div>
     <div class="dogfooding__example">
       <div class="dogfooding__code-label">YOUR EXTENSION</div>
-      <pre><code><span>const</span> summary = <span>await</span> ctx.ai.ask(
-  <em>"Summarize this note: "</em> + note
-);</code></pre>
+      <pre><code>summary, err := ctx.AI().<span>Ask</span>(
+  <em>"Summarize this note: "</em> + note,
+  api.AIOptions{},
+)</code></pre>
       <div class="dogfooding__connector" aria-hidden="true"><span></span><Sparkles size={16} /><span></span></div>
       <div class="dogfooding__result">
         <div class="dogfooding__result-label"><Sparkles size={15} aria-hidden="true" /> Nevermind AI</div>
