@@ -34,6 +34,8 @@ type operation struct {
 	onRetry func(attempt int, err error)
 	journal *journal
 	encoder platform.OpusEncoder
+	// transcriber is where this dictation's segments go; nil keeps the audio for later.
+	transcriber Transcriber
 	// live transcribes each finished segment while the user goes on speaking; nil sends nothing until Stop.
 	live   *liveTranscription
 	pauses pauseDetector

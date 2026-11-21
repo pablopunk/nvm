@@ -73,6 +73,8 @@ func (s *scriptedTranscriber) CancelPreparation(_ context.Context, operationID s
 	return nil
 }
 
+func (s *scriptedTranscriber) Finished(string) {}
+
 func (s *scriptedTranscriber) ids() []string {
 	s.mu.Lock()
 	defer s.mu.Unlock()

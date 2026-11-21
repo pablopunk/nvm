@@ -37,6 +37,8 @@ type Settings struct {
 	Dictionary       string `json:"dictionary"`
 	CopyToClipboard  bool   `json:"copyToClipboard"`
 	UseScreenContext bool   `json:"useScreenContext"`
+	// Engine is where speech becomes text; empty is the cloud.
+	Engine api.DictationEngine `json:"engine,omitempty"`
 }
 
 // defaultSettings are the choices a new install starts with.
@@ -81,8 +83,10 @@ func (e Extension) openSettings(ctx api.Context) (api.Result, error) {
 func (e Extension) settingsView(ctx api.Context) api.View {
 	settings := e.readSettings(ctx)
 	available := aiAvailable(ctx)
+	model, _ := ctx.Dictation().DeviceModel()
 	fields := []api.Field{
 		deviceField(settings.DeviceID, devicesOf(ctx)),
+		engineField(settings.Engine, model),
 		cleanupField(settings.CleanupWithAI && available, available),
 		dictionaryField(settings.Dictionary),
 		checkboxField(fieldClipboard, "Copy transcription to clipboard", settings.CopyToClipboard,
@@ -152,12 +156,13 @@ func (e Extension) saveSettings(ctx api.Context, form api.FormValues) (api.Resul
 		Dictionary:       form[fieldDictionary].Text,
 		CopyToClipboard:  form[fieldClipboard].Flag,
 		UseScreenContext: form[fieldScreen].Flag,
+		Engine:           engineOrCloud(api.DictationEngine(form[fieldEngine].Text)),
 	})
 	if err := ctx.Storage().Set(storageSettingsKey, settings); err != nil {
 		return api.Result{}, err
 	}
 	publishDeviceTitle(ctx, settings)
-	return api.Result{Navigation: api.NavPop}, nil
+	return api.Result{Navigation: api.NavPop, Toast: installNotice(ctx, settings.Engine)}, nil
 }
 
 // publishDeviceTitle publishes the title of the microphone the settings choose, for the Settings page's Dictation row.

@@ -31,6 +31,9 @@ type fakeDictation struct {
 	retryErr     error
 	deleted      []string
 	deleteFailed bool
+	model        api.DictationDeviceModel
+	installs     int
+	retryEngines []api.DictationEngine
 }
 
 func (d *fakeDictation) Status() (api.DictationStatus, error) { return d.status, nil }
@@ -62,6 +65,28 @@ func (d *fakeDictation) Recordings() ([]api.SavedDictation, error) {
 func (d *fakeDictation) Retry(id string) (string, error) {
 	d.retried = append(d.retried, id)
 	return d.retryText, d.retryErr
+}
+
+func (d *fakeDictation) RetryOn(id string, engine api.DictationEngine) (string, error) {
+	d.retryEngines = append(d.retryEngines, engine)
+	return d.Retry(id)
+}
+
+func (d *fakeDictation) DeviceModel() (api.DictationDeviceModel, error) {
+	model := d.model
+	if model.Status == "" {
+		model.Status = api.DictationModelMissing
+	}
+	model.Title, model.SizeBytes = "Parakeet v3", 670_000_000
+	return model, nil
+}
+
+func (d *fakeDictation) InstallDeviceModel() error {
+	d.installs++
+	if d.model.Status != api.DictationModelReady {
+		d.model.Status = api.DictationModelDownloading
+	}
+	return nil
 }
 
 func (d *fakeDictation) DeleteRecording(id string) error {

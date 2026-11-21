@@ -21,10 +21,14 @@ import (
 	"github.com/pablopunk/nvm/native/internal/backend"
 	"github.com/pablopunk/nvm/native/internal/dictation"
 	"github.com/pablopunk/nvm/native/internal/logx"
+	"github.com/pablopunk/nvm/native/internal/platform/parakeet"
 	"github.com/pablopunk/nvm/native/internal/platform/real"
 )
 
 func main() {
+	if code, handled := parakeet.Main(os.Args, os.Stdin, os.Stdout, os.Stderr); handled {
+		os.Exit(code)
+	}
 	os.Exit(run(os.Args[1:], os.Stdout, os.Stderr))
 }
 
@@ -32,6 +36,9 @@ type options struct {
 	tokenFile string
 	baseURL   string
 	version   string
+	parakeet  string
+	models    string
+	ortLib    string
 	runs      int
 	gap       time.Duration
 	release   time.Duration
@@ -45,6 +52,9 @@ func parseOptions(args []string, stderr io.Writer) (options, error) {
 	flags.StringVar(&opts.tokenFile, "token-file", "", "file holding a Nevermind API token (required)")
 	flags.StringVar(&opts.baseURL, "base-url", "", "backend origin; empty is production")
 	flags.StringVar(&opts.version, "client-version", "2026.1121.1", "desktop version the backend sees; it refuses versions it no longer supports")
+	flags.StringVar(&opts.parakeet, "parakeet", "", "folder of the on-device model; with -ort, transcribe on the device instead of the backend")
+	flags.StringVar(&opts.models, "device", "", "folder holding the model folder; with -ort, dictate through the service on the device")
+	flags.StringVar(&opts.ortLib, "ort", "", "ONNX Runtime library for -parakeet and -device")
 	flags.IntVar(&opts.runs, "runs", 1, "dictations to measure")
 	flags.DurationVar(&opts.gap, "gap", 800*time.Millisecond, "silence between clips")
 	flags.DurationVar(&opts.release, "release", 300*time.Millisecond, "silence after the speech before the release")
@@ -52,8 +62,8 @@ func parseOptions(args []string, stderr io.Writer) (options, error) {
 		return opts, err
 	}
 	opts.clips = flags.Args()
-	if opts.tokenFile == "" || len(opts.clips) == 0 {
-		return opts, errors.New("usage: dictbench -token-file FILE [-runs N] clip.wav...")
+	if opts.tokenFile == "" && opts.parakeet == "" && opts.models == "" || len(opts.clips) == 0 {
+		return opts, errors.New("usage: dictbench (-token-file FILE | -parakeet DIR -ort LIB | -device ROOT -ort LIB) [-runs N] clip.wav...")
 	}
 	return opts, nil
 }
@@ -68,6 +78,20 @@ func run(args []string, stdout, stderr io.Writer) int {
 	if err != nil {
 		fmt.Fprintln(stderr, err)
 		return 1
+	}
+	if opts.models != "" {
+		if err := runDevice(opts.ortLib, opts.models, speech, opts.runs, opts.release, stdout, stderr); err != nil {
+			fmt.Fprintln(stderr, err)
+			return 1
+		}
+		return 0
+	}
+	if opts.parakeet != "" {
+		if err := runLocal(opts.ortLib, opts.parakeet, speech, stdout); err != nil {
+			fmt.Fprintln(stderr, err)
+			return 1
+		}
+		return 0
 	}
 	client, err := newClient(opts)
 	if err != nil {
@@ -186,6 +210,8 @@ func (t *tracingTranscriber) Prepare(ctx context.Context, operationID string) er
 func (t *tracingTranscriber) CancelPreparation(ctx context.Context, operationID string, userCancelled bool) error {
 	return t.client.CancelTranscriptionPreparation(ctx, operationID, userCancelled)
 }
+
+func (t *tracingTranscriber) Finished(string) {}
 
 func (t *tracingTranscriber) traces() []requestTrace {
 	t.mu.Lock()

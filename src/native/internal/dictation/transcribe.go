@@ -15,13 +15,15 @@ type Segment struct {
 	File           []byte
 }
 
-// Transcriber is the backend port. Prepare warms the backend's admission before the recording ends, Transcribe sends
-// one segment, and CancelPreparation releases an admission nobody will use. userCancelled marks a dictation the user
-// stopped, as opposed to one that failed on its own.
+// Transcriber turns segments into text: the backend, or the model on this device. Prepare readies it when the
+// microphone opens (the backend's admission, the device's model load), Transcribe sends one segment, CancelPreparation
+// releases a preparation nobody will use, and Finished says the dictation is over, whatever its outcome, so held
+// resources can go. userCancelled marks a dictation the user stopped, as opposed to one that failed on its own.
 type Transcriber interface {
 	Prepare(ctx context.Context, operationID string) error
 	Transcribe(ctx context.Context, segment Segment) (string, error)
 	CancelPreparation(ctx context.Context, operationID string, userCancelled bool) error
+	Finished(operationID string)
 }
 
 // Recorder keeps a dictation's audio on disk from its first captured frame until its transcript is in, so a dictation

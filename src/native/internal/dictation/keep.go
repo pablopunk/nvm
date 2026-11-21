@@ -32,8 +32,8 @@ func (s *Service) markFailed(id string, cause error) {
 // retryRecording transcribes the loaded audio of saved dictation id under a fresh operation ID, retrying passing
 // failures under the policy. The reason of a failure is written beside the audio, which stays until the caller
 // deletes it.
-func (s *Service) retryRecording(ctx context.Context, id string, files [][]byte) (string, error) {
-	text, err := transcribeFiles(ctx, s.cfg.Transcriber, s.cfg.Retry, newRetryOperationID(), false, files, s.retryWarning("dictation.transcribe-retry"))
+func (s *Service) retryRecording(ctx context.Context, id string, files [][]byte, transcriber Transcriber) (string, error) {
+	text, err := transcribeFiles(ctx, transcriber, s.cfg.Retry, newRetryOperationID(), false, files, s.retryWarning("dictation.transcribe-retry"))
 	if err != nil && ctx.Err() == nil {
 		s.markFailed(id, err)
 	}

@@ -37,13 +37,19 @@ func (e Extension) start(ctx api.Context) (api.Result, error) {
 	if cleanWithAI {
 		prepareCleanup(ctx)
 	}
-	if available, err := ctx.Dictation().APIAvailable(); err != nil || !available {
+	engine := engineOrCloud(settings.Engine)
+	if engine == api.DictationEngineDevice {
+		if notice := deviceModelNotice(ctx); notice != "" {
+			showIndicator(ctx, failureIndicator(notice))
+			return api.Result{}, nil
+		}
+	} else if available, err := ctx.Dictation().APIAvailable(); err != nil || !available {
 		showIndicator(ctx, failureIndicator("Sign in to use cloud dictation"))
 		return api.Result{}, nil
 	}
 	deferred := newDeferredIndicator(ctx.Indicators())
 	go nameMicrophone(ctx, settings.DeviceID, deferred)
-	err := ctx.Dictation().Start(api.DictationStartOptions{IndicatorID: IndicatorID, DeviceID: settings.DeviceID, MuteSystemAudioWhileRecord: true})
+	err := ctx.Dictation().Start(api.DictationStartOptions{IndicatorID: IndicatorID, DeviceID: settings.DeviceID, MuteSystemAudioWhileRecord: true, Engine: engine})
 	if err != nil {
 		deferred.cancel()
 		showFailure(ctx, err)

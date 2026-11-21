@@ -18,8 +18,10 @@ type DictationEngine interface {
 	Stop() (string, error)
 	Cancel() error
 	Recordings() ([]api.SavedDictation, error)
-	Retry(ctx context.Context, id string) (string, error)
+	RetryOn(ctx context.Context, id string, engine api.DictationEngine) (string, error)
 	DeleteRecording(id string) error
+	DeviceModel() api.DictationDeviceModel
+	InstallDeviceModel()
 }
 
 // serveDictation answers the dictation service. Every operation needs the dictation capability.
@@ -55,13 +57,18 @@ func (h *Handler) serveDictation(ctx context.Context, call protocol.ServiceCall)
 		if err := decodeArgs(call.Args, &args); err != nil {
 			return nil, err
 		}
-		return engine.Retry(ctx, args.ID)
+		return engine.RetryOn(ctx, args.ID, args.Engine)
 	case protocol.OpDeleteRecording:
 		var args protocol.DictationRecordingArgs
 		if err := decodeArgs(call.Args, &args); err != nil {
 			return nil, err
 		}
 		return nil, engine.DeleteRecording(args.ID)
+	case protocol.OpDeviceModel:
+		return engine.DeviceModel(), nil
+	case protocol.OpInstallModel:
+		engine.InstallDeviceModel()
+		return nil, nil
 	}
 	return nil, invalid("dictation has no operation %q", call.Op)
 }

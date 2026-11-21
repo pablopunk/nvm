@@ -270,9 +270,12 @@
       "APIAvailable",
       "Cancel",
       "DeleteRecording",
+      "DeviceModel",
       "Devices",
+      "InstallDeviceModel",
       "Recordings",
       "Retry",
+      "RetryOn",
       "Start",
       "Status",
       "Stop"

@@ -54,6 +54,22 @@ func (d remoteDictation) Retry(id string) (string, error) {
 	return transcript, err
 }
 
+func (d remoteDictation) RetryOn(id string, engine api.DictationEngine) (string, error) {
+	var transcript string
+	err := d.link.Call(protocol.ServiceDictation, protocol.OpRetry, protocol.DictationRecordingArgs{ID: id, Engine: engine}, &transcript)
+	return transcript, err
+}
+
+func (d remoteDictation) DeviceModel() (api.DictationDeviceModel, error) {
+	var model api.DictationDeviceModel
+	err := d.link.Call(protocol.ServiceDictation, protocol.OpDeviceModel, nil, &model)
+	return model, err
+}
+
+func (d remoteDictation) InstallDeviceModel() error {
+	return d.link.Call(protocol.ServiceDictation, protocol.OpInstallModel, nil, nil)
+}
+
 func (d remoteDictation) DeleteRecording(id string) error {
 	return d.link.Call(protocol.ServiceDictation, protocol.OpDeleteRecording, protocol.DictationRecordingArgs{ID: id}, nil)
 }

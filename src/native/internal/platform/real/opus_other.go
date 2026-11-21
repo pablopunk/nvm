@@ -16,3 +16,8 @@ type opusCodec struct{}
 func (opusCodec) NewEncoder(platform.AudioFormat) (platform.OpusEncoder, error) {
 	return nil, fmt.Errorf("%w: Opus encoding is not available on this system yet", platform.ErrUnsupported)
 }
+
+// NewDecoder reports ErrUnsupported.
+func (opusCodec) NewDecoder(platform.AudioFormat) (platform.OpusDecoder, error) {
+	return nil, fmt.Errorf("%w: Opus decoding is not available on this system yet", platform.ErrUnsupported)
+}

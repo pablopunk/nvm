@@ -33,7 +33,7 @@ type liveTranscription struct {
 func newLiveTranscription(s *Service, op *operation) *liveTranscription {
 	return &liveTranscription{
 		ctx:         op.ctx,
-		transcriber: s.cfg.Transcriber,
+		transcriber: op.transcriber,
 		policy:      s.cfg.Retry,
 		onRetry:     s.retryWarning("dictation.transcribe-retry"),
 		operationID: op.id,
