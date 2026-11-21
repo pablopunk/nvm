@@ -17,5 +17,3 @@ https://github.com/user-attachments/assets/7104303f-eb02-4802-9c9b-5e6c2b2d9e04
 
 > [!IMPORTANT]
 > This app is in Alpha. Expect bugs.
-
-Nevermind is a native command palette for your desktop, written in Go on [MyGo](https://mygo.egoist.dev). Summon it with a hotkey, search apps, files, clipboard history, emoji and your own extensions, and ask the AI to write a new extension when something is missing.
