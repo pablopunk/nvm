@@ -53,7 +53,7 @@ func Row(c *ui.Context, d RowData) {
 				title = col
 			}
 		}
-		rowEl := PlatePadding(ui.Row(c).Gap(10).AlignItems(ui.Center).Radius(12), d.Selected, 5, 8)
+		rowEl := rowPlate(ui.Row(c).Gap(10).AlignItems(ui.Center), d.Selected)
 		hovered := rowEl.Hovered()
 		switch {
 		case d.Disabled:
@@ -86,4 +86,22 @@ func Row(c *ui.Context, d RowData) {
 			}
 		})
 	})
+}
+
+// rowInset is how far a row's tile sits from the plate's top, bottom and leading edge, so the tile reads as centred in
+// the plate's rounded corner. The trailing side keeps more room for the accessory and the return glyph.
+const (
+	rowInset         = 5
+	rowTrailingInset = 8
+)
+
+// rowPlate pads and rounds a row so its tile sits rowInset from three edges and the plate's corners are concentric
+// with the tile's. A selected row's edge is a border that takes layout space, so the padding gives it up.
+func rowPlate(e ui.Element, selected bool) ui.Element {
+	edge := float32(0)
+	if selected {
+		edge = selectionEdgeWidth
+	}
+	return e.Radius(ImageRadius("", TileSize)+rowInset).
+		Padding(rowInset-edge, rowTrailingInset-edge, rowInset-edge, rowInset-edge)
 }
