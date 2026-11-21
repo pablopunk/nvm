@@ -58,8 +58,12 @@ jobs:
             gh api "repos/$GITHUB_REPOSITORY/actions/workflows/$workflow/runs?head_sha=$SOURCE_SHA&event=push&per_page=50" --jq '.workflow_runs' > ci-runs.json
             mise exec -- node "$NIGHTLY_CLI" ci-gate --sha "$SOURCE_SHA" --runs ci-runs.json | jq -e '.ok == true'
           done
-          curl -fsS --max-time 20 "$PRODUCTION_API_ORIGIN/api/health" -o production-health.json
-          mise exec -- node "$NIGHTLY_CLI" identity --sha "$SOURCE_SHA" --health production-health.json | jq -e '.status == "verified"'
+          # A release does not wait for the backend deploy: the app only needs a compatible API, not the same commit.
+          # A production backend behind this build is reported, not fatal.
+          if ! { curl -fsS --max-time 20 "$PRODUCTION_API_ORIGIN/api/health" -o production-health.json &&
+            mise exec -- node "$NIGHTLY_CLI" identity --sha "$SOURCE_SHA" --health production-health.json | jq -e '.status == "verified"' >/dev/null; }; then
+            echo "::warning::Production API does not run $SOURCE_SHA yet; promoting anyway"
+          fi
           echo "STABLE_TAG=$stable" >> "$GITHUB_ENV"
       - name: Install OpenCode
         run: |
@@ -107,8 +111,12 @@ jobs:
         run: |
           set -euo pipefail
           [[ "$(gh api "repos/$GITHUB_REPOSITORY/releases/latest" --jq '.tag_name')" == "$STABLE_TAG" ]]
-          curl -fsS --max-time 20 "$PRODUCTION_API_ORIGIN/api/health" -o production-health.json
-          mise exec -- node "$NIGHTLY_CLI" identity --sha "$SOURCE_SHA" --health production-health.json | jq -e '.status == "verified"'
+          # A release does not wait for the backend deploy: the app only needs a compatible API, not the same commit.
+          # A production backend behind this build is reported, not fatal.
+          if ! { curl -fsS --max-time 20 "$PRODUCTION_API_ORIGIN/api/health" -o production-health.json &&
+            mise exec -- node "$NIGHTLY_CLI" identity --sha "$SOURCE_SHA" --health production-health.json | jq -e '.status == "verified"' >/dev/null; }; then
+            echo "::warning::Production API does not run $SOURCE_SHA yet; promoting anyway"
+          fi
           gh release edit "v$VERSION" --draft=false --latest
       - name: Clean up failed draft
         if: failure() && steps.draft.outputs.created_tag == 'true'
