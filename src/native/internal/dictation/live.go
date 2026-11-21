@@ -23,11 +23,18 @@ type liveTranscription struct {
 	preparedOK  *bool
 	journal     *journal
 
-	wg    sync.WaitGroup
-	mu    sync.Mutex
-	texts map[int]string
-	err   error
-	errAt int
+	wg     sync.WaitGroup
+	mu     sync.Mutex
+	texts  map[int]string
+	pieces map[int]piece
+	err    error
+	errAt  int
+}
+
+// piece is what a live segment sent: how many frames of the previous segment it repeated, and of its own.
+type piece struct {
+	overlap int
+	frames  int
 }
 
 func newLiveTranscription(s *Service, op *operation) *liveTranscription {
@@ -41,19 +48,25 @@ func newLiveTranscription(s *Service, op *operation) *liveTranscription {
 		preparedOK:  &op.preparedOK,
 		journal:     op.journal,
 		texts:       map[int]string{},
+		pieces:      map[int]piece{},
 	}
 }
 
-// send starts transcribing segment index. packets must not change afterwards.
-func (l *liveTranscription) send(index int, track webm.Track, packets [][]byte) {
+// send starts transcribing segment index, opening with lead, the end of the segment before it, so the model hears the
+// sentence run across the cut. Neither slice may change afterwards.
+func (l *liveTranscription) send(index int, track webm.Track, lead, packets [][]byte) {
 	if l == nil {
 		return
 	}
+	l.mu.Lock()
+	l.pieces[index] = piece{overlap: len(lead), frames: len(packets)}
+	l.mu.Unlock()
 	l.wg.Add(1)
 	safego.Go("dictation.transcribe-segment", func(context.Context) {
 		defer l.wg.Done()
 		l.journal.awaitSaved(l.ctx, index, len(packets))
-		text, err := l.transcribe(index, webm.Mux(track, packets, FrameMillis))
+		file := webm.Mux(track, append(append(make([][]byte, 0, len(lead)+len(packets)), lead...), packets...), FrameMillis)
+		text, err := l.transcribe(index, file)
 		l.record(index, text, err)
 	})
 }
@@ -87,7 +100,7 @@ func (l *liveTranscription) record(index int, text string, err error) {
 	l.texts[index] = strings.TrimSpace(text)
 }
 
-// wait returns the texts of segments 0..count-1 joined with spaces, once every segment sent is answered.
+// wait returns the texts of segments 0..count-1 stitched at their overlaps, once every segment sent is answered.
 func (l *liveTranscription) wait(count int) (string, error) {
 	l.wg.Wait()
 	l.mu.Lock()
@@ -95,17 +108,22 @@ func (l *liveTranscription) wait(count int) (string, error) {
 	if l.err != nil {
 		return "", l.err
 	}
-	texts := make([]string, 0, count)
+	var joined string
+	var joinedMillis int
 	for index := range count {
 		text, ok := l.texts[index]
 		if !ok {
 			return "", errMissingSegment
 		}
-		if text != "" {
-			texts = append(texts, text)
+		sent := l.pieces[index]
+		if sent.overlap > 0 {
+			joined = stitch(joined, text, overlapWordEstimate(joined, joinedMillis))
+		} else if text != "" {
+			joined = strings.TrimSpace(joined + " " + text)
 		}
+		joinedMillis += sent.frames * FrameMillis
 	}
-	return strings.Join(texts, " "), nil
+	return joined, nil
 }
 
 var errMissingSegment = errors.New("a segment of the dictation was never transcribed")

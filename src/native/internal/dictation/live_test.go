@@ -9,8 +9,8 @@ import (
 
 func TestSpeechIsCutAtPausesAndSentBeforeTheUserStops(t *testing.T) {
 	h := newHarness(t)
-	h.transcriber.bySegment = map[int]string{0: "first sentence.", 1: "second sentence."}
-	audio := slices.Concat(voice(6), make([]int16, SampleRate*6/10), voice(2))
+	h.transcriber.bySegment = map[int]string{0: "first sentence.", 1: "sentence. second sentence."}
+	audio := voicedWithPause(6, 2)
 	h.mic.Queue(audio...)
 	if err := h.service.Start("default"); err != nil {
 		t.Fatalf("Start: %v", err)
@@ -100,6 +100,11 @@ func segmentIndex(segment Segment) int {
 	}
 	index, _ := strconv.Atoi(suffix)
 	return index
+}
+
+// voicedWithPause is speech, a pause long enough to cut at, and more speech.
+func voicedWithPause(before, after float64) []int16 {
+	return slices.Concat(voice(before), make([]int16, SampleRate*6/10), voice(after))
 }
 
 // voice returns seconds of a signal the pause detector hears as continuous speech: loud and quiet 20 ms frames in turn,

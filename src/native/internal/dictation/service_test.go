@@ -166,7 +166,7 @@ func TestStopTranscribesTheCapturedSpeechAsOneWebMFile(t *testing.T) {
 
 func TestLongDictationsAreSentAsOneMinuteSegmentsInOrder(t *testing.T) {
 	h := newHarness(t)
-	h.transcriber.bySegment = map[int]string{0: "first part", 1: "second part"}
+	h.transcriber.bySegment = map[int]string{0: "alpha beta", 1: "gamma delta"}
 	h.mic.Queue(voice(61)...)
 	if err := h.service.Start("default"); err != nil {
 		t.Fatalf("Start: %v", err)
@@ -175,7 +175,7 @@ func TestLongDictationsAreSentAsOneMinuteSegmentsInOrder(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Stop: %v", err)
 	}
-	if text != "first part second part" {
+	if text != "alpha beta gamma delta" {
 		t.Fatalf("text = %q, want both segments joined by a space", text)
 	}
 	ids := h.transcriber.ids()

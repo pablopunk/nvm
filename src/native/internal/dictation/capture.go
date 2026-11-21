@@ -218,7 +218,12 @@ func (op *operation) sendLive() {
 		return
 	}
 	for ; op.liveSent < len(op.segments); op.liveSent++ {
-		op.live.send(op.liveSent, op.track(), op.segments[op.liveSent])
+		var lead [][]byte
+		if op.liveSent > 0 {
+			previous := op.segments[op.liveSent-1]
+			lead = previous[max(0, len(previous)-overlapFrames):]
+		}
+		op.live.send(op.liveSent, op.track(), lead, op.segments[op.liveSent])
 	}
 }
 
