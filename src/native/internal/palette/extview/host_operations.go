@@ -72,7 +72,11 @@ func (s *Session) revealPath(h search.Host, path string) {
 func (s *Session) runUpdate(h search.Host, op string) {
 	if err := s.deps.RunUpdate(op); err != nil {
 		h.Toast(err.Error())
+		return
 	}
+	// The page re-reads the updater at once, so a switched channel or a started check shows without waiting for the
+	// page's own refresh.
+	h.Refresh()
 }
 
 func (s *Session) runSystemOp(h search.Host, op string) {
