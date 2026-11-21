@@ -49,6 +49,8 @@ function gh(args, allowMissing = false) {
     return execFileSync('gh', args, {
       encoding: 'utf8',
       stdio: ['ignore', 'pipe', 'pipe'],
+      // gh pages through every release; the Go packages make that output larger than Node's 1 MiB default.
+      maxBuffer: 64 * 1024 * 1024,
     });
   } catch (error) {
     if (allowMissing && String(error.stderr ?? '').includes('(HTTP 404)'))
