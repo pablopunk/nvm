@@ -3,5 +3,9 @@
 // (engine.go); the real engine is the platform SelfUpdater (platform/real, over MyGo's signed updater), and tests use
 // update/fake. NoUpdates is the updater of builds that cannot update themselves: it never contacts the network.
 //
+// A check, scheduled or asked for, finds a newer version and starts its download; the download outlives the check, and
+// only a channel switch cancels it. On macOS the downloaded bundle is staged next to the app and replaces it when the
+// app exits, so Restart to Update and any quit both finish an update.
+//
 // Layer: service tier (with jobs, shortcuts, windowmgmt, dictation, menubar and diag). It imports platform only.
 package update
