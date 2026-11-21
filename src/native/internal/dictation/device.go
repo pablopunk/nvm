@@ -44,6 +44,10 @@ func NewDeviceTranscriber(speech platform.SpeechRecognizer, codec platform.OpusC
 	return &DeviceTranscriber{speech: speech, codec: codec, model: model, linger: deviceLinger, held: map[string]bool{}}
 }
 
+// ReadsWholeRecording is true: the model transcribes a dictation in one pass when it stops, as Hex runs this model, so
+// a pause never ends a sentence. The model loads while the user speaks, so the pass is all the wait.
+func (d *DeviceTranscriber) ReadsWholeRecording() bool { return true }
+
 // Prepare loads the model for dictation operationID, which holds it until Finished.
 func (d *DeviceTranscriber) Prepare(_ context.Context, operationID string) error {
 	d.mu.Lock()

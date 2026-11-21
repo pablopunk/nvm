@@ -88,7 +88,7 @@ func TestTheModelLoadsOnPrepareServesTheDictationAndUnloadsAfterIt(t *testing.T)
 	waitFor(t, func() bool { return rig.speech.OpenSessions() == 0 }, "the model to unload after the dictation")
 }
 
-func TestADictationOnTheDeviceIsTranscribedPieceByPiece(t *testing.T) {
+func TestADictationOnTheDeviceIsTranscribedWholeWhenItStops(t *testing.T) {
 	rig := newDeviceRig(t, true)
 	h := newHarness(t)
 	audio := slices.Concat(voice(6), make([]int16, SampleRate*6/10), voice(2))
@@ -96,12 +96,19 @@ func TestADictationOnTheDeviceIsTranscribedPieceByPiece(t *testing.T) {
 	if err := h.service.StartOn(rig.device, "default", nil); err != nil {
 		t.Fatalf("Start: %v", err)
 	}
+	<-currentOperation(h.service).done
+	if len(rig.speech.Heard()) != 0 {
+		t.Fatal("the device transcribed a piece before the dictation stopped")
+	}
+	if rig.speech.OpenSessions() != 1 {
+		t.Fatal("the model was not loading while the user spoke")
+	}
 	text, err := h.service.Stop()
 	if err != nil {
 		t.Fatalf("Stop: %v", err)
 	}
-	if len(rig.speech.Heard()) != 2 || strings.Count(text, "heard") != 2 {
-		t.Fatalf("text = %q after %d requests; want both pieces transcribed on the device", text, len(rig.speech.Heard()))
+	if heard := rig.speech.Heard(); len(heard) != 1 || len(heard[0]) < len(audio)-SampleRate/10 || strings.Count(text, "heard") != 1 {
+		t.Fatalf("text = %q after %d requests; want the whole recording in one pass", text, len(heard))
 	}
 	if len(h.transcriber.ids()) != 0 {
 		t.Fatal("an on-device dictation reached the cloud transcriber")

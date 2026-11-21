@@ -168,7 +168,7 @@ func (s *Service) StartOn(transcriber Transcriber, deviceID string, sink func(fl
 	if s.cfg.Recorder != nil {
 		op.journal = newJournal(s.cfg.Recorder, op.id, op.track(), s.warn)
 	}
-	if op.transcriber != nil {
+	if op.transcriber != nil && !readsWholeRecording(op.transcriber) {
 		op.live = newLiveTranscription(s, op)
 	}
 	s.cur = op
@@ -258,8 +258,7 @@ func (s *Service) finish(op *operation) (string, error) {
 	if op.transcriber == nil {
 		return "", s.keepFailed(op, saved, ErrNoTranscriber)
 	}
-	op.sendLive()
-	text, err := op.live.wait(len(op.segments))
+	text, err := s.transcribe(op)
 	if op.ctx.Err() != nil {
 		s.keepCancelled(op, saved)
 		return "", ErrCancelled
@@ -342,4 +341,19 @@ func randomHex() string {
 	var raw [16]byte
 	_, _ = rand.Read(raw[:])
 	return hex.EncodeToString(raw[:])
+}
+
+// transcribe returns the text of a captured dictation: the live pieces once the last one is answered, or the whole
+// recording in one pass for a transcriber that reads it whole.
+func (s *Service) transcribe(op *operation) (string, error) {
+	if op.live != nil {
+		op.sendLive()
+		return op.live.wait(len(op.segments))
+	}
+	select {
+	case <-op.prepared:
+	case <-op.ctx.Done():
+		return "", op.ctx.Err()
+	}
+	return transcribeFiles(op.ctx, op.transcriber, s.cfg.Retry, op.id, op.preparedOK, segmentFiles(op), s.retryWarning("dictation.transcribe-retry"))
 }
