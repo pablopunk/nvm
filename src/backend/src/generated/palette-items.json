@@ -1,0 +1,155 @@
+[
+  {
+    "id": "builtin:AI Chats",
+    "title": "AI Chats",
+    "subtitle": "",
+    "icon": "sparkles",
+    "aliases": [],
+    "kind": "command"
+  },
+  {
+    "id": "builtin:Force Quit Apps",
+    "title": "Force Quit Apps",
+    "subtitle": "Force quit running applications",
+    "icon": "stop-circle",
+    "aliases": [
+      "force quit",
+      "kill",
+      "quit apps"
+    ],
+    "kind": "command"
+  },
+  {
+    "id": "builtin:Background Tasks",
+    "title": "Background Tasks",
+    "subtitle": "Inspect and run host-managed background jobs",
+    "icon": "activity",
+    "aliases": [],
+    "kind": "command"
+  },
+  {
+    "id": "builtin:Emoji & Symbols",
+    "title": "Emoji & Symbols",
+    "subtitle": "Search and paste emoji, symbols, and Unicode characters",
+    "icon": "smile-plus",
+    "aliases": [
+      "emoji picker",
+      "symbol picker",
+      "unicode characters",
+      "special characters"
+    ],
+    "kind": "command"
+  },
+  {
+    "id": "builtin:Toggle Floating Notes",
+    "title": "Toggle Floating Notes",
+    "subtitle": "Show or hide your floating Markdown notes",
+    "icon": "notebook-pen",
+    "aliases": [
+      "notes",
+      "note"
+    ],
+    "kind": "command"
+  },
+  {
+    "id": "builtin:Search Floating Notes",
+    "title": "Search Floating Notes",
+    "subtitle": "Browse and delete your notes",
+    "icon": "list",
+    "aliases": [
+      "notes",
+      "all notes"
+    ],
+    "kind": "command"
+  },
+  {
+    "id": "builtin:New Floating Note",
+    "title": "New Floating Note",
+    "subtitle": "Start a fresh local Markdown note",
+    "icon": "square-pen",
+    "aliases": [
+      "new note"
+    ],
+    "kind": "command"
+  },
+  {
+    "id": "builtin:Keyboard Shortcuts",
+    "title": "Keyboard Shortcuts",
+    "subtitle": "View, change, or remove global shortcuts",
+    "icon": "keyboard",
+    "aliases": [],
+    "kind": "command"
+  },
+  {
+    "id": "builtin:Settings",
+    "title": "Settings",
+    "subtitle": "Configure Nevermind",
+    "icon": "settings",
+    "aliases": [],
+    "kind": "command"
+  },
+  {
+    "id": "builtin:Lock Screen",
+    "title": "Lock Screen",
+    "subtitle": "Secure this computer",
+    "icon": "lock",
+    "aliases": [],
+    "kind": "command"
+  },
+  {
+    "id": "builtin:Sleep",
+    "title": "Sleep",
+    "subtitle": "Put this computer to sleep",
+    "icon": "moon",
+    "aliases": [],
+    "kind": "command"
+  },
+  {
+    "id": "builtin:Restart Computer",
+    "title": "Restart Computer",
+    "subtitle": "Restart this computer",
+    "icon": "restart",
+    "aliases": [],
+    "kind": "command"
+  },
+  {
+    "id": "builtin:Quit Nevermind",
+    "title": "Quit Nevermind",
+    "subtitle": "Close the app",
+    "icon": "power",
+    "aliases": [],
+    "kind": "command"
+  },
+  {
+    "id": "builtin:Open Downloads",
+    "title": "Open Downloads",
+    "subtitle": "~/Downloads",
+    "icon": "folder",
+    "aliases": [],
+    "kind": "command"
+  },
+  {
+    "id": "builtin:Open Documents",
+    "title": "Open Documents",
+    "subtitle": "~/Documents",
+    "icon": "folder",
+    "aliases": [],
+    "kind": "command"
+  },
+  {
+    "id": "builtin:Open Desktop",
+    "title": "Open Desktop",
+    "subtitle": "~/Desktop",
+    "icon": "folder",
+    "aliases": [],
+    "kind": "command"
+  },
+  {
+    "id": "builtin:Check for Updates",
+    "title": "Check for Updates",
+    "subtitle": "",
+    "icon": "restart",
+    "aliases": [],
+    "kind": "command"
+  }
+]
