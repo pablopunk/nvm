@@ -67,7 +67,7 @@ jobs:
           echo "STABLE_TAG=$stable" >> "$GITHUB_ENV"
       - name: Install OpenCode
         run: |
-          curl -fsSL https://opencode.ai/install | bash
+          curl -fsSL https://opencode.ai/install | env -u VERSION bash
           echo "$HOME/.opencode/bin" >> "$GITHUB_PATH"
       - name: Write release notes
         env:
