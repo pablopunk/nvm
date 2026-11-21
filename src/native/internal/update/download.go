@@ -3,10 +3,11 @@ package update
 import "context"
 
 // startDownloadLocked starts the download of offer in the background and returns the state that shows it. The
-// download is cancelled by a channel switch, and its result is dropped when the channel changed while it ran (epoch).
-// The caller holds s.mu.
+// download outlives the check that found it: the caller's context ends when the check returns, so the download keeps
+// only its values. It is cancelled by a channel switch, and its result is dropped when the channel changed while it ran
+// (epoch). The caller holds s.mu.
 func (s *Service) startDownloadLocked(ctx context.Context, epoch int, offer Offer) (State, func()) {
-	downloadCtx, cancel := context.WithCancel(ctx)
+	downloadCtx, cancel := context.WithCancel(context.WithoutCancel(ctx))
 	s.cancel = cancel
 	begin := func() { go s.runDownload(downloadCtx, epoch, offer) }
 	return State{Status: StatusDownloading, CurrentVersion: s.state.CurrentVersion, LatestVersion: offer.Version}, begin

@@ -325,3 +325,32 @@ func TestRunReturnsAtOnceInABuildThatCannotUpdate(t *testing.T) {
 	svc := update.NewService(update.Options{Engine: updatefake.Disabled(), Clock: fake.NewClock(), Current: running})
 	svc.Run(context.Background())
 }
+
+// awaitingEngine installs only once the test lets it, and fails as a real download does when its context ended first.
+type awaitingEngine struct {
+	*updatefake.Engine
+	release chan struct{}
+}
+
+func (e awaitingEngine) Install(ctx context.Context, progress func(done, total int64)) error {
+	<-e.release
+	if err := ctx.Err(); err != nil {
+		return err
+	}
+	return e.Engine.Install(ctx, progress)
+}
+
+// TestDownloadOutlivesTheCheckThatFoundIt: a check runs on a task context that ends when the check returns; the
+// download it starts must still finish instead of hanging at 0%.
+func TestDownloadOutlivesTheCheckThatFoundIt(t *testing.T) {
+	e := awaitingEngine{Engine: updatefake.NewEngine([]updatefake.Check{offering("2.0.1")}, installed(100)), release: make(chan struct{})}
+	svc, rec := newService(e, nil)
+
+	ctx, cancel := context.WithCancel(context.Background())
+	svc.Check(ctx)
+	cancel()
+	close(e.release)
+	if ready := rec.await(t, update.StatusDownloaded); ready.LatestVersion != "2.0.1" {
+		t.Fatalf("ready = %+v", ready)
+	}
+}
