@@ -1,0 +1,779 @@
+{
+ "ExtensionAction.confirmMessage": {
+  "status": "renamed",
+  "target": "Confirmation.Message"
+ },
+ "ExtensionAction.dismissAfterRun='auto'": {
+  "note": "A bool replaces the single auto value",
+  "status": "better",
+  "target": "Action.DismissAfterRun"
+ },
+ "ExtensionAction.formValues": {
+  "status": "renamed",
+  "target": "Invocation.Form"
+ },
+ "ExtensionAction.previewIntent": {
+  "note": "The host offers preview itself on rows with preview content",
+  "status": "better",
+  "target": "func:PreviewFile"
+ },
+ "ExtensionAction.promptMessage": {
+  "status": "renamed",
+  "target": "PromptSpec.Message"
+ },
+ "ExtensionAction.requiresConfirmation": {
+  "status": "renamed",
+  "target": "Action.Confirm"
+ },
+ "ExtensionAction.shortcutScope": {
+  "note": "Deprecated in 1.x; Command.GlobalShortcut replaces it",
+  "status": "dropped",
+  "target": ""
+ },
+ "ExtensionAction.style='regular'": {
+  "status": "same",
+  "target": "Action.Style"
+ },
+ "ExtensionAction.type": {
+  "status": "renamed",
+  "target": "Action.Kind"
+ },
+ "ExtensionActionContribution.action": {
+  "note": "A command runs its own handler",
+  "status": "better",
+  "target": "Command"
+ },
+ "ExtensionActionContribution.dismissAfterRun='auto'": {
+  "status": "better",
+  "target": "Command.DismissAfterRun"
+ },
+ "ExtensionActionContribution.run": {
+  "status": "renamed",
+  "target": "ActionHandler.RunAction"
+ },
+ "ExtensionActionResult.action": {
+  "status": "renamed",
+  "target": "Result.Next"
+ },
+ "ExtensionActionSection.isLoading": {
+  "note": "Declared in 1.x but never read by its palette",
+  "status": "dropped",
+  "target": ""
+ },
+ "ExtensionActionSection.lazyActions": {
+  "note": "1.x appends these to actions",
+  "status": "better",
+  "target": "ActionSection.Actions"
+ },
+ "ExtensionAiAttachment#type=file.as='metadata'": {
+  "status": "same",
+  "target": "Attachment.As"
+ },
+ "ExtensionAiAttachment#type=file.type": {
+  "status": "renamed",
+  "target": "Attachment.Kind"
+ },
+ "ExtensionAiAttachment#type=image.data": {
+  "status": "renamed",
+  "target": "Attachment.DataURL"
+ },
+ "ExtensionAiAttachment#type=image.imageDataUrl": {
+  "status": "renamed",
+  "target": "Attachment.DataURL"
+ },
+ "ExtensionAiAttachment#type=image.type": {
+  "status": "renamed",
+  "target": "Attachment.Kind"
+ },
+ "ExtensionAiAttachment#type=text.type": {
+  "status": "renamed",
+  "target": "Attachment.Kind"
+ },
+ "ExtensionAiOptions.onDelta": {
+  "note": "Stream events replace callbacks",
+  "status": "better",
+  "target": "AIStream.Events"
+ },
+ "ExtensionAiOptions.onEvent": {
+  "note": "Stream events replace callbacks",
+  "status": "better",
+  "target": "AIStream.Events"
+ },
+ "ExtensionAiOptions.signal": {
+  "status": "renamed",
+  "target": "Context.Std"
+ },
+ "ExtensionAiStreamEvent#type=error.data": {
+  "note": "Errors reach extensions as Message; raw provider payloads stay in the host",
+  "status": "dropped",
+  "target": ""
+ },
+ "ExtensionBackgroundTrigger#type=files.changed.kind": {
+  "status": "renamed",
+  "target": "FileKindFilter"
+ },
+ "ExtensionClipboardContent#type=image.image": {
+  "status": "renamed",
+  "target": "ClipboardContent"
+ },
+ "ExtensionClipboardContent#type=image.path": {
+  "status": "renamed",
+  "target": "ClipboardContent"
+ },
+ "ExtensionClipboardHistory.search": {
+  "status": "renamed",
+  "target": "ClipboardHistory.List"
+ },
+ "ExtensionClipboardReadOptions.formats": {
+  "status": "renamed",
+  "target": "SystemClipboard.Read"
+ },
+ "ExtensionClipboardReadResult#type=empty.type": {
+  "status": "renamed",
+  "target": "ClipboardContent"
+ },
+ "ExtensionCommand.dismissAfterRun='auto'": {
+  "status": "better",
+  "target": "Command.DismissAfterRun"
+ },
+ "ExtensionCommand.run": {
+  "status": "renamed",
+  "target": "ActionHandler.RunAction"
+ },
+ "ExtensionCommand.shortcutScope": {
+  "note": "Deprecated in 1.x; Command.GlobalShortcut replaces it",
+  "status": "dropped",
+  "target": ""
+ },
+ "ExtensionContext.action": {
+  "note": "Durable actions are Commands",
+  "status": "better",
+  "target": "Command"
+ },
+ "ExtensionContext.actions": {
+  "note": "Constructors and action kinds replace the actions namespace",
+  "status": "better",
+  "target": "Action"
+ },
+ "ExtensionContext.actions.background": {
+  "status": "renamed",
+  "target": "const:ModeBackground"
+ },
+ "ExtensionContext.actions.camera": {
+  "status": "renamed",
+  "target": "const:ActionCamera"
+ },
+ "ExtensionContext.actions.copyImage": {
+  "status": "renamed",
+  "target": "func:CopyImage"
+ },
+ "ExtensionContext.actions.copyText": {
+  "status": "renamed",
+  "target": "func:CopyText"
+ },
+ "ExtensionContext.actions.native": {
+  "note": "Replaced by named actions and built-in-only host actions",
+  "status": "dropped",
+  "target": ""
+ },
+ "ExtensionContext.actions.openPalette": {
+  "status": "renamed",
+  "target": "const:ActionOpenPalette"
+ },
+ "ExtensionContext.actions.openPath": {
+  "status": "renamed",
+  "target": "func:OpenPath"
+ },
+ "ExtensionContext.actions.openUrl": {
+  "status": "renamed",
+  "target": "func:OpenURL"
+ },
+ "ExtensionContext.actions.openWith": {
+  "status": "renamed",
+  "target": "func:OpenWith"
+ },
+ "ExtensionContext.actions.paste": {
+  "status": "renamed",
+  "target": "func:Paste"
+ },
+ "ExtensionContext.actions.pasteText": {
+  "status": "renamed",
+  "target": "func:PasteText"
+ },
+ "ExtensionContext.actions.pop": {
+  "status": "renamed",
+  "target": "const:ActionPop"
+ },
+ "ExtensionContext.actions.push": {
+  "status": "renamed",
+  "target": "func:PushView"
+ },
+ "ExtensionContext.actions.quickLook": {
+  "status": "renamed",
+  "target": "func:QuickLook"
+ },
+ "ExtensionContext.actions.recordShortcut": {
+  "status": "renamed",
+  "target": "const:ActionShortcut"
+ },
+ "ExtensionContext.actions.ref": {
+  "status": "renamed",
+  "target": "Action.Ref"
+ },
+ "ExtensionContext.actions.refreshContributions": {
+  "note": "InvalidateRoot also revalidates the commands of the calling extension",
+  "status": "better",
+  "target": "Views.InvalidateRoot"
+ },
+ "ExtensionContext.actions.removeShortcut": {
+  "status": "renamed",
+  "target": "const:ActionShortcut"
+ },
+ "ExtensionContext.actions.replace": {
+  "status": "renamed",
+  "target": "const:ActionReplaceView"
+ },
+ "ExtensionContext.actions.revealPath": {
+  "status": "renamed",
+  "target": "func:RevealPath"
+ },
+ "ExtensionContext.actions.root": {
+  "status": "renamed",
+  "target": "func:RootView"
+ },
+ "ExtensionContext.actions.run": {
+  "status": "renamed",
+  "target": "func:Run"
+ },
+ "ExtensionContext.actions.setPaletteShortcut": {
+  "status": "renamed",
+  "target": "const:ActionRecordPaletteShortcut"
+ },
+ "ExtensionContext.actions.shellExec": {
+  "status": "renamed",
+  "target": "const:ActionShellExec"
+ },
+ "ExtensionContext.actions.shellScript": {
+  "note": "Run a handler that calls Shell.Script",
+  "status": "better",
+  "target": "Shell.Script"
+ },
+ "ExtensionContext.actions.system": {
+  "status": "renamed",
+  "target": "func:SystemOp"
+ },
+ "ExtensionContext.actions.toggleSetting": {
+  "status": "renamed",
+  "target": "const:ActionToggleSetting"
+ },
+ "ExtensionContext.actions.trash": {
+  "status": "renamed",
+  "target": "func:Trash"
+ },
+ "ExtensionContext.actions.typeText": {
+  "status": "renamed",
+  "target": "func:TypeText"
+ },
+ "ExtensionContext.actions.updates": {
+  "status": "renamed",
+  "target": "const:ActionUpdate"
+ },
+ "ExtensionContext.clipboard": {
+  "status": "renamed",
+  "target": "ClipboardHistory"
+ },
+ "ExtensionContext.command": {
+  "status": "renamed",
+  "target": "LaunchContext"
+ },
+ "ExtensionContext.desktop.files.preview": {
+  "status": "renamed",
+  "target": "Files.QuickLook"
+ },
+ "ExtensionContext.desktop.files.toFileUrl": {
+  "status": "renamed",
+  "target": "Files.FileURL"
+ },
+ "ExtensionContext.desktop.selection.read": {
+  "status": "same",
+  "target": "Selection.Read"
+ },
+ "ExtensionContext.extension": {
+  "status": "renamed",
+  "target": "Identity"
+ },
+ "ExtensionContext.extension.rename": {
+  "status": "same",
+  "target": "Self.Rename"
+ },
+ "ExtensionContext.extensions": {
+  "status": "renamed",
+  "target": "Ownership"
+ },
+ "ExtensionContext.launch": {
+  "status": "renamed",
+  "target": "LaunchContext"
+ },
+ "ExtensionContext.menuBar": {
+  "status": "renamed",
+  "target": "Views"
+ },
+ "ExtensionContext.menuBar.refresh": {
+  "status": "renamed",
+  "target": "Views.RefreshMenuBar"
+ },
+ "ExtensionContext.signal": {
+  "status": "renamed",
+  "target": "Context.Std"
+ },
+ "ExtensionContext.state": {
+  "note": "View state arrives in the invocation; package variables hold per-process state; Cache holds shared state",
+  "status": "better",
+  "target": "Cache"
+ },
+ "ExtensionContext.ui": {
+  "note": "Constructors in the api package replace the ui namespace",
+  "status": "better",
+  "target": "View"
+ },
+ "ExtensionContext.ui.actions": {
+  "note": "Plain slice, no helper needed",
+  "status": "better",
+  "target": "Action"
+ },
+ "ExtensionContext.ui.camera": {
+  "status": "renamed",
+  "target": "const:ViewCamera"
+ },
+ "ExtensionContext.ui.chat": {
+  "status": "renamed",
+  "target": "const:ViewChat"
+ },
+ "ExtensionContext.ui.collection": {
+  "status": "renamed",
+  "target": "func:CollectionView"
+ },
+ "ExtensionContext.ui.confirm": {
+  "status": "renamed",
+  "target": "func:WithConfirmation"
+ },
+ "ExtensionContext.ui.editor": {
+  "status": "renamed",
+  "target": "func:EditorView"
+ },
+ "ExtensionContext.ui.empty": {
+  "status": "renamed",
+  "target": "EmptyState"
+ },
+ "ExtensionContext.ui.error": {
+  "status": "renamed",
+  "target": "func:ErrorView"
+ },
+ "ExtensionContext.ui.form": {
+  "status": "renamed",
+  "target": "func:FormView"
+ },
+ "ExtensionContext.ui.grid": {
+  "status": "renamed",
+  "target": "func:GridView"
+ },
+ "ExtensionContext.ui.indicator": {
+  "status": "renamed",
+  "target": "Indicators"
+ },
+ "ExtensionContext.ui.indicator.hide": {
+  "status": "renamed",
+  "target": "Indicators.Hide"
+ },
+ "ExtensionContext.ui.indicator.show": {
+  "status": "renamed",
+  "target": "Indicators.Show"
+ },
+ "ExtensionContext.ui.indicator.update": {
+  "status": "renamed",
+  "target": "Indicators.Update"
+ },
+ "ExtensionContext.ui.item": {
+  "note": "Plain struct literal, no helper needed",
+  "status": "better",
+  "target": "Item"
+ },
+ "ExtensionContext.ui.list": {
+  "status": "renamed",
+  "target": "func:ListView"
+ },
+ "ExtensionContext.ui.loading": {
+  "status": "renamed",
+  "target": "View.IsLoading"
+ },
+ "ExtensionContext.ui.preview": {
+  "status": "renamed",
+  "target": "func:PreviewView"
+ },
+ "ExtensionContext.ui.previewAction": {
+  "status": "renamed",
+  "target": "func:PreviewFile"
+ },
+ "ExtensionContext.ui.previewFile": {
+  "status": "renamed",
+  "target": "func:PreviewFileView"
+ },
+ "ExtensionContext.ui.previewView": {
+  "status": "renamed",
+  "target": "func:PreviewView"
+ },
+ "ExtensionContext.ui.progress": {
+  "status": "renamed",
+  "target": "func:ProgressView"
+ },
+ "ExtensionContext.ui.webview": {
+  "status": "renamed",
+  "target": "const:ViewWebview"
+ },
+ "ExtensionContext.updates.getState": {
+  "status": "renamed",
+  "target": "Updates.State"
+ },
+ "ExtensionContributionRefreshResult.error": {
+  "note": "The refresh is asynchronous; failures appear in the extension row",
+  "status": "better",
+  "target": "Views.InvalidateRoot"
+ },
+ "ExtensionContributionRefreshResult.ok": {
+  "note": "The refresh is asynchronous; failures appear in the extension row",
+  "status": "better",
+  "target": "Views.InvalidateRoot"
+ },
+ "ExtensionCrudCollection.searchBarPlaceholder": {
+  "status": "renamed",
+  "target": "View.Placeholder"
+ },
+ "ExtensionDataLoaderHandle._loader": {
+  "status": "renamed",
+  "target": "DataSource.Loader"
+ },
+ "ExtensionDecisionAnswer#type=choice.value": {
+  "status": "renamed",
+  "target": "DecisionResult.Answers"
+ },
+ "ExtensionDecisionAnswer#type=predicate.value": {
+  "status": "renamed",
+  "target": "DecisionResult.Answers"
+ },
+ "ExtensionDecisionAnswer#type=score.value": {
+  "status": "renamed",
+  "target": "DecisionResult.Answers"
+ },
+ "ExtensionDecisionOptions.signal": {
+  "status": "renamed",
+  "target": "Context.Std"
+ },
+ "ExtensionEditorDraftOptions.autosave.action": {
+  "status": "renamed",
+  "target": "DraftOptions.Autosave"
+ },
+ "ExtensionFindFilesOptions.pattern": {
+  "status": "renamed",
+  "target": "FindOptions.Patterns"
+ },
+ "ExtensionFormField.canCreateDirectories": {
+  "note": "Inverted: true in 1.x is false here",
+  "status": "renamed",
+  "target": "Field.DisableDirectoryCreation"
+ },
+ "ExtensionItem.dismissAfterRun='auto'": {
+  "status": "better",
+  "target": "Action.DismissAfterRun"
+ },
+ "ExtensionItem.primaryAction": {
+  "status": "renamed",
+  "target": "Item.Primary"
+ },
+ "ExtensionItem.shortcutScope": {
+  "note": "Deprecated in 1.x",
+  "status": "dropped",
+  "target": ""
+ },
+ "ExtensionMenuBar.sections.items": {
+  "status": "renamed",
+  "target": "MenuSection.Rows"
+ },
+ "ExtensionMenuBarContribution.render": {
+  "status": "renamed",
+  "target": "MenuBarProvider"
+ },
+ "ExtensionMenuBarContribution.triggers": {
+  "status": "renamed",
+  "target": "MenuBarProvider"
+ },
+ "ExtensionMetadataItem#type=link.type": {
+  "status": "renamed",
+  "target": "Metadata.Kind"
+ },
+ "ExtensionMetadataItem#type=separator.type": {
+  "status": "renamed",
+  "target": "Metadata.Kind"
+ },
+ "ExtensionMetadataItem#type=tag.type": {
+  "status": "renamed",
+  "target": "Metadata.Kind"
+ },
+ "ExtensionMetadataItem#type=text.type": {
+  "status": "renamed",
+  "target": "Metadata.Kind"
+ },
+ "ExtensionOcrBlock.boundingBox": {
+  "status": "renamed",
+  "target": "Rect"
+ },
+ "ExtensionOwnership.claim": {
+  "note": "Host-only in 1.x; the host enforces ownership",
+  "status": "dropped",
+  "target": ""
+ },
+ "ExtensionOwnership.reload": {
+  "note": "Host-only in 1.x; the host enforces ownership",
+  "status": "dropped",
+  "target": ""
+ },
+ "ExtensionOwnership.remove": {
+  "note": "Host-only in 1.x; the host enforces ownership",
+  "status": "dropped",
+  "target": ""
+ },
+ "ExtensionPagination.onLoadMore": {
+  "status": "renamed",
+  "target": "Pagination.Next"
+ },
+ "ExtensionPaletteShortcut.scope='palette'": {
+  "status": "renamed",
+  "target": "Shortcuts.Palette"
+ },
+ "ExtensionPasteTextOptions.expectedFrontmostAppId": {
+  "status": "renamed",
+  "target": "PasteOptions.ExpectedFrontmostID"
+ },
+ "ExtensionPasteTextOptions.plainText": {
+  "status": "renamed",
+  "target": "PasteOptions.PlainTextOnly"
+ },
+ "ExtensionPreviewItemDescriptor.clipboardType": {
+  "note": "1.x only showed it as the preview subtitle",
+  "status": "better",
+  "target": "View.Subtitle"
+ },
+ "ExtensionPreviewItemDescriptor.imageDataUrl": {
+  "status": "renamed",
+  "target": "Item.Image"
+ },
+ "ExtensionRuntimeCache.getStale": {
+  "status": "renamed",
+  "target": "Cache.Stale"
+ },
+ "ExtensionSearchAccessory.items": {
+  "status": "renamed",
+  "target": "ViewFilter.Options"
+ },
+ "ExtensionShortcutRecord.scope='global'": {
+  "status": "same",
+  "target": "ShortcutRecord.Scope"
+ },
+ "ExtensionShortcutRecord.source='user'": {
+  "status": "same",
+  "target": "ShortcutRecord.Source"
+ },
+ "ExtensionSystem.capabilities": {
+  "status": "renamed",
+  "target": "System.HasCapability"
+ },
+ "ExtensionSystem.capabilities.has": {
+  "status": "renamed",
+  "target": "System.HasCapability"
+ },
+ "ExtensionTemplateOptions.returnCursor": {
+  "note": "Template always returns the cursor",
+  "status": "better",
+  "target": "Text.Template"
+ },
+ "ExtensionTemplateOptions.returnResult": {
+  "note": "Template always returns the result",
+  "status": "better",
+  "target": "Text.Template"
+ },
+ "ExtensionTemplateResult.missingVariables": {
+  "status": "renamed",
+  "target": "TemplateResult.Missing"
+ },
+ "ExtensionView.actionPanelPresentation": {
+  "note": "Deprecated and ignored in 1.x",
+  "status": "dropped",
+  "target": ""
+ },
+ "ExtensionView.actionPanelPresentation='compact'": {
+  "note": "Deprecated and ignored in 1.x",
+  "status": "dropped",
+  "target": ""
+ },
+ "ExtensionView.refresh.action": {
+  "status": "renamed",
+  "target": "Refresh.Ref"
+ },
+ "ExtensionView.searchAccessory": {
+  "status": "renamed",
+  "target": "View.Filter"
+ },
+ "ExtensionView.searchBarPlaceholder": {
+  "status": "renamed",
+  "target": "View.Placeholder"
+ },
+ "ExtensionView.submitAction": {
+  "status": "renamed",
+  "target": "FormSpec.Submit"
+ },
+ "ExtensionView.titleFromContent": {
+  "status": "renamed",
+  "target": "EditorSpec.TitleFromLine"
+ },
+ "ExtensionView.type": {
+  "status": "renamed",
+  "target": "View.Kind"
+ },
+ "ExtensionView.webviewPermissions": {
+  "status": "renamed",
+  "target": "WebviewSpec.Permissions"
+ },
+ "ExtensionView.windowPresentation": {
+  "status": "renamed",
+  "target": "View.WindowCompact"
+ },
+ "ExtensionView.windowPresentation='compact'": {
+  "status": "renamed",
+  "target": "View.WindowCompact"
+ },
+ "ExtensionViewPatch.items.id": {
+  "status": "renamed",
+  "target": "Item.ID"
+ },
+ "ExtensionWindowApplyResult.reason='not-resizable'": {
+  "note": "A window that cannot resize reports unapplied, with less specific copy",
+  "status": "renamed",
+  "target": "value:unapplied"
+ },
+ "ExtensionWindowDimension.unit": {
+  "status": "renamed",
+  "target": "Dimension.Unit"
+ },
+ "ExtensionWindowDimension.unit='percent'": {
+  "status": "same",
+  "target": "Dimension.Unit"
+ },
+ "ExtensionWindowDimension.unit='points'": {
+  "status": "same",
+  "target": "Dimension.Unit"
+ },
+ "ExtensionWindowDimension.value": {
+  "status": "renamed",
+  "target": "Dimension.Value"
+ },
+ "ExtensionWindowHandle.id": {
+  "status": "renamed",
+  "target": "WindowHandle"
+ },
+ "ExtensionWindowLayoutSpec#kind=exact.height": {
+  "status": "renamed",
+  "target": "ExactFrame.Height"
+ },
+ "ExtensionWindowLayoutSpec#kind=exact.width": {
+  "status": "renamed",
+  "target": "ExactFrame.Width"
+ },
+ "ExtensionWindowLayoutSpec#kind=exact.x": {
+  "status": "renamed",
+  "target": "ExactFrame.X"
+ },
+ "ExtensionWindowLayoutSpec#kind=exact.y": {
+  "status": "renamed",
+  "target": "ExactFrame.Y"
+ },
+ "ExtensionWindowLayoutSpec#kind=fraction.height": {
+  "status": "renamed",
+  "target": "Rect.Height"
+ },
+ "ExtensionWindowLayoutSpec#kind=fraction.width": {
+  "status": "renamed",
+  "target": "Rect.Width"
+ },
+ "ExtensionWindowLayoutSpec#kind=fraction.x": {
+  "status": "renamed",
+  "target": "Rect.X"
+ },
+ "ExtensionWindowLayoutSpec#kind=fraction.y": {
+  "status": "renamed",
+  "target": "Rect.Y"
+ },
+ "ExtensionWindowManagementOptions.outerGap.bottom": {
+  "status": "renamed",
+  "target": "Edges"
+ },
+ "ExtensionWindowManagementOptions.outerGap.left": {
+  "status": "renamed",
+  "target": "Edges"
+ },
+ "ExtensionWindowManagementOptions.outerGap.right": {
+  "status": "renamed",
+  "target": "Edges"
+ },
+ "ExtensionWindowManagementOptions.outerGap.top": {
+  "status": "renamed",
+  "target": "Edges"
+ },
+ "LogSource='main'": {
+  "note": "Go has one host process",
+  "status": "dropped",
+  "target": ""
+ },
+ "LogSource='renderer'": {
+  "note": "Go has no renderer process",
+  "status": "dropped",
+  "target": ""
+ },
+ "NevermindExtension.actions": {
+  "note": "Dynamic durable actions are Commands",
+  "status": "better",
+  "target": "CommandProvider.Commands"
+ },
+ "NevermindExtension.commands": {
+  "status": "renamed",
+  "target": "CommandProvider.Commands"
+ },
+ "NevermindExtension.menuBar": {
+  "status": "renamed",
+  "target": "MenuBarProvider"
+ },
+ "NevermindExtension.permissions": {
+  "status": "renamed",
+  "target": "Manifest.Capabilities"
+ },
+ "NevermindExtension.restoreWindow": {
+  "status": "renamed",
+  "target": "WindowRestorer.RestoreWindow"
+ },
+ "NevermindExtension.rootItems": {
+  "status": "renamed",
+  "target": "RootProvider.RootItems"
+ },
+ "NevermindExtension.searchItems": {
+  "status": "renamed",
+  "target": "SearchProvider.SearchItems"
+ },
+ "ShortcutScope='global'": {
+  "note": "Deprecated in 1.x",
+  "status": "dropped",
+  "target": ""
+ },
+ "ShortcutScope='local'": {
+  "note": "Deprecated in 1.x",
+  "status": "dropped",
+  "target": ""
+ }
+}

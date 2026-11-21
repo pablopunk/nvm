@@ -3,7 +3,7 @@ import { Redis } from '@upstash/redis';
 import { SignJWT, jwtVerify } from 'jose';
 import { env } from './env';
 import { safeRelativeRedirectPath } from './safe-redirect';
-import { parsePublicOrigin } from '../../../app/shared/public-origin';
+import { parsePublicOrigin } from '../shared/public-origin';
 
 const STATE_TTL = 10 * 60;
 const GRANT_TTL = 60;

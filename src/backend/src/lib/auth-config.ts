@@ -2,7 +2,7 @@ import {
   parsePublicOrigin,
   PRODUCTION_WEB_ORIGIN,
   PublicOriginError,
-} from '../../../app/shared/public-origin';
+} from '../shared/public-origin';
 import { env } from './env';
 
 export class AuthConfigurationError extends Error {

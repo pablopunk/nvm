@@ -1,7 +1,7 @@
 import React from 'react';
 import { AbsoluteFill, useCurrentFrame } from 'remotion';
 import { MODE_FRAMES, resolvePreset } from 'thinking-orbs/engine';
-import { IndicatorStatusIcon } from '../../../../app/palette/indicator/indicator-status-icon';
+import { IndicatorStatusIcon } from '../../../src/palette-ui/indicator/indicator-status-icon';
 import { tween } from './timeline';
 
 const TRANSCRIBING = 60;

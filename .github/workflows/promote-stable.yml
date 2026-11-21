@@ -26,6 +26,7 @@ jobs:
       DEV_TAG: ${{ inputs.dev_tag }}
       NIGHTLY_CLI: .github/scripts/nightly-release-cli.cjs
       PRODUCTION_API_ORIGIN: https://api.nvm.fyi
+      UPDATE_PUBLIC_KEY: ${{ vars.NATIVE_UPDATE_PUBLIC_KEY }}
     steps:
       - uses: actions/checkout@v4
         with:
@@ -44,8 +45,7 @@ jobs:
           mv dev/manifest.json manifest.json
           run_id="$(jq -er '.runId | strings' manifest.json)"
           mise exec -- node .github/scripts/promotion-manifest.cjs verify dev manifest.json "$version" "$sha" "$run_id"
-          epoch="$(git show "$sha:src/app/resources/state-compatibility.json" | jq -er '.epoch | numbers')"
-          mise exec -- node "$NIGHTLY_CLI" validate-assets --dir dev --version "$version" --state-epoch "$epoch"
+          mise exec -- node "$NIGHTLY_CLI" validate-assets --dir dev --version "$version" --tag "$DEV_TAG" --public-key "$UPDATE_PUBLIC_KEY"
           printf 'VERSION=%s\nSOURCE_SHA=%s\n' "$version" "$sha" >> "$GITHUB_ENV"
       - name: Check CI, production identity and stable ordering
         run: |
@@ -54,8 +54,10 @@ jobs:
           [[ "$stable" =~ ^v[0-9]+\.[0-9]+\.[0-9]+$ ]]
           STABLE="$stable" mise exec -- node -e 'const { compareVersions } = require("./.github/scripts/nightly-versioning.cjs"); if (compareVersions(process.env.VERSION, process.env.STABLE.slice(1)) <= 0) throw Error("Selected build is not newer than stable")'
           git merge-base --is-ancestor "$stable" "$SOURCE_SHA"
-          gh api "repos/$GITHUB_REPOSITORY/actions/workflows/ci.yml/runs?head_sha=$SOURCE_SHA&event=push&per_page=50" --jq '.workflow_runs' > ci-runs.json
-          mise exec -- node "$NIGHTLY_CLI" ci-gate --sha "$SOURCE_SHA" --runs ci-runs.json | jq -e '.ok == true'
+          for workflow in ci.yml native.yml; do
+            gh api "repos/$GITHUB_REPOSITORY/actions/workflows/$workflow/runs?head_sha=$SOURCE_SHA&event=push&per_page=50" --jq '.workflow_runs' > ci-runs.json
+            mise exec -- node "$NIGHTLY_CLI" ci-gate --sha "$SOURCE_SHA" --runs ci-runs.json | jq -e '.ok == true'
+          done
           curl -fsS --max-time 20 "$PRODUCTION_API_ORIGIN/api/health" -o production-health.json
           mise exec -- node "$NIGHTLY_CLI" identity --sha "$SOURCE_SHA" --health production-health.json | jq -e '.status == "verified"'
           echo "STABLE_TAG=$stable" >> "$GITHUB_ENV"
@@ -78,10 +80,8 @@ jobs:
       - name: Stage stable metadata
         run: |
           set -euo pipefail
-          cp dev/nightly.yml dev/latest.yml
-          cp dev/nightly-mac.yml dev/latest-mac.yml
-          cp dev/nightly-linux.yml dev/latest-linux.yml
-          cp dev/nightly-linux-arm64.yml dev/latest-linux-arm64.yml
+          mise exec -- node "$NIGHTLY_CLI" retarget-metadata --dir dev --version "$VERSION" --tag "v$VERSION"
+          mise exec -- node "$NIGHTLY_CLI" validate-assets --dir dev --version "$VERSION" --tag "v$VERSION" --public-key "$UPDATE_PUBLIC_KEY"
           (cd dev && sha256sum * | sort) > expected-sha256.txt
       - name: Create and verify draft
         id: draft

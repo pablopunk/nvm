@@ -1,4 +1,4 @@
-import { parsePublicOrigin } from '../../../app/shared/public-origin';
+import { parsePublicOrigin } from '../shared/public-origin';
 import { env } from './env';
 
 export function localDevelopmentOrigin(origin: string) {

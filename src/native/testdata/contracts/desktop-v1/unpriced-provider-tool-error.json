@@ -1,0 +1,6 @@
+{
+  "error": {
+    "type": "unsupported_request_shape",
+    "message": "OpenRouter web search is unavailable because its per-search charge is outside Nevermind’s token reservation."
+  }
+}

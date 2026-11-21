@@ -2,7 +2,7 @@ import type { APIRoute } from 'astro';
 import {
   joinPublicApiUrl,
   parsePublicOrigin,
-} from '../../../../../app/shared/public-origin';
+} from '../../../shared/public-origin';
 import { chooseFundedAccountRoute } from '../../../lib/active-model-funding';
 import {
   compatibilityHeaders,

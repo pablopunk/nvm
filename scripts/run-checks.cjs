@@ -6,25 +6,8 @@ const path = require('node:path');
 
 const checks = [
   'check-pnpm-build-policy.cjs',
-  'ensure-electron.test.cjs',
-  'check-packaged-runtime-imports.cjs',
-  'check-design-system.cjs',
-  'check-internal-extensions.cjs',
-  'check-clone-safe-actions.cjs',
-  'check-packaged-resources.cjs',
-  'check-source-paths.cjs',
   'check-backend-contract-fixtures.cjs',
-  'check-extension-fixture-coverage.cjs',
-  'check-extension-trust-copy.cjs',
-  'check-windows-platform-inventory.cjs',
-  'check-os-platform-boundaries.cjs',
-  'check-runtime-nonblocking.cjs',
-  'check-window-config.cjs',
-  'check-appearance-contract.cjs',
-  'check-logging.cjs',
   'check-backend-api-major.cjs',
-  'check-electron-structure.cjs',
-  'check-file-size.cjs',
 ];
 
 let failed = false;

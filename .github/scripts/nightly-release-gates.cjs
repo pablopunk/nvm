@@ -9,6 +9,8 @@ const MADRID_TIME_ZONE = 'Europe/Madrid';
 const SCHEDULED_MADRID_HOUR = 4;
 const FULL_COMMIT_SHA_PATTERN = /^[0-9a-f]{40}$/;
 const ANCESTRY_OK_STATUSES = new Set(['identical', 'ahead']);
+// The push CI that must pass on a commit before it is promoted: the repository's checks and the Go app's tests.
+const CI_WORKFLOWS = ['ci.yml', 'native.yml'];
 
 function madridHour(date) {
   const hourText = new Intl.DateTimeFormat('en-GB', {
@@ -196,6 +198,7 @@ function evaluatePublicationRace({ releases, sha, version }) {
 }
 
 module.exports = {
+  CI_WORKFLOWS,
   evaluateCiGate,
   evaluateDeploymentGate,
   evaluateProductionIdentity,

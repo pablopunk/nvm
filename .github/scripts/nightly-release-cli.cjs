@@ -6,31 +6,21 @@ const { execFileSync } = require('node:child_process');
 const fs = require('node:fs');
 const path = require('node:path');
 const {
-  classifyNightlyAppChanges,
-  isVersionOnlyPackageJsonChange,
-} = require('./nightly-app-paths.cjs');
-const {
   evaluateCiGate,
   evaluateDeploymentGate,
   evaluateProductionIdentity,
-  evaluatePublicationRace,
   evaluateScheduleGate,
 } = require('./nightly-release-gates.cjs');
 const {
+  CHECKSUMS,
   NIGHTLY_UPDATER_METADATA,
+  checksumsFor,
+  isReleaseAsset,
+  retargetUpdaterMetadata,
   validateNightlyAssetSet,
+  verifyChecksums,
   verifyUpdaterMetadata,
 } = require('./nightly-assets.cjs');
-const { selectNightlyRetention } = require('./nightly-retention.cjs');
-const {
-  formatNightlyVersion,
-  madridDateStamp,
-  newestStableRelease,
-  nightlyBaseline,
-  nightlyTagName,
-  parseVersion,
-  publishedNightlies,
-} = require('./nightly-versioning.cjs');
 
 function parseArguments(argv) {
   const [command, ...rest] = argv;
@@ -62,20 +52,6 @@ function readJsonFileIfPresent(filePath) {
   }
 }
 
-function git(args) {
-  return execFileSync('git', args, { encoding: 'utf8' }).trim();
-}
-
-function gitShowIfPresent(revision, filePath) {
-  try {
-    return execFileSync('git', ['show', `${revision}:${filePath}`], {
-      encoding: 'utf8',
-    });
-  } catch {
-    return null;
-  }
-}
-
 function gh(args) {
   return execFileSync('gh', args, { encoding: 'utf8' }).trim();
 }
@@ -98,22 +74,6 @@ function requireEnvironment(name) {
   return value;
 }
 
-function releasesWithResolvedTags(filePath) {
-  const releases = readJsonFile(filePath);
-  for (const { release } of publishedNightlies(releases)) {
-    const sha = gh([
-      'api',
-      `repos/${repositoryName()}/commits/${encodeURIComponent(release.tag_name)}`,
-      '--jq',
-      '.sha',
-    ]);
-    if (!/^[0-9a-f]{40}$/.test(sha))
-      throw new Error(`Cannot resolve nightly tag ${release.tag_name}`);
-    release.target_commitish = sha;
-  }
-  return releases;
-}
-
 function commandScheduleGate(options) {
   return evaluateScheduleGate({
     event: requireOption(options, 'event'),
@@ -127,65 +87,6 @@ function commandCiGate(options) {
     sha: requireOption(options, 'sha'),
     runs: readJsonFile(requireOption(options, 'runs')),
   });
-}
-
-function commandPlan(options) {
-  const sha = requireOption(options, 'sha');
-  const now = new Date(requireOption(options, 'now'));
-  const releases = releasesWithResolvedTags(requireOption(options, 'releases'));
-  const runNumber = Number(requireOption(options, 'run-number'));
-  const stableTags = releases
-    .filter((release) => !(release.draft || release.prerelease))
-    .map((release) => release.tag_name);
-  const stable = newestStableRelease(stableTags);
-  if (!stable)
-    throw new Error('No stable v* tag exists to derive the nightly base');
-  const bootstrapCommit = git(['rev-parse', `${stable.tag}^{commit}`]);
-  const baseline = nightlyBaseline({ releases, bootstrapCommit });
-  const changedPaths = git([
-    'diff',
-    '--name-only',
-    '--no-renames',
-    baseline.commit,
-    sha,
-  ])
-    .split('\n')
-    .filter(Boolean);
-  const classification = classifyNightlyAppChanges(changedPaths, {
-    isPackageJsonVersionOnly: (filePath) =>
-      isVersionOnlyPackageJsonChange(
-        gitShowIfPresent(baseline.commit, filePath),
-        gitShowIfPresent(sha, filePath),
-      ),
-  });
-  const base = {
-    sourceSha: sha,
-    baselineCommit: baseline.commit,
-    baselineSource: baseline.source,
-    matchedPaths: classification.matched,
-  };
-  if (!classification.appAffecting)
-    return {
-      ...base,
-      build: false,
-      reason: `no app-affecting changes since ${baseline.commit}`,
-    };
-  const version = formatNightlyVersion({
-    baseVersion: stable.version,
-    dateStamp: madridDateStamp(now),
-    runNumber,
-  });
-  const race = evaluatePublicationRace({ releases, sha, version });
-  if (race.action === 'reject') throw new Error(race.reason);
-  if (race.action === 'noop')
-    return { ...base, build: false, reason: race.reason };
-  return {
-    ...base,
-    build: true,
-    version,
-    tag: nightlyTagName(version),
-    reason: race.reason,
-  };
 }
 
 function commandIdentity(options) {
@@ -265,92 +166,103 @@ function commandIdentity(options) {
   return deployment.status === 'verified' ? identity : deployment;
 }
 
-function commandPublishGuard(options) {
-  return evaluatePublicationRace({
-    releases: releasesWithResolvedTags(requireOption(options, 'releases')),
-    sha: requireOption(options, 'sha'),
-    version: requireOption(options, 'version'),
-  });
+function fileNames(directory) {
+  return fs
+    .readdirSync(directory)
+    .filter((name) => fs.statSync(path.join(directory, name)).isFile());
 }
 
-function sha512Base64(filePath) {
-  return crypto
-    .createHash('sha512')
-    .update(fs.readFileSync(filePath))
-    .digest('base64');
+function sha256(filePath) {
+  return crypto.createHash('sha256').update(fs.readFileSync(filePath)).digest();
 }
 
+// Checks a staged release: the exact Go asset set, each manifest's version, files, sizes and signatures at the
+// release's tag, and SHA256SUMS.
 function commandValidateAssets(options) {
   const directory = requireOption(options, 'dir');
   const version = requireOption(options, 'version');
-  const names = fs
-    .readdirSync(directory)
-    .filter((name) => fs.statSync(path.join(directory, name)).isFile());
+  const tag = requireOption(options, 'tag');
+  const names = fileNames(directory);
   validateNightlyAssetSet(names, version);
   for (const metadataName of NIGHTLY_UPDATER_METADATA) {
     verifyUpdaterMetadata({
       name: metadataName,
       text: fs.readFileSync(path.join(directory, metadataName), 'utf8'),
       version,
+      repository: repositoryName(),
+      tag,
       assetNames: names,
-      sha512Of: (assetName) => sha512Base64(path.join(directory, assetName)),
+      sha256Of: (assetName) => sha256(path.join(directory, assetName)),
       sizeOf: (assetName) => fs.statSync(path.join(directory, assetName)).size,
+      publicKey: options['public-key'],
     });
-    if (options['state-epoch']) {
-      const text = fs.readFileSync(path.join(directory, metadataName), 'utf8');
-      const epochs = [...text.matchAll(/^nevermindStateEpoch:\s*(\d+)\s*$/gm)];
-      if (epochs.length !== 1 || epochs[0][1] !== options['state-epoch'])
-        throw new Error(
-          `${metadataName} has an invalid state compatibility epoch`,
-        );
+  }
+  verifyChecksums({
+    text: fs.readFileSync(path.join(directory, CHECKSUMS), 'utf8'),
+    names,
+    sha256Hex: (assetName) =>
+      sha256(path.join(directory, assetName)).toString('hex'),
+  });
+  return { valid: true, assetCount: names.length, version, tag };
+}
+
+// Gathers the release files of every packaging job's artifact (one directory each under --from) into --dir, refuses
+// two different files of one name, and writes the release's SHA256SUMS.
+function commandAssembleAssets(options) {
+  const from = requireOption(options, 'from');
+  const directory = requireOption(options, 'dir');
+  fs.mkdirSync(directory, { recursive: true });
+  for (const artifact of fs.readdirSync(from).sort()) {
+    const artifactDirectory = path.join(from, artifact);
+    if (!fs.statSync(artifactDirectory).isDirectory()) continue;
+    for (const name of fileNames(artifactDirectory).filter(isReleaseAsset)) {
+      const source = path.join(artifactDirectory, name);
+      const destination = path.join(directory, name);
+      if (fs.existsSync(destination)) {
+        if (!fs.readFileSync(source).equals(fs.readFileSync(destination)))
+          throw new Error(`${artifact} has another ${name}`);
+        continue;
+      }
+      fs.copyFileSync(source, destination);
     }
   }
-  return { valid: true, assetCount: names.length, version };
+  const names = fileNames(directory);
+  fs.writeFileSync(
+    path.join(directory, CHECKSUMS),
+    checksumsFor(names, (name) =>
+      sha256(path.join(directory, name)).toString('hex'),
+    ),
+  );
+  return { assetCount: names.length + 1 };
 }
 
-function commandSetPackageVersion(options) {
+// Points the manifests in --dir at the release --tag, the dev, nightly or stable release that will hold them.
+function commandRetargetMetadata(options) {
+  const directory = requireOption(options, 'dir');
   const version = requireOption(options, 'version');
-  if (!parseVersion(version)?.nightly)
-    throw new Error(`Refusing non-nightly package version: ${version}`);
-  const manifestPath = path.join(process.cwd(), 'package.json');
-  const manifest = readJsonFile(manifestPath);
-  manifest.version = version;
-  fs.writeFileSync(manifestPath, `${JSON.stringify(manifest, null, 2)}\n`);
-  return { version };
-}
-
-function commandSetDevPackageVersion(options) {
-  const version = requireOption(options, 'version');
-  const parts = version.split('.');
-  if (
-    parts.length !== 3 ||
-    parts.some((part) => !/^(0|[1-9]\d*)$/.test(part) || Number(part) > 65535)
-  )
-    throw new Error(`Invalid dev package version: ${version}`);
-  const manifestPath = path.join(process.cwd(), 'package.json');
-  const manifest = readJsonFile(manifestPath);
-  manifest.version = version;
-  fs.writeFileSync(manifestPath, `${JSON.stringify(manifest, null, 2)}\n`);
-  return { version };
-}
-
-function commandRetention(options) {
-  return selectNightlyRetention({
-    releases: readJsonFile(requireOption(options, 'releases')),
-    now: new Date(requireOption(options, 'now')),
-  });
+  const tag = requireOption(options, 'tag');
+  for (const metadataName of NIGHTLY_UPDATER_METADATA) {
+    const file = path.join(directory, metadataName);
+    fs.writeFileSync(
+      file,
+      retargetUpdaterMetadata({
+        text: fs.readFileSync(file, 'utf8'),
+        repository: repositoryName(),
+        version,
+        tag,
+      }),
+    );
+  }
+  return { tag };
 }
 
 const commands = {
   'schedule-gate': commandScheduleGate,
   'ci-gate': commandCiGate,
-  plan: commandPlan,
   identity: commandIdentity,
-  'publish-guard': commandPublishGuard,
   'validate-assets': commandValidateAssets,
-  'set-package-version': commandSetPackageVersion,
-  'set-dev-package-version': commandSetDevPackageVersion,
-  retention: commandRetention,
+  'assemble-assets': commandAssembleAssets,
+  'retarget-metadata': commandRetargetMetadata,
 };
 
 function main() {

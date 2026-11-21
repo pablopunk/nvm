@@ -1,6 +1,6 @@
 ---
 name: security-audit
-description: Use when reviewing Nevermind for security risk, threat modeling, secure-code review, dependency/config exposure, secrets, OWASP-style web/API issues, Electron attack surface, auth/session/token/billing abuse, or any request for a penetration-test/security report. Explore the repo before conclusions; this is for authorized review of this app only.
+description: Use when reviewing Nevermind for security risk, threat modeling, secure-code review, dependency/config exposure, secrets, OWASP-style web/API issues, desktop attack surface, auth/session/token/billing abuse, or any request for a penetration-test/security report. Explore the repo before conclusions; this is for authorized review of this app only.
 ---
 
 # Security Audit
@@ -9,32 +9,32 @@ Use this skill for defensive security work on Nevermind. Produce evidence-backed
 
 ## First steps
 
-1. **Establish scope from the repo.** Identify the desktop app, backend, deployed surfaces, auth providers, data stores, IPC boundaries, extension APIs, and privileged OS actions before judging risk.
-2. **Check local guidance.** Read `AGENTS.md`, then the relevant project skill files. For Electron-specific work, read `../electron-best-practices/SKILL.md` and linked files.
-3. **Map trust boundaries.** Renderer ↔ preload ↔ main, extensions ↔ host API, user content ↔ extension views, desktop ↔ backend, backend ↔ upstream AI providers, auth sessions ↔ API tokens, admin ↔ user.
-4. **Audit high-impact paths first.** Auth, tokens, admin APIs, proxy/billing, custom protocols, shell/file/URL actions, IPC handlers, extension permissions, secrets/config, update/release pipeline.
+1. **Establish scope from the repo.** Identify the desktop app, backend, deployed surfaces, auth providers, data stores, process boundaries, extension APIs, and privileged OS actions before judging risk.
+2. **Check local guidance.** Read `AGENTS.md`, then the relevant project skill files.
+3. **Map trust boundaries.** App ↔ extension and helper child processes, extensions ↔ host API, user content ↔ extension views, desktop ↔ backend, backend ↔ upstream AI providers, auth sessions ↔ API tokens, admin ↔ user.
+4. **Audit high-impact paths first.** Auth, tokens, admin APIs, proxy/billing, shell/file/URL actions, child-process protocols, extension permissions, secrets/config, update/release pipeline.
 5. **Verify findings.** Prefer code references, concrete reproduction steps, safe local tests, and exact commands over speculation.
 
 ## Nevermind security surfaces
 
-- Electron main/preload/renderer: `src/app/electron/main.ts`, `src/app/electron/preload.ts`, `src/app/electron/app/palette-window.ts`, `src/app/palette/preload-api.ts`.
-- Extension host and API: `src/app/resources/nevermind-extension-api.d.ts`, `src/app/electron/main.ts`, `src/app/palette/extension-view/extension-view.tsx`, internal extensions under `src/app/resources/`.
-- Desktop auth/model proxy integration: `src/app/electron/backend/nevermind-auth.ts`, `src/app/electron/ai/ai.ts`.
+- Go app, helpers and child processes: `src/native/internal/app`, `src/native/internal/ext`, `src/native/internal/platform`, `src/native/sidecar`.
+- Extension host and API: `src/native/internal/ext/api`, `src/native/internal/ext`, `docs/extension-trust-model.md`.
+- Desktop auth/model proxy integration: `src/native/internal/backend`, `src/native/internal/ai`.
 - Astro backend routes: `src/backend/src/pages/api/**`, especially auth, device auth, admin, tokens, and `/api/v1/**` proxy routes.
 - Backend libraries: `src/backend/src/lib/workos.ts`, `tokens.ts`, `admin.ts`, `proxy.ts`, `ratelimit.ts`, `cron-auth.ts`, `audit.ts`, `settings.ts`.
-- Persistence/config: `src/backend/src/db/schema.ts`, Drizzle migrations, `electron-builder.yml`, `src/backend/vercel.json`, env examples.
+- Persistence/config: `src/backend/src/db/schema.ts`, Drizzle migrations, `src/native/packaging`, `src/backend/vercel.json`, env examples.
 
 ## Audit checklist
 
 - Auth/session: redirect handling, sealed cookie settings, CSRF on cookie-authenticated mutations, logout, device-code approval/exchange, role escalation.
 - API tokens: generation entropy, prefix leakage, hashing, revocation, last-use writes, bearer extraction, rate limits, token exposure in logs/UI.
-- Authorization: admin gates, object ownership checks, extension permission checks, IPC caller assumptions, path/URL action ownership.
-- Electron hardening: context isolation, sandbox, node integration, navigation/window-open policy, permission handlers, CSP/custom protocol behavior, preload API input validation.
+- Authorization: admin gates, object ownership checks, extension permission checks, child-process caller assumptions, path/URL action ownership.
+- Desktop hardening: helper binaries and child-process input validation, local file permissions, URL and navigation handling for embedded web content.
 - Extension isolation: least-privilege permissions, shell/system actions, file and app helpers, iframe sandbox, untrusted HTML/media, clipboard and AI permissions.
 - Backend proxy/billing: transparent auth swap, forwarded headers, request size/token limits, upstream URL construction, streaming parsing, abuse/rate limits, billing failure modes.
 - Input/output safety: SSR/script injection, DOM insertion, markdown/rendered content, URL/path validation, shell argument handling, log redaction.
 - Secrets/config: committed env files, Vercel env exposure, PostHog project keys, WorkOS/Redis/Neon keys, release signing material, local auth storage.
-- Supply chain: dependency vulnerabilities, Electron version posture, packaged resources, updater/release artifact trust, native modules.
+- Supply chain: dependency vulnerabilities, Go toolchain posture, packaged resources, updater/release artifact trust, native modules.
 
 ## Report format
 

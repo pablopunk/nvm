@@ -30,6 +30,7 @@ const result = spawnSync(
     'check',
     ...(write ? ['--write'] : []),
     '--error-on-warnings',
+    '--no-errors-on-unmatched',
     '--assist-enabled=false',
     '--skip=suspicious',
     '--skip=style',

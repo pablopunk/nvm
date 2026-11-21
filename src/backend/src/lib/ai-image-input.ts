@@ -4,8 +4,8 @@ import {
   AI_CHAT_IMAGE_MAX_DIMENSION,
   AI_CHAT_IMAGE_MIME_TYPES,
   AI_CHAT_IMAGE_TOTAL_MAX_BYTES,
-} from '../../../app/shared/ai-chat-images';
-import { imageDimensions } from '../../../app/shared/ai-image-dimensions';
+} from '../shared/ai-chat-images';
+import { imageDimensions } from '../shared/ai-image-dimensions';
 
 type ImageInput = {
   mimeType: string;

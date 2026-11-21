@@ -1,0 +1,45 @@
+//go:build rig
+
+package rigtest
+
+import "testing"
+
+func TestJourneyToggleSettingAction(t *testing.T) {
+	home := t.TempDir()
+	seedExtensionFolder(t, home, "acme.toggle")
+	app := Launch(t, Options{Home: home, Theme: "dark"})
+	openExtensionsView(t, app)
+	enableThroughReview(t, app, "toggle action", "Toggle action fixture")
+	_, err := app.WaitFor("Running", elementWait)
+	must(t, err)
+	hidePalette(t, app)
+	must(t, app.SummonPalette())
+	must(t, app.Type("Toggle action fixture"))
+	waitForRow(t, app, "Toggle action fixture", clipWait)
+	must(t, app.Key("Return"))
+	_, err = app.WaitFor("Toggle compact", elementWait)
+	must(t, err)
+	must(t, app.Key("Return"))
+	_, err = app.WaitFor("Toggle compact?", elementWait)
+	must(t, err)
+	must(t, app.Key("Return"))
+	_, err = app.WaitFor("Inspect current value", elementWait)
+	must(t, err)
+	must(t, app.Key("Down"))
+	must(t, app.Key("Return"))
+	_, err = app.WaitFor("Compact enabled", elementWait)
+	must(t, err)
+	must(t, app.Key("Escape"))
+	_, err = app.WaitFor("Toggle compact", elementWait)
+	must(t, err)
+	must(t, app.Key("Return"))
+	_, err = app.WaitFor("Toggle compact?", elementWait)
+	must(t, err)
+	must(t, app.Key("Return"))
+	_, err = app.WaitFor("Inspect current value", elementWait)
+	must(t, err)
+	must(t, app.Key("Down"))
+	must(t, app.Key("Return"))
+	_, err = app.WaitFor("Compact disabled", elementWait)
+	must(t, err)
+}

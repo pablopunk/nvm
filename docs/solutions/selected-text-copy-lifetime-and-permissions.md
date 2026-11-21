@@ -27,30 +27,6 @@ Tests, typechecks, native compilation, and app launches are intentionally skippe
 
 The packaged macOS journey remains outstanding: select text in Slack, run the command, confirm replacement and clipboard restoration, then confirm blocked access is reported as a permission error and is not shown as allowed in the permissions list.
 
-## Checks run
-
-Formatting was applied with:
-
-```sh
-mise exec -- pnpm format src/app/electron/os/selected-text.ts src/app/electron/os/selected-text.test.ts src/app/electron/os/macos-selected-text.ts src/app/electron/os/macos-selected-text.test.ts src/app/electron/main.ts src/app/electron/os/os.ts src/app/extensions/permissions.ts src/app/extensions/permissions.test.ts src/app/extensions/ai-commands.ts src/app/extensions/ai-commands.test.ts src/app/resources/nevermind-extension-api.d.ts
-mise exec -- pnpm format src/app/electron/os/macos-selected-text.ts src/app/electron/os/macos-selected-text.test.ts src/app/resources/nevermind-extension-api.d.ts
-```
-
-These checks passed:
-
-```sh
-git diff --check
-mise exec -- pnpm check src/app/electron/os/selected-text.ts src/app/electron/os/selected-text.test.ts src/app/electron/os/macos-selected-text.ts src/app/electron/os/macos-selected-text.test.ts src/app/electron/main.ts src/app/electron/os/os.ts src/app/extensions/permissions.ts src/app/extensions/permissions.test.ts src/app/extensions/ai-commands.ts src/app/extensions/ai-commands.test.ts src/app/resources/nevermind-extension-api.d.ts
-```
-
-The initial `mise exec -- pnpm check:changed 299e43e` attempt processed no files before commit; it is not lint evidence. The following checks then passed for repair commit `6fe754d` on `fix/selected-text-access`:
-
-```sh
-mise exec -- pnpm check:staged
-mise exec -- pnpm check:changed 299e43e
-git diff 299e43e --check
-```
-
-The commit hook ran the staged check against all 11 touched TypeScript files. This is formatter/linter evidence only, not runtime or packaged-app evidence.
+Evidence at the time was formatter and linter output on the 1.x sources, not runtime or packaged-app evidence. Those sources were removed in the Go rewrite; see git history before the rewrite.
 
 Keywords: Slack, Select text to fix, Accessibility allowed, clipboard fallback, return await, finally, selected-text helper, CGPreflightPostEventAccess, apiDisabled.

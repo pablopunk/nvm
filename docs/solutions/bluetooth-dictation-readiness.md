@@ -20,11 +20,9 @@ stream becomes ready after five seconds because silence can be valid input and
 the Web platform cannot distinguish device silence from operating-system
 silence. Startup fails after seven seconds if neither condition is met.
 
-Show the target `Listening` state immediately to avoid flashing routine startup
-steps. Replace it with the current model or microphone preparation state only
-when that phase takes longer than one second, and restore `Listening` when the
-microphone becomes ready. Include the resolved microphone name in a delayed
-waiting state so slow device routing is useful rather than noisy.
+Show a non-recording waiting state immediately. Show `Listening` only after
+the host confirms microphone readiness. Resolve the device name asynchronously
+and use it only while preparation remains active.
 
 ## Evidence
 

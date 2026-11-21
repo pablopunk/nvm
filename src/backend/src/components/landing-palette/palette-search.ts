@@ -1,4 +1,4 @@
-import { scoreNormalizedNonEmpty } from '../../../../app/palette/search-ranking';
+import { scoreNormalizedNonEmpty } from '../../palette-ui/search-ranking';
 import type { PaletteItem } from './palette-types';
 
 export const MAX_RESULTS = 40;

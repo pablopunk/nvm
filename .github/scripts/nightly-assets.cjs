@@ -1,31 +1,61 @@
 'use strict';
 
-// Asset names mirror the stable packaging collection in .github/workflows/ci.yml,
-// with the updater metadata renamed to the channel files electron-updater reads:
-// nightly.yml (Windows), nightly-mac.yml (macOS), and nightly-linux[-arm64].yml.
-const NIGHTLY_UPDATER_METADATA = [
-  'nightly-linux-arm64.yml',
-  'nightly-linux.yml',
-  'nightly-mac.yml',
-  'nightly.yml',
+const crypto = require('node:crypto');
+
+// The Go app's release assets, as `mygo build` names them (src/native/mygo.json slug) and native-package.yml builds
+// them: one disk image and update archive per Mac, an archive and Debian package per Linux machine, the Windows
+// installer and archive, MyGo's install scripts, and one SHA256SUMS for the lot. Each update-<target>.json is the
+// manifest that installed apps read; its archive and delta URLs name the release that holds them, so promotion
+// retargets them (retargetUpdaterMetadata) and leaves every other byte as built.
+const SLUG = 'nevermind';
+const UPDATE_TARGETS = [
+  'darwin-arm64',
+  'linux-amd64',
+  'linux-arm64',
+  'windows-amd64',
 ];
+const NIGHTLY_UPDATER_METADATA = UPDATE_TARGETS.map(
+  (target) => `update-${target}.json`,
+);
+const CHECKSUMS = 'SHA256SUMS';
+const VERSION_PATTERN = /^\d+\.\d+\.\d+$/;
+// The DER prefix of an Ed25519 public key, before its 32 bytes.
+const ED25519_SPKI_PREFIX = Buffer.from('302a300506032b6570032100', 'hex');
+
+function requireReleaseVersion(version) {
+  if (!VERSION_PATTERN.test(version ?? ''))
+    throw new Error(`Invalid release version: ${version}`);
+}
+
+function updateArchiveName(version, target) {
+  return `${SLUG}-${version}-${target}.tar.gz`;
+}
 
 function expectedNightlyAssetNames(version) {
+  requireReleaseVersion(version);
   return [
-    `Nevermind-${version}-win-x64-portable.exe`,
-    `Nevermind-${version}-mac-arm64.zip`,
-    `Nevermind-${version}-mac-arm64.zip.blockmap`,
-    `Nevermind-${version}-linux-x86_64.AppImage`,
-    `Nevermind-${version}-linux-x86_64.AppImage.blockmap`,
-    `Nevermind-${version}-linux-amd64.deb`,
-    `Nevermind-${version}-linux-arm64.AppImage`,
-    `Nevermind-${version}-linux-arm64.AppImage.blockmap`,
-    `Nevermind-${version}-linux-arm64.deb`,
-    'nightly.yml',
-    'nightly-mac.yml',
-    'nightly-linux.yml',
-    'nightly-linux-arm64.yml',
+    `${SLUG}-${version}-arm64.dmg`,
+    ...UPDATE_TARGETS.map((target) => updateArchiveName(version, target)),
+    `${SLUG}_${version}_amd64.deb`,
+    `${SLUG}_${version}_arm64.deb`,
+    `${SLUG}-setup-${version}-amd64.exe`,
+    ...NIGHTLY_UPDATER_METADATA,
+    'install.sh',
+    'install.ps1',
+    CHECKSUMS,
   ];
+}
+
+// A delta updates an earlier published version to this one; MyGo makes up to three per target when an earlier
+// version is published, and none for the first.
+function deltaAsset(name, version) {
+  const match =
+    /^nevermind-(\d+\.\d+\.\d+)-to-(\d+\.\d+\.\d+)-([a-z]+-[a-z0-9]+)\.delta$/.exec(
+      name,
+    );
+  if (!match || match[2] !== version || !UPDATE_TARGETS.includes(match[3]))
+    return null;
+  return { from: match[1], target: match[3] };
 }
 
 // Publication requires the exact expected set: a missing or extra asset means a
@@ -39,7 +69,9 @@ function validateNightlyAssetSet(names, version) {
   if (duplicates.length > 0)
     throw new Error(`Duplicate release assets: ${duplicates.join(', ')}`);
   const missing = expected.filter((name) => !actual.includes(name));
-  const extra = actual.filter((name) => !expected.includes(name));
+  const extra = actual.filter(
+    (name) => !expected.includes(name) && !deltaAsset(name, version),
+  );
   if (missing.length > 0 || extra.length > 0)
     throw new Error(
       `Release asset set mismatch. Missing: [${missing.join(', ')}]. Unexpected: [${extra.join(', ')}].`,
@@ -47,91 +79,150 @@ function validateNightlyAssetSet(names, version) {
   return expected;
 }
 
-function yamlScalar(text) {
-  return text.trim().replace(/^['"]|['"]$/g, '');
+function releaseDownloadPrefix(repository, tag) {
+  if (!/^[A-Za-z0-9_.-]+\/[A-Za-z0-9_.-]+$/.test(repository ?? ''))
+    throw new Error('Invalid repository');
+  return `https://github.com/${repository}/releases/download/${encodeURIComponent(tag)}/`;
 }
 
-// Minimal parser for electron-builder's update metadata shape: top-level scalars
-// plus a `files:` list of { url, sha512, size } entries.
-function parseUpdaterMetadata(text) {
-  const metadata = { version: null, path: null, sha512: null, files: [] };
-  let current = null;
-  for (const line of text.split(/\r?\n/)) {
-    const top = /^([a-zA-Z0-9]+):\s*(.*)$/.exec(line);
-    if (top) {
-      current = null;
-      if (top[1] === 'version') metadata.version = yamlScalar(top[2]);
-      if (top[1] === 'path') metadata.path = yamlScalar(top[2]);
-      if (top[1] === 'sha512') metadata.sha512 = yamlScalar(top[2]);
-      continue;
-    }
-    const entry = /^\s*-\s+url:\s*(.+)$/.exec(line);
-    if (entry) {
-      current = { url: yamlScalar(entry[1]), sha512: null, size: null };
-      metadata.files.push(current);
-      continue;
-    }
-    const field = /^\s+(sha512|size):\s*(.+)$/.exec(line);
-    if (field && current) current[field[1]] = yamlScalar(field[2]);
-  }
-  return metadata;
+function verifySignature(publicKey, digest, signature, label) {
+  if (!publicKey) return;
+  const raw = Buffer.from(publicKey.trim(), 'base64');
+  if (raw.length !== 32) throw new Error('Invalid update public key');
+  const key = crypto.createPublicKey({
+    key: Buffer.concat([ED25519_SPKI_PREFIX, raw]),
+    format: 'der',
+    type: 'spki',
+  });
+  if (!crypto.verify(null, digest, key, Buffer.from(signature ?? '', 'base64')))
+    throw new Error(`${label} is not signed with the update key`);
 }
 
-// `sha512Of(name)` returns the base64 SHA-512 of a staged asset, or null when the
-// asset is absent. Every referenced file must exist with a matching digest and,
-// when `sizeOf` is supplied, a matching byte size.
+// `sha256Of(name)` returns the SHA-256 digest of a staged asset as a Buffer, and
+// `sizeOf(name)` its size. Every file a manifest references must be an asset of
+// this release, at the release's tag, with its size and a valid signature.
 function verifyUpdaterMetadata({
   name,
   text,
   version,
-  sha512Of,
-  sizeOf,
+  repository,
+  tag,
   assetNames,
+  sha256Of,
+  sizeOf,
+  publicKey,
 }) {
-  const metadata = parseUpdaterMetadata(text);
-  if (metadata.version !== version)
+  const target = /^update-(.+)\.json$/.exec(name)?.[1];
+  if (!UPDATE_TARGETS.includes(target))
+    throw new Error(`${name} is not an update manifest`);
+  const manifest = JSON.parse(text);
+  if (manifest.version !== version)
     throw new Error(
-      `${name} version ${metadata.version} does not match ${version}`,
+      `${name} version ${manifest.version} does not match ${version}`,
     );
-  if (metadata.files.length === 0) throw new Error(`${name} lists no files`);
-  if (!metadata.files.some((file) => file.url === metadata.path))
-    throw new Error(`${name} path ${metadata.path} is not a listed file`);
-  for (const file of metadata.files) {
-    if (!assetNames.includes(file.url))
+  const prefix = releaseDownloadPrefix(repository, tag);
+  const checkFile = (url, size, signature, label) => {
+    if (typeof url !== 'string' || !url.startsWith(prefix))
+      throw new Error(`${label} ${url} is not in the release ${tag}`);
+    const file = decodeURIComponent(url.slice(prefix.length));
+    if (!assetNames.includes(file))
       throw new Error(
-        `${name} references ${file.url}, which is not a release asset`,
+        `${label} references ${file}, which is not a release asset`,
       );
-    const actual = sha512Of(file.url);
-    if (!actual) throw new Error(`${name} references missing ${file.url}`);
-    if (actual !== file.sha512)
+    if (Number(size) !== sizeOf(file))
       throw new Error(
-        `${name} sha512 for ${file.url} does not match the staged file`,
+        `${label} size for ${file} does not match the staged file`,
       );
-    if (sizeOf && Number(file.size) !== sizeOf(file.url))
+    verifySignature(publicKey, sha256Of(file), signature, `${label} ${file}`);
+    return file;
+  };
+  const archive = checkFile(
+    manifest.url,
+    manifest.size,
+    manifest.signature,
+    name,
+  );
+  if (archive !== updateArchiveName(version, target))
+    throw new Error(
+      `${name} must update to ${updateArchiveName(version, target)}`,
+    );
+  for (const delta of manifest.deltas ?? []) {
+    const file = checkFile(
+      delta.url,
+      delta.size,
+      delta.signature,
+      `${name} delta`,
+    );
+    const parsed = deltaAsset(file, version);
+    if (!parsed || parsed.target !== target || parsed.from !== delta.from)
       throw new Error(
-        `${name} size for ${file.url} does not match the staged file`,
+        `${name} delta ${file} does not update ${delta.from} on ${target}`,
       );
   }
-  const primary = metadata.files.find((file) => file.url === metadata.path);
-  if (metadata.sha512 && metadata.sha512 !== primary.sha512)
-    throw new Error(`${name} top-level sha512 does not match ${metadata.path}`);
-  if (name === 'nightly-mac.yml') {
-    const expected = `Nevermind-${version}-mac-arm64.zip`;
-    if (
-      metadata.files.length !== 1 ||
-      metadata.files[0].url !== expected ||
-      metadata.path !== expected
-    ) {
-      throw new Error(`${name} must target only the macOS arm64 ZIP`);
-    }
-  }
-  return metadata;
+  return manifest;
+}
+
+// Points a manifest's archive and delta URLs at the release `tag` of the same version: its dev, nightly or stable
+// release. The archives are signed, not the manifest, so the signatures stay valid.
+function retargetUpdaterMetadata({ text, repository, version, tag }) {
+  requireReleaseVersion(version);
+  const manifest = JSON.parse(text);
+  if (manifest.version !== version)
+    throw new Error(
+      `Manifest version ${manifest.version} does not match ${version}`,
+    );
+  const sources = [`v${version}`, `v${version}-dev`, `v${version}-nightly`].map(
+    (sourceTag) => releaseDownloadPrefix(repository, sourceTag),
+  );
+  const destination = releaseDownloadPrefix(repository, tag);
+  if (!sources.includes(destination))
+    throw new Error(`${tag} is not a release of ${version}`);
+  const retarget = (url) => {
+    const source = sources.find((prefix) => url?.startsWith?.(prefix));
+    if (!source)
+      throw new Error(`${url} is not a file of a release of ${version}`);
+    return destination + url.slice(source.length);
+  };
+  manifest.url = retarget(manifest.url);
+  for (const delta of manifest.deltas ?? []) delta.url = retarget(delta.url);
+  return `${JSON.stringify(manifest, null, 2)}\n`;
+}
+
+// SHA256SUMS lists every asset but itself and the manifests, which promotion retargets, in sha256sum's format.
+function checksumsFor(names, sha256Hex) {
+  return `${names
+    .filter(
+      (name) => name !== CHECKSUMS && !NIGHTLY_UPDATER_METADATA.includes(name),
+    )
+    .sort()
+    .map((name) => `${sha256Hex(name)}  ${name}`)
+    .join('\n')}\n`;
+}
+
+function verifyChecksums({ text, names, sha256Hex }) {
+  if (text !== checksumsFor(names, sha256Hex))
+    throw new Error(`${CHECKSUMS} does not list exactly the staged assets`);
+}
+
+// Whether a file a packaging job uploaded belongs in the release.
+function isReleaseAsset(name) {
+  return (
+    /\.(dmg|tar\.gz|deb|delta)$/.test(name) ||
+    /^nevermind-setup-.+\.exe$/.test(name) ||
+    /^update-.+\.json$/.test(name) ||
+    name === 'install.sh' ||
+    name === 'install.ps1'
+  );
 }
 
 module.exports = {
+  CHECKSUMS,
   NIGHTLY_UPDATER_METADATA,
+  checksumsFor,
   expectedNightlyAssetNames,
-  parseUpdaterMetadata,
+  isReleaseAsset,
+  retargetUpdaterMetadata,
   validateNightlyAssetSet,
+  verifyChecksums,
   verifyUpdaterMetadata,
 };

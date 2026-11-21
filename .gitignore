@@ -1,6 +1,5 @@
 node_modules
 dist
-/release/
 .DS_Store
 *.log
 .env
@@ -12,5 +11,3 @@ dist
 .codex
 .multica
 /backend/
-/build/native/
-opencode.json

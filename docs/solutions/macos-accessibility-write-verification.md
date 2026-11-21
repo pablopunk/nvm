@@ -6,8 +6,8 @@
 
 ## Context
 
-- Command: `nevermind.ai-commands` action `fix-selected-text-with-ai` in `src/app/extensions/ai-commands.ts`.
-- Host path: `ctx.desktop.selection.replaceText` -> `replaceSelectedText` in `src/app/electron/os/os.ts` -> `src/app/resources/macos-selected-text.swift`.
+- Command: `nevermind.ai-commands` action `fix-selected-text-with-ai` in `1.x/extensions/ai-commands.ts`.
+- Host path: `ctx.desktop.selection.replaceText` -> `replaceSelectedText` in `1.x/electron/os/os.ts` -> `src/native/sidecar/macos-helper/selected-text.swift`.
 - Clipboard fallback: `ctx.actions.pasteText` with `concealed`, `restoreClipboard`, and `expectedFrontmostAppId`.
 - The unverified accessibility write came from the "replace selected text without clipboard" change and shipped in `v0.17.x`.
 

@@ -1,0 +1,15 @@
+{
+  "id": "00000000-0000-4000-8000-000000000001",
+  "model": "typesafe/jev-1.13",
+  "answers": {
+    "is_bug": { "type": "predicate", "value": true, "probability": 0.9 },
+    "area": {
+      "type": "choice",
+      "value": "checkout",
+      "probabilities": { "checkout": 0.8, "login": 0.2 },
+      "confidence": 0.75
+    },
+    "urgency": { "type": "score", "value": 3 }
+  },
+  "usage": { "inputTokens": 120, "outputTokens": 12 }
+}

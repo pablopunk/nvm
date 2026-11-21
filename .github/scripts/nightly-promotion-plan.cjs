@@ -2,7 +2,7 @@
 
 const { compareVersions, parseVersion } = require('./nightly-versioning.cjs');
 const { selectNewestDev } = require('./promotion-selection.cjs');
-const { evaluateCiGate } = require('./nightly-release-gates.cjs');
+const { CI_WORKFLOWS, evaluateCiGate } = require('./nightly-release-gates.cjs');
 const { execFileSync } = require('node:child_process');
 const path = require('node:path');
 
@@ -40,11 +40,13 @@ function createEligibilityProbe({ repository, healthFile, gh, identity }) {
     const sha = gh(`repos/${repository}/commits/${candidate.tag}`).sha;
     if (!/^[0-9a-f]{40}$/.test(sha ?? ''))
       throw new Error('Invalid dev tag commit');
-    const runs = gh(
-      `repos/${repository}/actions/workflows/ci.yml/runs?head_sha=${sha}&event=push&per_page=50`,
-    ).workflow_runs;
-    if (!Array.isArray(runs)) throw new Error('CI runs unavailable');
-    if (!evaluateCiGate({ sha, runs }).ok) return false;
+    for (const workflow of CI_WORKFLOWS) {
+      const runs = gh(
+        `repos/${repository}/actions/workflows/${workflow}/runs?head_sha=${sha}&event=push&per_page=50`,
+      ).workflow_runs;
+      if (!Array.isArray(runs)) throw new Error('CI runs unavailable');
+      if (!evaluateCiGate({ sha, runs }).ok) return false;
+    }
     const verdict = identity(sha, healthFile);
     if (verdict?.status === 'verified') return true;
     if (

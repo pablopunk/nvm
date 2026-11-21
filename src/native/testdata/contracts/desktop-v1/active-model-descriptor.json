@@ -1,0 +1,21 @@
+{
+  "id": "gemini-3-flash",
+  "name": "Gemini 3 Flash",
+  "contextWindow": 100000,
+  "maxTokens": 8192,
+  "reasoning": false,
+  "input": ["text"],
+  "maxInputTokens": 100000,
+  "thinkingLevel": "low",
+  "api": "google-generative-ai",
+  "provider": "nevermind",
+  "baseUrl": "https://api.nvm.fyi/api/v1",
+  "modelTier": "free",
+  "creditKind": "free",
+  "credits": {
+    "paid": 0,
+    "free": 10,
+    "total": 10
+  },
+  "notice": "ok"
+}

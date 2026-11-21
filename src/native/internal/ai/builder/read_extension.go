@@ -1,0 +1,99 @@
+package builder
+
+import (
+	"context"
+	"encoding/json"
+	"errors"
+	"fmt"
+
+	"github.com/pablopunk/nvm/native/internal/ai/agent"
+)
+
+const readExtensionToolName = "read_extension"
+
+var readExtensionSchema = json.RawMessage(`{"type":"object","properties":{` +
+	`"id":{"type":"string","description":"The id of an installed extension, from the installed extensions list."},` +
+	`"offset":{"type":"integer","description":"The byte offset of the page to read. Omit it for the first page."}` +
+	`},"required":["id"],"additionalProperties":false}`)
+
+type readExtensionArgs struct {
+	ID     string `json:"id"`
+	Offset int    `json:"offset"`
+}
+
+// readExtensionTool shows the manifest and source of any installed extension, a page at a time. Reading is the only
+// thing it does: write_extension still writes only the chat's own extension.
+func (w *Workshop) readExtensionTool(reads *editReads) agent.Tool {
+	return agent.Tool{
+		Name:        readExtensionToolName,
+		Description: "Read an installed extension. For editing, read every snapshot page with the returned offsets in this turn. Extensions containing other assets may return reference-only pages, which cannot authorize replacement. Only this chat's own extension can be changed.",
+		Label:       "Reading an extension",
+		Schema:      readExtensionSchema,
+		Summarize:   summarizeReadExtension,
+		Run: func(ctx context.Context, args json.RawMessage) (agent.Result, error) {
+			var in readExtensionArgs
+			if err := json.Unmarshal(args, &in); err != nil {
+				return agent.Result{}, err
+			}
+			return w.readInstalled(ctx, reads, in.ID, in.Offset)
+		},
+	}
+}
+
+// readInstalled reads extension id page by page through the turn's snapshot reads. A reference-only extension falls
+// back to its read-only definition, which never authorizes a replacement.
+func (w *Workshop) readInstalled(ctx context.Context, reads *editReads, id string, offset int) (agent.Result, error) {
+	result, err := reads.read(ctx, id, offset)
+	if offset != 0 || !errors.Is(err, ErrReferenceOnly) {
+		return result, err
+	}
+	text, err := w.referenceText(id)
+	if err != nil {
+		return agent.Result{}, err
+	}
+	return reads.reference(ctx, id, text)
+}
+
+func (w *Workshop) readExtension(in readExtensionArgs) (agent.Result, error) {
+	text, err := w.referenceText(in.ID)
+	if err != nil {
+		return agent.Result{}, err
+	}
+	return extensionPage(in.ID, text, in.Offset)
+}
+
+func (w *Workshop) referenceText(id string) (string, error) {
+	manifest, source, err := w.extensions.Definition(id)
+	if err != nil {
+		return "", fmt.Errorf("no installed extension has the id %q", id)
+	}
+	if source == "" {
+		return "", errors.New("this extension has no source to read: it is built into Nevermind")
+	}
+	data, err := json.MarshalIndent(manifest, "", "  ")
+	if err != nil {
+		return "", err
+	}
+	return string(data) + "\n\n" + source, nil
+}
+
+// extensionPage returns the page of an extension's text that starts at offset, and says where the next one starts.
+func extensionPage(id, text string, offset int) (agent.Result, error) {
+	if offset < 0 || offset > len(text) {
+		return agent.Result{}, fmt.Errorf("offset must be between 0 and %d", len(text))
+	}
+	end := pageEnd(text, offset)
+	header := fmt.Sprintf("Extension %s (read-only), bytes %d to %d of %d.", id, offset, end, len(text))
+	if end < len(text) {
+		header += fmt.Sprintf(" Read the next page with offset %d if you need it.", end)
+	}
+	return agent.Result{Text: header + "\n\n" + text[offset:end], Outcome: "Read " + id}, nil
+}
+
+func summarizeReadExtension(args json.RawMessage) string {
+	var in readExtensionArgs
+	if json.Unmarshal(args, &in) != nil {
+		return ""
+	}
+	return in.ID
+}

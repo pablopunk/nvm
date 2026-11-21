@@ -1,0 +1,1 @@
+{"apiVersion":"1.0","id":"acme.toggle","title":"Toggle action fixture","capabilities":["settings.write"],"settings":[{"id":"compact","type":"boolean","value":false}]}

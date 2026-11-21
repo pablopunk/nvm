@@ -1,0 +1,7 @@
+{
+  "error": {
+    "type": "pricing_unavailable",
+    "message": "The active AI model has no usable price in the current catalog. Choose another model or try again later.",
+    "reason": "unpriced"
+  }
+}

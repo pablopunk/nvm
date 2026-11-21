@@ -7,7 +7,7 @@ import {
   CommandRow,
   CommandTile,
   GridView,
-} from '../../../../app/palette/ui';
+} from '../../../src/palette-ui/ui';
 import THEMES from './themes.json';
 import {
   GRID_CLICKS,

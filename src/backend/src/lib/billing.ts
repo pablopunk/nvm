@@ -1,6 +1,6 @@
 import { and, eq, isNull } from 'drizzle-orm';
 import Stripe from 'stripe';
-import { parsePublicOrigin } from '../../../app/shared/public-origin';
+import { parsePublicOrigin } from '../shared/public-origin';
 import { db } from '../db/client';
 import { creditLedger, stripeEvents, subscriptions, users } from '../db/schema';
 import { productionWebOrigin } from './auth-config';

@@ -1,0 +1,12 @@
+{
+  "name": "nevermind-demo-video",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "preview": "npx --yes hyperframes@0.9.59 preview",
+    "check": "npx --yes hyperframes@0.9.59 check --json",
+    "snapshot": "npx --yes hyperframes@0.9.59 snapshot",
+    "render": "npx --yes hyperframes@0.9.59 render --quality delivery -o out/nevermind-demo-v3-master.mp4",
+    "encode": "sh scripts/encode.sh out/nevermind-demo-v3-master.mp4 out"
+  }
+}

@@ -19,7 +19,7 @@ function item(
 
 const items = [
   item('Calendar', { kind: 'app', subtitle: 'Launch application' }),
-  item('Start Dictation', { keywords: ['dictate', 'voice'] }),
+  item('Dictate', { keywords: ['dictate', 'voice'] }),
   item('Design system.fig', { kind: 'file', keywords: ['design'] }),
   item('Force Quit Apps', { aliases: ['kill'] }),
 ];
@@ -34,7 +34,7 @@ test('an empty query keeps the original order', () => {
 test('matches titles, aliases, and hidden keywords', () => {
   assert.equal(searchPalette(items, 'calen')[0]?.title, 'Calendar');
   assert.equal(searchPalette(items, 'kill')[0]?.title, 'Force Quit Apps');
-  assert.equal(searchPalette(items, 'dictate')[0]?.title, 'Start Dictation');
+  assert.equal(searchPalette(items, 'dictate')[0]?.title, 'Dictate');
 });
 
 test('title matches outrank subtitle matches', () => {

@@ -17,7 +17,7 @@ const session = await getSessionFromCookies(Astro.request.headers.get('cookie'))
   ) : (
     <div class="landing-actions">
       <a class="button button--primary" href="/api/auth/signin">Sign in</a>
-      <a class="button" href="https://github.com/pablopunk/nvm/releases">Get the latest release</a>
+      <a class="button" href="https://github.com/pablopunk/nvm/releases/latest">Get the latest release</a>
     </div>
   )
 ) : (

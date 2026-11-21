@@ -269,7 +269,7 @@ main:has(.landing-shell) { --main-padding-top: 0px; display: flex; flex-directio
   z-index: -1;
   pointer-events: none;
   top: 0;
-  bottom: -48px;
+  bottom: 0;
   left: 50%;
   width: 100vw;
   transform: translateX(-50%);
@@ -320,6 +320,7 @@ main:has(.landing-shell) { --main-padding-top: 0px; display: flex; flex-directio
   width: 100vw;
   max-width: none;
   aspect-ratio: 16 / 9;
+  margin-top: 80px;
   background: #000;
 }
 .landing-demo__video {
@@ -402,6 +403,7 @@ main:has(.landing-shell) { --main-padding-top: 0px; display: flex; flex-directio
   .landing-shell { gap: 0; }
   .landing-nav { position: relative; top: auto; left: auto; transform: none; gap: 12px; width: calc(100% + 48px); margin-inline: -24px; }
   .landing-nav::before { display: none; }
+  .landing-demo { margin-top: 0; }
   .landing-nav__account .button { padding: 8px 12px; font-size: 13px; white-space: nowrap; }
   .landing-nav-email { display: none; }
   .landing-hero { gap: 32px; padding: 0 0 60px; }

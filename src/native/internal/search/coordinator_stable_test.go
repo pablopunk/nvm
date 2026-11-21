@@ -1,0 +1,107 @@
+package search
+
+import (
+	"slices"
+	"testing"
+
+	"github.com/pablopunk/nvm/native/internal/platform/fake"
+)
+
+// TestAKeystrokeWhoseProvidersAnswerInTimeShowsOneSnapshot checks that ranked providers that answer within
+// FirstSnapshot produce a single, settled snapshot: no partial list for each provider that answers first.
+func TestAKeystrokeWhoseProvidersAnswerInTimeShowsOneSnapshot(t *testing.T) {
+	sink := newSnapshotSink()
+	c := NewCoordinator(Options{Clock: fake.NewClock(), OnSnapshot: sink.OnSnapshot, Flat: true})
+	a := fixedRows("a", Item{ID: "low", Kind: KindCommands, Title: "Low", Score: 10})
+	b := fixedRows("b", Item{ID: "high", Kind: KindCommands, Title: "High", Score: 90})
+	c.Query("wallpapers", []Provider{a, b})
+
+	first := sink.next(t)
+	if !first.Settled || !equalStrings(titles(first.Items), []string{"High", "Low"}) {
+		t.Fatalf("first snapshot settled=%v rows=%v, want both providers ranked at once", first.Settled, titles(first.Items))
+	}
+	select {
+	case extra := <-sink.ch:
+		t.Fatalf("a second snapshot followed for the same keystroke: %v", titles(extra.Items))
+	default:
+	}
+}
+
+// TestRowsOnScreenKeepTheirOrderWhenALateProviderAnswers checks that late rows are ranked consistently.
+func TestRowsOnScreenKeepTheirOrderWhenALateProviderAnswers(t *testing.T) {
+	clock := fake.NewClock()
+	sink := newSnapshotSink()
+	c := NewCoordinator(Options{Clock: clock, OnSnapshot: sink.OnSnapshot, Flat: true})
+	release := make(chan struct{})
+	late := gatedProvider{id: "late", first: Item{ID: "early", Kind: KindFiles, Title: "Early", Score: 20}, late: Item{ID: "best", Kind: KindFiles, Title: "Best", Score: 99}, release: release}
+	fast := fixedRows("fast", Item{ID: "fast", Kind: KindCommands, Title: "Fast", Score: 50})
+	c.Query("q", []Provider{late, fast})
+	passFirstSnapshot(t, c, clock)
+
+	first := sink.next(t)
+	if !equalStrings(titles(first.Items), []string{"Fast", "Early"}) {
+		t.Fatalf("first snapshot rows = %v", titles(first.Items))
+	}
+	close(release)
+	snaps := sink.untilSettled(t, c.Gen())
+	if got := titles(snaps[len(snaps)-1].Items); !equalStrings(got, []string{"Best", "Fast", "Early"}) {
+		t.Fatalf("rows after the late answer = %v, want all rows in ranked order", got)
+	}
+
+	sink2 := newSnapshotSink()
+	c.opts.OnSnapshot = sink2.OnSnapshot
+	if warm, hit := c.Query("q", []Provider{fixedRows("late", Item{ID: "best", Kind: KindFiles, Title: "Best", Score: 99}), fast}); !hit || titles(warm.Items)[0] != "Best" {
+		t.Fatalf("revisited query rows = %v, want the remembered result in its best order", titles(warm.Items))
+	}
+}
+
+// TestALateExactMatchLeadsTheRowsOnScreenOfAWorseTier checks that the stable order holds inside a tier only: the first
+// snapshot of "loom" lacks the slow provider's exact match, and when it arrives it goes above the worse rows shown, while
+// the rows of one tier keep their order.
+func TestALateExactMatchLeadsTheRowsOnScreenOfAWorseTier(t *testing.T) {
+	clock := fake.NewClock()
+	sink := newSnapshotSink()
+	c := NewCoordinator(Options{Clock: clock, OnSnapshot: sink.OnSnapshot, Flat: true, Tiered: true, Learner: tieredLearner{}})
+	release := make(chan struct{})
+	late := gatedProvider{id: "late", first: Item{ID: "helper", Kind: KindFiles, Title: "Studio Loom Helper"}, late: Item{ID: "loom", Kind: KindApplications, Title: "Loom"}, release: release}
+	fast := fixedRows("fast", Item{ID: "gloomy", Kind: KindCommands, Title: "Gloomy"})
+	c.Query("loom", []Provider{late, fast})
+	passFirstSnapshot(t, c, clock)
+
+	first := sink.next(t)
+	if !equalStrings(titles(first.Items), []string{"Studio Loom Helper", "Gloomy"}) {
+		t.Fatalf("first snapshot rows = %v", titles(first.Items))
+	}
+	close(release)
+	snaps := sink.untilSettled(t, c.Gen())
+	want := []string{"Loom", "Studio Loom Helper", "Gloomy"}
+	if got := titles(snaps[len(snaps)-1].Items); !equalStrings(got, want) {
+		t.Fatalf("rows after the late answer = %v, want %v", got, want)
+	}
+}
+
+// TestALateAnswerLandsAboveTheQueryFallbacks checks that rows arriving after the first snapshot go above the web search
+// and Automate rows, so Return never runs a fallback while a real match is on screen.
+func TestALateAnswerLandsAboveTheQueryFallbacks(t *testing.T) {
+	clock := fake.NewClock()
+	sink := newSnapshotSink()
+	c := NewCoordinator(Options{Clock: clock, OnSnapshot: sink.OnSnapshot, Flat: true})
+	release := make(chan struct{})
+	late := gatedProvider{id: "late", first: Item{ID: "web", Kind: KindSearch, Title: "Search the web", Score: 1, QueryFallback: true}, late: Item{ID: "match", Kind: KindCommands, Title: "Match", Score: 90}, release: release}
+	c.Query("q", []Provider{late})
+	clock.AwaitTimerDueIn(HardBudget) // the budget watch has started, so advancing below moves its timer too
+	passFirstSnapshot(t, c, clock)
+	clock.AwaitTimerDueIn(HardBudget - FirstSnapshot)
+	clock.Advance(HardBudget - FirstSnapshot)
+	if settled := sink.untilSettled(t, c.Gen()); !containsTitle(settled[len(settled)-1].Items, "Search the web") {
+		t.Fatalf("the cut-off query should show its fallback, got %v", titles(settled[len(settled)-1].Items))
+	}
+	close(release)
+	var got []string
+	for !slices.Contains(got, "Match") {
+		got = titles(sink.next(t).Items)
+	}
+	if len(got) == 0 || got[0] != "Match" {
+		t.Fatalf("rows = %v, want the late match above the fallback", got)
+	}
+}

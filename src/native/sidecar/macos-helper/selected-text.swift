@@ -1,0 +1,302 @@
+import AppKit
+import ApplicationServices
+import Foundation
+
+private let noSelectionExitCode: Int32 = 3
+
+func fail(_ message: String, code: Int32 = 1) -> Never {
+  FileHandle.standardError.write(Data("\(message)\n".utf8))
+  exit(code)
+}
+
+func attribute(_ element: AXUIElement, _ name: CFString) -> AnyObject? {
+  var value: AnyObject?
+  let result = AXUIElementCopyAttributeValue(element, name, &value)
+  guard result != .apiDisabled else {
+    fail("Accessibility access is blocked", code: 2)
+  }
+  guard result == .success else {
+    return nil
+  }
+  return value
+}
+
+private func parameterizedAttribute(
+  _ element: AXUIElement,
+  _ name: CFString,
+  _ parameter: AnyObject
+) -> AnyObject? {
+  var value: AnyObject?
+  let result = AXUIElementCopyParameterizedAttributeValue(
+    element,
+    name,
+    parameter,
+    &value
+  )
+  guard result != .apiDisabled else {
+    fail("Accessibility access is blocked", code: 2)
+  }
+  guard result == .success else {
+    return nil
+  }
+  return value
+}
+
+private func text(_ value: AnyObject?) -> String? {
+  if let value = value as? String, !value.isEmpty { return value }
+  if let value = value as? NSAttributedString, !value.string.isEmpty {
+    return value.string
+  }
+  return nil
+}
+
+private func element(_ value: AnyObject?) -> AXUIElement? {
+  guard let value, CFGetTypeID(value) == AXUIElementGetTypeID() else {
+    return nil
+  }
+  return (value as! AXUIElement)
+}
+
+private func selectedRange(_ element: AXUIElement) -> (AnyObject, CFRange)? {
+  guard
+    let value = attribute(element, kAXSelectedTextRangeAttribute as CFString)
+  else {
+    return nil
+  }
+  var range = CFRange(location: 0, length: 0)
+  guard
+    CFGetTypeID(value) == AXValueGetTypeID(),
+    AXValueGetValue(value as! AXValue, .cfRange, &range),
+    range.length > 0
+  else {
+    return nil
+  }
+  return (value, range)
+}
+
+private func selectedTextFromRange(
+  _ element: AXUIElement,
+  _ rangeValue: AnyObject,
+  _ range: CFRange
+) -> String? {
+  for name in [
+    kAXStringForRangeParameterizedAttribute as CFString,
+    kAXAttributedStringForRangeParameterizedAttribute as CFString,
+  ] {
+    if let result = text(parameterizedAttribute(element, name, rangeValue)) {
+      return result
+    }
+  }
+
+  guard let fullText = attribute(element, kAXValueAttribute as CFString) as? String
+  else {
+    return nil
+  }
+  let utf16 = fullText.utf16
+  guard
+    let start = utf16.index(
+      utf16.startIndex,
+      offsetBy: range.location,
+      limitedBy: utf16.endIndex
+    ),
+    let end = utf16.index(
+      start,
+      offsetBy: range.length,
+      limitedBy: utf16.endIndex
+    )
+  else {
+    return nil
+  }
+  return String(utf16[start..<end])
+}
+
+private func selectedText(_ element: AXUIElement) -> String? {
+  let role = attribute(element, kAXRoleAttribute as CFString) as? String
+  let subrole = attribute(element, kAXSubroleAttribute as CFString) as? String
+  if role == "AXSecureTextField" || subrole == (kAXSecureTextFieldSubrole as String) {
+    return nil
+  }
+
+  if let result = text(attribute(element, kAXSelectedTextAttribute as CFString)) {
+    return result
+  }
+  if let markerRange = attribute(element, "AXSelectedTextMarkerRange" as CFString) {
+    for name in [
+      "AXStringForTextMarkerRange" as CFString,
+      "AXAttributedStringForTextMarkerRange" as CFString,
+    ] {
+      if let result = text(parameterizedAttribute(element, name, markerRange)) {
+        return result
+      }
+    }
+  }
+  if let (rangeValue, range) = selectedRange(element) {
+    return selectedTextFromRange(element, rangeValue, range)
+  }
+  return nil
+}
+
+private func selectedTextFromFocusedHierarchy(_ root: AXUIElement) -> String? {
+  var current = root
+  for _ in 0..<8 {
+    if let result = selectedText(current) { return result }
+    guard let focused = element(
+      attribute(current, kAXFocusedUIElementAttribute as CFString)
+    ) else {
+      return nil
+    }
+    current = focused
+  }
+  return nil
+}
+
+private func textValue(_ element: AXUIElement) -> String? {
+  attribute(element, kAXValueAttribute as CFString) as? String
+}
+
+private func replacementApplied(
+  _ element: AXUIElement,
+  _ replacement: String,
+  _ valueBefore: String?
+) -> Bool {
+  for attempt in 0..<8 {
+    if attempt > 0 { Thread.sleep(forTimeInterval: 0.04) }
+    guard let valueAfter = textValue(element) else { return false }
+    if valueAfter == valueBefore { continue }
+    return valueAfter.contains(replacement)
+  }
+  return false
+}
+
+private func replaceSelectedTextInFocusedHierarchy(
+  _ root: AXUIElement,
+  _ replacement: String
+) -> Bool {
+  var current = root
+  for _ in 0..<8 {
+    if selectedText(current) != nil {
+      var settable = DarwinBoolean(false)
+      if
+        AXUIElementIsAttributeSettable(
+          current,
+          kAXSelectedTextAttribute as CFString,
+          &settable
+        ) == .success,
+        settable.boolValue
+      {
+        let valueBefore = textValue(current)
+        if
+          AXUIElementSetAttributeValue(
+            current,
+            kAXSelectedTextAttribute as CFString,
+            replacement as CFTypeRef
+          ) == .success
+        {
+          return replacementApplied(current, replacement, valueBefore)
+        }
+      }
+    }
+    guard let focused = element(
+      attribute(current, kAXFocusedUIElementAttribute as CFString)
+    ) else {
+      return false
+    }
+    current = focused
+  }
+  return false
+}
+
+func readSelection(pid: pid_t) -> Never {
+  let app = AXUIElementCreateApplication(pid)
+  AXUIElementSetAttributeValue(
+    app,
+    "AXManualAccessibility" as CFString,
+    kCFBooleanTrue
+  )
+
+  for attempt in 0..<2 {
+    if
+      NSWorkspace.shared.frontmostApplication?.processIdentifier == pid,
+      let focused = element(
+        attribute(app, kAXFocusedUIElementAttribute as CFString)
+      ), let result = selectedTextFromFocusedHierarchy(focused)
+    {
+      FileHandle.standardOutput.write(Data(result.utf8))
+      exit(0)
+    }
+    if attempt == 0 { Thread.sleep(forTimeInterval: 0.06) }
+  }
+  guard NSWorkspace.shared.frontmostApplication?.processIdentifier == pid else {
+    fail("Selection target is not frontmost", code: 4)
+  }
+  exit(noSelectionExitCode)
+}
+
+private let copyModifiers: CGEventFlags = [
+  .maskCommand, .maskControl, .maskAlternate, .maskShift,
+]
+
+/// A global shortcut's modifiers are still down when its handler runs; a copy
+/// sent with them is Command+Control+Alt+C, not Command+C. Wait for the user to
+/// let go, bounded, and report 5 if they never do.
+private func waitForModifiersReleased() -> Bool {
+  let deadline = Date().addingTimeInterval(1.5)
+  while !CGEventSource.flagsState(.combinedSessionState)
+    .intersection(copyModifiers).isEmpty
+  {
+    if Date() >= deadline { return false }
+    Thread.sleep(forTimeInterval: 0.02)
+  }
+  return true
+}
+
+func copySelection(pid: pid_t) -> Never {
+  guard CGPreflightPostEventAccess() else {
+    fail("Accessibility access for keyboard events is blocked", code: 2)
+  }
+  guard NSWorkspace.shared.frontmostApplication?.processIdentifier == pid else {
+    fail("Selection target is not frontmost", code: 4)
+  }
+  guard waitForModifiersReleased() else {
+    fail("Shortcut modifier keys are still held", code: 5)
+  }
+  guard let source = CGEventSource(stateID: .hidSystemState) else {
+    fail("Could not create keyboard event source")
+  }
+  for keyDown in [true, false] {
+    guard
+      let event = CGEvent(
+        keyboardEventSource: source,
+        virtualKey: 8,
+        keyDown: keyDown
+      )
+    else {
+      fail("Could not create keyboard event")
+    }
+    event.flags = .maskCommand
+    event.post(tap: .cghidEventTap)
+  }
+  exit(0)
+}
+
+func replaceSelection(pid: pid_t) -> Never {
+  guard NSWorkspace.shared.frontmostApplication?.processIdentifier == pid else {
+    fail("Selection target is not frontmost", code: 4)
+  }
+  let data = FileHandle.standardInput.readDataToEndOfFile()
+  guard let replacement = String(data: data, encoding: .utf8) else {
+    fail("Replacement text is not valid UTF-8")
+  }
+  let app = AXUIElementCreateApplication(pid)
+  AXUIElementSetAttributeValue(
+    app,
+    "AXManualAccessibility" as CFString,
+    kCFBooleanTrue
+  )
+  guard let focused = element(
+    attribute(app, kAXFocusedUIElementAttribute as CFString)
+  ), replaceSelectedTextInFocusedHierarchy(focused, replacement) else {
+    exit(noSelectionExitCode)
+  }
+  exit(0)
+}

@@ -46,65 +46,17 @@ if ('pnpm' in manifest) {
     'package.json must not contain pnpm build-script settings; pnpm reads them from pnpm-workspace.yaml.',
   );
 }
-const electronRepairScript = path.join(root, 'scripts', 'ensure-electron.cjs');
-const backendRepairScript = path.join(root, 'scripts', 'ensure-backend.cjs');
-if (
-  manifest.scripts.predev !==
-  'node scripts/build-macos-selected-text-helper.cjs && node scripts/build-windows-desktop-text-helper.cjs && node scripts/ensure-electron.cjs && node scripts/ensure-backend.cjs'
-) {
+if (fs.existsSync(path.join(root, 'pnpm-workspace.yaml'))) {
   throw new Error(
-    'package.json predev must build the desktop helpers and run the conditional Electron and backend repair scripts.',
-  );
-}
-if (!fs.existsSync(electronRepairScript)) {
-  throw new Error('The Electron repair script must exist.');
-}
-if (!fs.existsSync(backendRepairScript)) {
-  throw new Error('The backend repair script must exist.');
-}
-const electronRepair = require(electronRepairScript);
-for (const functionName of [
-  'cleanElectronGeneratedPayload',
-  'electronInstallerEnvironment',
-  'ensureElectronAvailable',
-  'installElectronBinary',
-  'resolveInstalledElectronExecutable',
-]) {
-  if (typeof electronRepair[functionName] !== 'function') {
-    throw new Error(
-      `The Electron repair script must export ${functionName}().`,
-    );
-  }
-}
-const backendRepair = require(backendRepairScript);
-if (typeof backendRepair.ensureBackendAvailable !== 'function') {
-  throw new Error(
-    'The backend repair script must export ensureBackendAvailable().',
+    'The root has no dependencies with build scripts; remove pnpm-workspace.yaml or extend this check.',
   );
 }
 
-const rootDependencies = [
-  '@google/genai',
-  'electron',
-  'electron-winstaller',
-  'esbuild',
-  'protobufjs',
-  'sharp',
-];
-const rootLegacyDependencies = rootDependencies.filter(
-  (dependency) => dependency !== 'sharp',
-);
 const backendDependencies = ['esbuild', 'sharp'];
-
-assertDependencies(root, 'allowBuilds', rootDependencies);
-assertDependencies(root, 'onlyBuiltDependencies', rootLegacyDependencies);
+const backendDirectory = path.join(root, 'src', 'backend');
+assertDependencies(backendDirectory, 'allowBuilds', backendDependencies);
 assertDependencies(
-  path.join(root, 'src', 'backend'),
-  'allowBuilds',
-  backendDependencies,
-);
-assertDependencies(
-  path.join(root, 'src', 'backend'),
+  backendDirectory,
   'onlyBuiltDependencies',
   backendDependencies,
 );

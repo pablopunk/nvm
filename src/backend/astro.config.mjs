@@ -3,7 +3,6 @@ import { defineConfig } from 'astro/config';
 import vercel from '@astrojs/vercel';
 import react from '@astrojs/react';
 import tailwindcss from '@tailwindcss/vite';
-import { execFileSync } from 'node:child_process';
 import { fileURLToPath } from 'node:url';
 
 const repoRoot = fileURLToPath(new URL('../..', import.meta.url));
@@ -24,40 +23,17 @@ function resolveBuildCommitSha() {
 
 const buildCommitSha = resolveBuildCommitSha();
 
-/**
- * Exposes the desktop app's built-in palette items to the landing page on every
- * dev, check, and build run. Runs here instead of an npm pre-hook because
- * Vercel's Astro preset invokes `astro build` directly. It never fails the build.
- */
-const generatedPaletteItems = {
-  name: 'generated-palette-items',
-  hooks: {
-    'astro:config:setup': function generatePaletteItems() {
-      try {
-        execFileSync(
-          process.execPath,
-          ['--import', 'tsx', fileURLToPath(new URL('./scripts/generate-palette-items.ts', import.meta.url))],
-          { stdio: 'inherit' },
-        );
-      } catch (error) {
-        console.warn('[palette] Generation failed; the landing palette uses sample content only.', error);
-      }
-    },
-  },
-};
-
 export default defineConfig({
   output: 'server',
   adapter: vercel(),
   site: 'https://www.nvm.fyi',
   vite: {
     plugins: [tailwindcss()],
-    // The landing palette imports the desktop app's palette styles and ranking.
+    // The landing palette imports the shared palette styles and the extension API types from src/native.
     server: { fs: { allow: [repoRoot] } },
     define: { __NVM_BUILD_COMMIT_SHA__: JSON.stringify(buildCommitSha) },
   },
   integrations: [
-    generatedPaletteItems,
     react(),
   ],
 });

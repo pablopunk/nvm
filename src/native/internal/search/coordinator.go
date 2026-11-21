@@ -1,0 +1,377 @@
+package search
+
+import (
+	"context"
+	"sort"
+	"sync"
+	"time"
+
+	"github.com/pablopunk/nvm/native/internal/platform"
+	"github.com/pablopunk/nvm/native/internal/safego"
+)
+
+// The budgets of a provider call (PLAN.md B8) and the time a query has to produce its first snapshot.
+const (
+	// SoftBudget is how long a provider call may run before it is logged at debug level.
+	SoftBudget = 20 * time.Millisecond
+	// HardBudget is how long a provider call may run before it is marked slow and stops holding up the snapshot.
+	// Its rows that arrive later still merge into the same query.
+	HardBudget = 100 * time.Millisecond
+	// AggregateHardBudget bounds an aggregate whose children have independent deadlines, including host work
+	// outside those deadlines. Timed-out partial aggregates are discarded from fixed results.
+	AggregateHardBudget = time.Second
+	// FirstSnapshot is the longest a query waits for its ranked providers before its first snapshot. Until then the
+	// screen keeps the previous rows, so a keystroke changes the list once instead of once per provider. When a
+	// provider has not answered by then, the snapshot shows what has, and its rows follow the rows on screen.
+	FirstSnapshot = 40 * time.Millisecond
+
+	defaultCacheSize = 32
+)
+
+// Snapshot is the merged result of one query at one moment. Settled is set once every provider has
+// finished or been cut off; until then more snapshots of the same generation may follow. Pending is set while
+// a provider reports a call in flight (Batch.Pending), so the rows shown are not the whole answer yet.
+type Snapshot struct {
+	revision uint64
+	Gen      int
+	Query    string
+	Items    []Item
+	Settled  bool
+	Pending  bool
+	// Carried holds, while Items is empty and the query is unsettled, the rows the superseded query showed that
+	// came from providers still working on this one. Rows of a provider that already answered are never carried.
+	Carried []Item
+}
+
+// Options configures a Coordinator.
+type Options struct {
+	// Clock measures the budgets and times the first snapshot. Tests pass a fake clock.
+	Clock platform.Clock
+	// Synchronous runs the providers in the calling goroutine, so the complete result is returned by Query.
+	// It is for tests and goldens; the palette runs asynchronously.
+	Synchronous bool
+	// Limit is how many rows a merged result keeps. Zero means DefaultLimit.
+	Limit int
+	// CacheSize is how many queries keep their rows for instant redisplay. Zero means 32.
+	CacheSize int
+	// OnSnapshot receives every snapshot of an asynchronous query. It runs on a provider's goroutine, never
+	// under the coordinator's lock, so it may hand the snapshot to the UI thread.
+	OnSnapshot func(Snapshot)
+	// Learner raises the score of the rows that carry a LearnKey by what the user chose for them. Nil means
+	// no row is learned.
+	Learner Learner
+	// Tiered ranks typed queries by match tier, then class and usage, as tiered.go describes. Without it the rows rank by the
+	// Score their provider gives them. The root is tiered; a view that orders its own rows is not.
+	Tiered bool
+	// Flat lists the rows in score order with no section labels, as 1.x's root list does, for every query.
+	Flat bool
+	// SingleSnapshot publishes one complete result set per typed query: its rows and their order stay as published,
+	// and a refresh only updates the content of the rows already shown. The empty query is not fixed.
+	SingleSnapshot bool
+}
+
+// ProviderStats counts the calls of one provider over the coordinator's life.
+type ProviderStats struct {
+	ID    string
+	Calls int
+	Slow  int           // calls cut off at the hard budget
+	Last  time.Duration // duration of the most recent call that finished
+}
+
+// Coordinator runs the providers of a query concurrently, merges what they return, and keeps the merged
+// result of each query for instant redisplay. A new query cancels the previous one: rows that arrive for an
+// older generation are dropped, so a slow provider never overwrites a newer query's rows.
+type Coordinator struct {
+	opts   Options
+	single singleQueryState
+
+	mu                          sync.Mutex
+	publishMu                   sync.Mutex
+	revision, publication       uint64
+	cacheEpoch, queryCacheEpoch uint64
+	publishedRevision           uint64
+	gen                         int
+	query                       string
+	cancel                      context.CancelFunc // cancels the providers of the current generation
+	slots                       []*slot            // one per provider of the current generation, in provider order
+	pending                     int                // slots not finished yet
+	emitted                     bool               // a snapshot of the current generation has been produced
+	warmSettled                 bool               // this query had a complete snapshot before refresh
+	cache                       *queryCache
+	stats                       map[string]*ProviderStats
+	shown                       map[string][]Item // rows of the last snapshot, by provider
+	superseded                  map[string][]Item // rows of the snapshot the previous query ended on
+	matcher                     *queryMatcher     // matches the rows of matcherQuery; nil for a blank query
+	matcherQuery                string
+}
+
+// slot is one provider's part of the current generation.
+type slot struct {
+	id           string
+	appended     bool
+	items        []Item
+	refreshing   bool
+	started      time.Time
+	budget       Budget
+	finished     bool
+	returned     bool
+	selfBudgeted bool
+	pending      bool
+	slow         bool
+	cancel       context.CancelFunc
+	done         chan struct{}
+}
+
+// NewCoordinator returns a coordinator with no queries. It panics without a clock: budgets cannot be
+// measured otherwise.
+func NewCoordinator(opts Options) *Coordinator {
+	if opts.Clock == nil {
+		panic("search: NewCoordinator needs a clock")
+	}
+	if opts.CacheSize == 0 {
+		opts.CacheSize = defaultCacheSize
+	}
+	return &Coordinator{opts: opts, cache: newQueryCache(opts.CacheSize), stats: map[string]*ProviderStats{}}
+}
+
+// Cancel stops the providers of the current query and drops their rows. It is what happens to a view when
+// the palette leaves it; the remembered rows stay.
+func (c *Coordinator) Cancel() {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	c.resetLocked()
+	c.slots = nil
+	c.pending = 0
+	c.query = ""
+}
+
+// Invalidate forgets remembered rows. Use it when a snapshot must be discarded; ordinary refreshes call Query,
+// which always revalidates providers while keeping cached navigation immediate.
+func (c *Coordinator) Invalidate() {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	c.cache.clear()
+	c.cacheEpoch++
+}
+
+// Gen returns the generation of the current query. A snapshot is current when its Gen equals this value.
+func (c *Coordinator) Gen() int {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	return c.gen
+}
+
+// Stats returns the counters of every provider that has been called, sorted by ID.
+func (c *Coordinator) Stats() []ProviderStats {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	out := make([]ProviderStats, 0, len(c.stats))
+	for _, s := range c.stats {
+		out = append(out, *s)
+	}
+	sort.Slice(out, func(i, j int) bool { return out[i].ID < out[j].ID })
+	return out
+}
+
+// resetLocked starts a new generation and cancels the previous one. The caller holds c.mu.
+func (c *Coordinator) resetLocked() {
+	c.gen++
+	if c.cancel != nil {
+		c.cancel()
+		c.cancel = nil
+	}
+}
+
+// invoke runs one provider's root or search call and delivers what it emits. It is the body of every call,
+// asynchronous or not.
+func (c *Coordinator) invoke(ctx context.Context, gen, idx int, p Provider, q string) {
+	emit := func(b Batch) {
+		b.Provider = p.ID()
+		c.deliver(gen, idx, b)
+	}
+	if seeded, ok := p.(SeededSearchProvider); ok && q != "" {
+		c.mu.Lock()
+		var rows []Item
+		if gen == c.gen && idx < len(c.slots) {
+			rows = append(rows, c.slots[idx].items...)
+		}
+		c.mu.Unlock()
+		seeded.SearchSeeded(ctx, q, rows, emit)
+		return
+	}
+	answerCall(ctx, p, q, emit)
+}
+
+// answerCall runs the root call of p, streamed when it streams, or its search call for q.
+func answerCall(ctx context.Context, p Provider, q string, emit func(Batch)) {
+	if q != "" {
+		p.Search(ctx, q, emit)
+		return
+	}
+	if streamer, streams := p.(RootStreamer); streams {
+		streamer.RootStream(ctx, emit)
+		return
+	}
+	emit(Batch{Items: p.Root(ctx), Final: true})
+}
+
+func mergeCached(slots []*slot, limit int, searching, flat, settled bool) []Item {
+	var ranked, appended [][]Item
+	for _, s := range slots {
+		if s.appended {
+			appended = append(appended, s.items)
+		} else {
+			ranked = append(ranked, s.items)
+		}
+	}
+	return mergeAppended(ranked, appended, limit, searching, flat, settled)
+}
+
+// start runs one provider on its own goroutine, supervised by safego, with the budget watch beside it.
+func (c *Coordinator) start(ctx context.Context, gen, idx int, p Provider, q string) {
+	pctx, cancel := context.WithCancel(ctx)
+	c.mu.Lock()
+	if gen != c.gen || idx >= len(c.slots) {
+		c.mu.Unlock()
+		cancel()
+		return
+	}
+	c.slots[idx].cancel = cancel
+	c.statsLocked(p.ID()).Calls++
+	c.mu.Unlock()
+	safego.Go("search."+p.ID(), func(context.Context) {
+		returned := false
+		defer func() { c.complete(gen, idx, returned) }()
+		c.invoke(pctx, gen, idx, p, q)
+		returned = true
+	}, safego.WithContext(pctx), safego.WithClock(c.opts.Clock))
+	go c.watch(gen, idx)
+}
+
+// snapshotLocked merges the current generation and remembers the result for its query. The caller holds c.mu.
+func (c *Coordinator) snapshotLocked() Snapshot {
+	c.revision++
+	var ranked, appended [][]Item
+	for _, s := range c.slots {
+		if s.appended {
+			appended = append(appended, s.items)
+		} else {
+			ranked = append(ranked, s.items)
+		}
+	}
+	settled := c.pending == 0
+	fixed := c.fixedLocked()
+	limit := c.limit()
+	if fixed {
+		limit = 0
+	}
+	fresh := mergeAppended(ranked, appended, limit, c.query != "", c.opts.Flat, settled || c.warmSettled)
+	shown := fresh
+	if fixed {
+		fresh = firstN(c.single.refine(c.query, fresh), c.limit())
+		shown = fresh
+		if visible := c.single.visible; visible != nil && visible.Query == c.query {
+			shown = updateInPlace(visible.Items, fresh)
+		}
+	}
+	snap := Snapshot{revision: c.revision, Gen: c.gen, Query: c.query, Items: shown, Settled: settled, Pending: c.pendingCallsLocked()}
+	c.emitted = true
+	providerRows := c.providerCache(fresh)
+	if fixed {
+		providerRows = c.completeProviderCache()
+	}
+	c.shown = c.providerCache(snap.Items)
+	if len(snap.Items) == 0 && !settled {
+		snap.Carried = c.carriedLocked()
+	}
+	if c.queryCacheEpoch == c.cacheEpoch {
+		c.cache.put(c.query, cachedRows{items: fresh, providers: providerRows, settled: snap.Settled || c.warmSettled})
+	}
+	return snap
+}
+
+// current returns the merged result of gen, for a synchronous query.
+func (c *Coordinator) current(gen int) Snapshot {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	if gen != c.gen {
+		return Snapshot{Gen: gen}
+	}
+	return c.snapshotLocked()
+}
+
+// firstSnapshotTimer makes sure a query shows something within one frame, even when every provider is slow.
+func (c *Coordinator) firstSnapshotTimer(gen int) {
+	<-c.opts.Clock.After(FirstSnapshot)
+	c.mu.Lock()
+	if gen != c.gen || c.emitted {
+		c.mu.Unlock()
+		return
+	}
+	snap := c.snapshotLocked()
+	c.mu.Unlock()
+	c.publish(snap)
+}
+
+// publish hands a snapshot to OnSnapshot. It is called without the lock.
+func (c *Coordinator) publish(snap Snapshot) {
+	c.publishMu.Lock()
+	defer c.publishMu.Unlock()
+	c.mu.Lock()
+	if snap.Gen != c.gen || snap.revision <= c.publishedRevision {
+		c.mu.Unlock()
+		return
+	}
+	if c.opts.SingleSnapshot && snap.Query != "" {
+		if visible := c.single.visible; visible != nil && (visible.Query != snap.Query || sameDisplay(visible.Items, snap.Items)) {
+			c.mu.Unlock()
+			return
+		}
+		c.single.setVisible(snap)
+	}
+	c.publishedRevision = snap.revision
+	c.mu.Unlock()
+	if c.opts.OnSnapshot != nil {
+		c.opts.OnSnapshot(snap)
+	}
+}
+
+// fixedLocked reports whether the current query keeps one result set: a typed query of a single-snapshot view. The empty
+// query lists the root's catalog, which fills in as its sources load. The caller holds c.mu.
+func (c *Coordinator) fixedLocked() bool {
+	return c.opts.SingleSnapshot && c.query != ""
+}
+
+func (c *Coordinator) limit() int {
+	if c.opts.Limit > 0 {
+		return c.opts.Limit
+	}
+	return DefaultLimit
+}
+
+// statsLocked returns the counters of a provider, creating them on first use. The caller holds c.mu.
+func (c *Coordinator) statsLocked(id string) *ProviderStats {
+	s, ok := c.stats[id]
+	if !ok {
+		s = &ProviderStats{ID: id}
+		c.stats[id] = s
+	}
+	return s
+}
+
+func ownsCallBudgets(p Provider) bool {
+	_, ok := p.(SelfBudgetedProvider)
+	return ok
+}
+
+// carriedLocked returns the superseded query's rows whose provider has not finished the current one. The caller
+// holds c.mu.
+func (c *Coordinator) carriedLocked() []Item {
+	var rows []Item
+	for _, s := range c.slots {
+		if !s.finished {
+			rows = append(rows, c.superseded[s.id]...)
+		}
+	}
+	return rows
+}

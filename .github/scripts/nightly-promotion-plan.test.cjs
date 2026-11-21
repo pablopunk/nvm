@@ -128,3 +128,46 @@ test('does not select ineligible, unpublished or older releases, and propagates 
   });
   assert.throws(() => planNightlyPromotion(releases, probe), /rate limited/);
 });
+
+test('a candidate needs both the repository CI and the Go app CI to pass on its commit', () => {
+  const candidate = 'v2026.1029.3-dev';
+  const sha = 'c'.repeat(40);
+  const run = (conclusion) => ({
+    workflow_runs: [
+      {
+        head_sha: sha,
+        event: 'push',
+        run_number: 1,
+        id: 1,
+        status: 'completed',
+        conclusion,
+      },
+    ],
+  });
+  const probeFor = (failing) =>
+    createEligibilityProbe({
+      repository: 'pablopunk/nvm',
+      healthFile: 'health.json',
+      gh: (endpoint) =>
+        endpoint.includes('/commits/')
+          ? { sha }
+          : run(
+              endpoint.includes(`/workflows/${failing}/`)
+                ? 'failure'
+                : 'success',
+            ),
+      identity: () => ({ status: 'verified' }),
+    });
+  assert.equal(
+    planNightlyPromotion([release(candidate)], probeFor('native.yml')).selected,
+    null,
+  );
+  assert.equal(
+    planNightlyPromotion([release(candidate)], probeFor('ci.yml')).selected,
+    null,
+  );
+  assert.equal(
+    planNightlyPromotion([release(candidate)], probeFor('none')).selected.tag,
+    candidate,
+  );
+});

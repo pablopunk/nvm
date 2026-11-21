@@ -1,0 +1,346 @@
+package clipboard
+
+import (
+	"fmt"
+	"image/color"
+	"testing"
+	"time"
+
+	"github.com/pablopunk/nvm/native/internal/platform"
+	"github.com/pablopunk/nvm/native/internal/platform/fake"
+)
+
+// Cases ported from clipboard-history.test.ts that drive the watcher, and the watcher behaviors the 1.x
+// suite leaves implicit: startup baseline, burst coalescing, same-content dedupe, own-write suppression,
+// the backoff schedule and shutdown.
+
+// red and blue are the test image colors.
+var (
+	red  = color.NRGBA{R: 255, A: 255}
+	blue = color.NRGBA{B: 255, A: 255}
+)
+
+// TestReadCandidateReadsText ports 'readClipboardItem reads text from clipboard'.
+func TestReadCandidateReadsText(t *testing.T) {
+	h := newHarness(t)
+	if err := h.clip.WriteText("hello world"); err != nil {
+		t.Fatal(err)
+	}
+	cand := h.watcher.readCandidate(h.watcher.readFormats(), true)
+	if cand == nil || cand.entry.Kind != KindText || cand.entry.Text != "hello world" {
+		t.Fatalf("candidate = %+v", cand)
+	}
+	if want := TextID("hello world"); cand.entry.ID != want {
+		t.Fatalf("ID = %s, want %s", cand.entry.ID, want)
+	}
+}
+
+// TestReadCandidateReturnsNothingForEmptyClipboard ports 'readClipboardItem returns null for empty clipboard'.
+func TestReadCandidateReturnsNothingForEmptyClipboard(t *testing.T) {
+	h := newHarness(t)
+	if cand := h.watcher.readCandidate(h.watcher.readFormats(), true); cand != nil {
+		t.Fatalf("candidate = %+v, want nil", cand)
+	}
+}
+
+// TestReadCandidateReadsImageWithoutStoring ports 'readClipboardItem reads image from clipboard without
+// persisting': reading a candidate writes no file.
+func TestReadCandidateReadsImageWithoutStoring(t *testing.T) {
+	h := newHarness(t)
+	if err := h.clip.WriteImagePNG(pngSolid(t, 4, 3, red)); err != nil {
+		t.Fatal(err)
+	}
+	cand := h.watcher.readCandidate(h.watcher.readFormats(), true)
+	if cand == nil || cand.entry.Kind != KindImage || len(cand.png) == 0 {
+		t.Fatalf("candidate = %+v", cand)
+	}
+	if cand.entry.Width != 4 || cand.entry.Height != 3 {
+		t.Fatalf("size = %dx%d", cand.entry.Width, cand.entry.Height)
+	}
+	if got := imageFileCount(t, h); got != 0 {
+		t.Fatalf("reading wrote %d image files", got)
+	}
+}
+
+// TestPollPersistsNewImageOnce ports 'pollClipboardChange persists a new clipboard image once'.
+func TestPollPersistsNewImageOnce(t *testing.T) {
+	h := newHarness(t)
+	if err := h.clip.WriteImagePNG(pngSolid(t, 2, 2, red)); err != nil {
+		t.Fatal(err)
+	}
+	h.watcher.pollOnce(false)
+	if imageFileCount(t, h) != 1 || h.history.Len() != 1 {
+		t.Fatalf("first poll: files %d, entries %d", imageFileCount(t, h), h.history.Len())
+	}
+	h.watcher.pollOnce(false)
+	if imageFileCount(t, h) != 1 || h.history.Len() != 1 {
+		t.Fatalf("unchanged image stored again: files %d, entries %d", imageFileCount(t, h), h.history.Len())
+	}
+}
+
+// TestPollDetectsTextAfterImage ports 'pollClipboardChange detects text changes without reading images'.
+func TestPollDetectsTextAfterImage(t *testing.T) {
+	h := newHarness(t)
+	if err := h.clip.WriteImagePNG(pngSolid(t, 2, 2, red)); err != nil {
+		t.Fatal(err)
+	}
+	h.watcher.pollOnce(false)
+	if err := h.clip.WriteText("hello world"); err != nil {
+		t.Fatal(err)
+	}
+	h.watcher.pollOnce(false)
+	if top := h.history.Find(Query{Limit: 1})[0]; top.Kind != KindText || top.Text != "hello world" {
+		t.Fatalf("top = %+v", top)
+	}
+}
+
+// TestPollCapturesImageFileCopiedWithFileURL ports 'pollClipboardChange captures image files copied with a file
+// url': a copied image file becomes an image entry, stored once.
+func TestPollCapturesImageFileCopiedWithFileURL(t *testing.T) {
+	h := newHarness(t)
+	h.files.Seed("/tmp/screenshot.png", pngSolid(t, 5, 4, blue))
+	h.clip.SetFilePaths("/tmp/screenshot.png")
+	h.watcher.pollOnce(false)
+	entries := h.history.Find(Query{})
+	if len(entries) != 1 || entries[0].Kind != KindImage {
+		t.Fatalf("entries = %+v, want one image", entries)
+	}
+	if imageFileCount(t, h) != 1 {
+		t.Fatalf("image files = %d, want 1", imageFileCount(t, h))
+	}
+	h.watcher.pollOnce(false)
+	if h.history.Len() != 1 || imageFileCount(t, h) != 1 {
+		t.Fatal("unchanged image file was stored again")
+	}
+}
+
+// TestPollCapturesFileListWhenNotAnImage: copied files that are not images become a files entry with the paths.
+func TestPollCapturesFileListWhenNotAnImage(t *testing.T) {
+	h := newHarness(t)
+	h.clip.SetFilePaths("/home/u/a.txt", "/home/u/b.txt")
+	h.watcher.pollOnce(false)
+	entries := h.history.Find(Query{})
+	if len(entries) != 1 || entries[0].Kind != KindFiles || len(entries[0].Paths) != 2 {
+		t.Fatalf("entries = %+v", entries)
+	}
+}
+
+// TestPollMarkerCases ports 'pollClipboardChange skips text marked <marker> and does not remember it', once per
+// NSPasteboard marker of the 1.x suite. The marker-to-format mapping lives in platform/real and is tested there;
+// here every marker is the concealed format the port reports.
+func TestPollMarkerCases(t *testing.T) {
+	markers := []string{
+		"org.nspasteboard.ConcealedType",
+		"org.nspasteboard.TransientType",
+		"org.nspasteboard.AutoGeneratedType",
+	}
+	for _, marker := range markers {
+		t.Run(marker, func(t *testing.T) {
+			h := newHarness(t)
+			h.clip.WriteConcealedText("hunter2")
+			h.watcher.pollOnce(false)
+			if h.history.Len() != 0 {
+				t.Fatal("concealed text was stored")
+			}
+			if err := h.clip.WriteText("hunter2"); err != nil {
+				t.Fatal(err)
+			}
+			h.watcher.pollOnce(false)
+			if top := h.history.Find(Query{Limit: 1}); len(top) != 1 || top[0].Text != "hunter2" {
+				t.Fatalf("the same text without the marker was not captured: %+v", top)
+			}
+		})
+	}
+}
+
+// TestPollSkipsConcealedImagesWithoutPersisting ports 'pollClipboardChange skips concealed images without
+// persisting them'.
+func TestPollSkipsConcealedImagesWithoutPersisting(t *testing.T) {
+	h := newHarness(t)
+	h.clip.WriteConcealedImagePNG(pngSolid(t, 2, 2, red))
+	h.watcher.pollOnce(false)
+	if h.history.Len() != 0 || imageFileCount(t, h) != 0 {
+		t.Fatalf("concealed image stored: entries %d, files %d", h.history.Len(), imageFileCount(t, h))
+	}
+}
+
+// TestPollCapturesOrdinaryText ports 'pollClipboardChange captures ordinary text when no marker is present'.
+func TestPollCapturesOrdinaryText(t *testing.T) {
+	h := newHarness(t)
+	if err := h.clip.WriteText("plain note"); err != nil {
+		t.Fatal(err)
+	}
+	h.watcher.pollOnce(false)
+	if got := h.texts(); len(got) != 1 || got[0] != "plain note" {
+		t.Fatalf("texts = %v", got)
+	}
+}
+
+// TestPollFailsOpenWhenFormatsFail ports 'pollClipboardChange fails open and captures text when hasFormat throws'.
+func TestPollFailsOpenWhenFormatsFail(t *testing.T) {
+	h := newHarness(t)
+	if err := h.clip.WriteText("plain note"); err != nil {
+		t.Fatal(err)
+	}
+	h.clip.FailNext(fake.OpClipboardFormats, fmt.Errorf("pasteboard unavailable"))
+	h.watcher.pollOnce(false)
+	if got := h.texts(); len(got) != 1 || got[0] != "plain note" {
+		t.Fatalf("texts = %v", got)
+	}
+}
+
+// TestJobDescriptor ports 'startClipboardWatcher returns job descriptor': the watcher describes itself as the
+// host job clipboard.poll on a one-second cadence with a two-second timeout.
+func TestJobDescriptor(t *testing.T) {
+	h := newHarness(t)
+	job := h.watcher.Job()
+	if job.ID != "clipboard.poll" || job.Owner != "host" || job.Scope != "clipboard" {
+		t.Fatalf("job = %+v", job)
+	}
+	if job.PollEvery != time.Second || job.Timeout != 2*time.Second {
+		t.Fatalf("cadence = %v, timeout = %v", job.PollEvery, job.Timeout)
+	}
+}
+
+// TestStartupIgnoresUnreadableText ports 'startClipboardWatcher ignores non-string clipboard text': a text read
+// that fails at startup is an empty baseline, not a failure.
+func TestStartupIgnoresUnreadableText(t *testing.T) {
+	h := newHarness(t)
+	h.clip.FailNext(fake.OpClipboardReadText, fmt.Errorf("unexpected clipboard data"))
+	h.watcher.prime()
+	if err := h.clip.WriteText("after start"); err != nil {
+		t.Fatal(err)
+	}
+	h.watcher.pollOnce(false)
+	if got := h.texts(); len(got) != 1 || got[0] != "after start" {
+		t.Fatalf("texts = %v", got)
+	}
+}
+
+// TestSuppressionIsRecognizedThenExpires ports 'suppressClipboardHistoryId adds suppression': the suppression is
+// active until the window passes, then it is forgotten.
+func TestSuppressionIsRecognizedThenExpires(t *testing.T) {
+	h := newHarness(t)
+	h.watcher.Suppress("text:abc")
+	if !h.watcher.takeSuppression("text:abc") {
+		t.Fatal("suppression not active right after Suppress")
+	}
+	h.clock.Advance(SuppressWindow)
+	if h.watcher.takeSuppression("text:abc") {
+		t.Fatal("suppression still active after the window")
+	}
+}
+
+// TestStartupImageIsIgnored: an image already on the clipboard when the app starts is the baseline and is never
+// stored; a different image copied later is.
+func TestStartupImageIsIgnored(t *testing.T) {
+	h := newHarness(t)
+	if err := h.clip.WriteImagePNG(pngSolid(t, 2, 2, red)); err != nil {
+		t.Fatal(err)
+	}
+	h.watcher.prime()
+	h.watcher.pollOnce(true)
+	if h.history.Len() != 0 {
+		t.Fatalf("startup image was stored: %d entries", h.history.Len())
+	}
+	if err := h.clip.WriteImagePNG(pngSolid(t, 2, 2, blue)); err != nil {
+		t.Fatal(err)
+	}
+	h.watcher.pollOnce(true)
+	if h.history.Len() != 1 {
+		t.Fatalf("new image not stored: %d entries", h.history.Len())
+	}
+}
+
+// TestSameContentTwiceIsOneEntry: copying the same text twice in a row keeps one entry; copying it again after
+// something else moves it to the top.
+func TestSameContentTwiceIsOneEntry(t *testing.T) {
+	h := newHarness(t)
+	for range 2 {
+		if err := h.clip.WriteText("same"); err != nil {
+			t.Fatal(err)
+		}
+		h.watcher.pollOnce(false)
+	}
+	if h.history.Len() != 1 {
+		t.Fatalf("Len = %d after the same content twice", h.history.Len())
+	}
+	mustWrite(t, h, "other")
+	h.watcher.pollOnce(false)
+	mustWrite(t, h, "same")
+	h.watcher.pollOnce(false)
+	if got := h.texts(); len(got) != 2 || got[0] != "same" {
+		t.Fatalf("texts = %v, want same first", got)
+	}
+}
+
+// TestOwnWriteIsSuppressed: an entry the app copies back is not recorded again and does not reorder the history.
+func TestOwnWriteIsSuppressed(t *testing.T) {
+	h := newHarness(t)
+	mustWrite(t, h, "alpha")
+	h.watcher.pollOnce(false)
+	mustWrite(t, h, "beta")
+	h.watcher.pollOnce(false)
+	alpha := h.history.Search("alpha")[0]
+	if err := h.actions.Copy(alpha); err != nil {
+		t.Fatalf("Copy: %v", err)
+	}
+	h.watcher.pollOnce(false)
+	if got := h.texts(); len(got) != 2 || got[0] != "beta" || got[1] != "alpha" {
+		t.Fatalf("texts = %v, want beta then alpha", got)
+	}
+	if got := h.history.Search("alpha")[0].ID; got != alpha.ID {
+		t.Fatalf("alpha entry changed ID: %s", got)
+	}
+}
+
+// TestOwnImageWriteIsSuppressed: an image copied back from history is recognized by its pixels, so the OS
+// re-encoding it does not create a duplicate.
+func TestOwnImageWriteIsSuppressed(t *testing.T) {
+	h := newHarness(t)
+	if err := h.clip.WriteImagePNG(pngSolid(t, 3, 3, red)); err != nil {
+		t.Fatal(err)
+	}
+	h.watcher.pollOnce(false)
+	mustWrite(t, h, "something else")
+	h.watcher.pollOnce(false)
+	entry := h.history.Find(Query{Kinds: []Kind{KindImage}})[0]
+	if err := h.actions.Copy(entry); err != nil {
+		t.Fatalf("Copy image: %v", err)
+	}
+	h.watcher.pollOnce(true)
+	if h.history.Len() != 2 {
+		t.Fatalf("Len = %d, want 2: the copied image was recorded again", h.history.Len())
+	}
+}
+
+// formatRecorder records the time of every Formats call, which is once per poll.
+type formatRecorder struct {
+	*fake.Clipboard
+	clock *fake.Clock
+	calls []time.Time
+}
+
+// Formats records the call time and delegates to the fake.
+func (f *formatRecorder) Formats() ([]platform.ClipboardFormat, error) {
+	f.calls = append(f.calls, f.clock.Now())
+	return f.Clipboard.Formats()
+}
+
+// mustWrite puts text on the fake clipboard, failing the test on error.
+func mustWrite(t *testing.T, h *harness, text string) {
+	t.Helper()
+	if err := h.clip.WriteText(text); err != nil {
+		t.Fatalf("WriteText: %v", err)
+	}
+}
+
+// imageFileCount counts the files in the image folder.
+func imageFileCount(t *testing.T, h *harness) int {
+	t.Helper()
+	entries, err := h.files.ReadDir(imagesDir)
+	if err != nil {
+		return 0
+	}
+	return len(entries)
+}

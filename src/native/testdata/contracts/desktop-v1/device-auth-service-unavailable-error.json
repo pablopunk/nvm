@@ -1,0 +1,6 @@
+{
+  "error": {
+    "type": "service_unavailable",
+    "message": "Device authorization is temporarily disabled."
+  }
+}

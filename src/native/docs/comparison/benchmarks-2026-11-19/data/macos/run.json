@@ -1,0 +1,16 @@
+{
+  "platform": "macos",
+  "title": "macOS (GitHub-hosted VM)",
+  "machine": "GitHub-hosted macos-15 runner: Apple M1 (Virtual) virtual machine, 3 vCPU, 7 GB, no GPU acceleration, macOS 15.8.2.",
+  "memory_metric": "physical footprint of the whole process tree",
+  "collected": "20 Nov 2026",
+  "v1_label": "v1 · 2026.1031.2 (Electron)",
+  "v2_label": "v2 · 71b918bf",
+  "attempts_note": "30 across 10 alternating process blocks",
+  "notes": [
+    "A virtual machine, not a real Mac: absolute numbers differ from hardware; compare v1 with v2 within this run only. Alternating AB/BA blocks, disposable profiles with identical 51,000-file fixtures, one 60-second priming launch per profile, profiles excluded from Spotlight; observer key-to-frame floor median 29.0 ms.",
+    "Bounds are ScreenCaptureKit frame and idle-sample times of the palette region, from CGEvent dispatch start; frames are classified by Vision OCR after each capture window. Second Settings row from the explore pass: 'System Settings' (v1), 'Window Management Settings' (v2). A palette shown at launch is dismissed with Escape before the hidden phase. The action menu is not measured (v1 has none).",
+    "The stable-list signature is the first nine row titles below the input, as on Linux; subtitles, right-hand values and footer chips are not compared.",
+    "ScreenCaptureKit idle samples are sparse on this VM: the app's stream went 300 ms or more without a frame or idle sample in v1 100% of attempts after the key and 92% in the 1 s no-input window before it; v2 100% of attempts after the key and 99% in the 1 s no-input window before it, so a silent stream is not evidence of a stall. Probe diagnostics (6 extra Down/Enter attempts per block; a harness window flipped 5 times at +150 to +550 ms, captured by its own stream): flips reached the probe's stream after v1 median 74 ms, p90 182 ms; v2 median 78 ms, p90 183 ms (the VM's compositor and capture delay, part of every upper bound); no v1 diagnostic attempt changed 400 ms or more after the key; in the 9 v2 attempts whose change came 400 ms or more after the key, flips made before that change took a median of 82 ms (p90 182 ms), as fast as any flip, so the compositor and capture kept presenting and the late change came from v2's window."
+  ]
+}

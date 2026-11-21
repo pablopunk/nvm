@@ -1,0 +1,10 @@
+{
+  "error": {
+    "type": "unsupported_client",
+    "message": "This version of Nevermind is no longer supported.",
+    "minimum_supported_desktop_version": "0.6.0",
+    "latest_desktop_version": "0.7.0",
+    "update_url": "https://example.com/update",
+    "request_id": "req_123"
+  }
+}
