@@ -4,8 +4,6 @@ import (
 	"context"
 	"fmt"
 	"strings"
-
-	"github.com/pablopunk/nvm/native/internal/dictation/webm"
 )
 
 // Segment is one WebM file of a dictation as the backend receives it. OperationID keys the request's idempotency;
@@ -47,16 +45,6 @@ func (e *SavedError) Error() string { return e.Err.Error() }
 
 // Unwrap returns the transcription's own error.
 func (e *SavedError) Unwrap() error { return e.Err }
-
-// segmentFiles muxes every captured segment of op into a WebM file, in order.
-func segmentFiles(op *operation) [][]byte {
-	track := op.track()
-	files := make([][]byte, 0, len(op.segments))
-	for _, packets := range op.segments {
-		files = append(files, webm.Mux(track, packets, FrameMillis))
-	}
-	return files
-}
 
 // transcribeFiles sends every segment file in order and joins the texts with spaces, as the desktop app does. The
 // first segment is the one a preparation covers when prepared is set. A segment that fails for a transient reason is retried

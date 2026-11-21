@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"context"
 	"errors"
+	"slices"
 	"strings"
 	"sync"
 	"testing"
@@ -14,10 +15,12 @@ import (
 )
 
 // scriptedTranscriber records every segment it is sent and every preparation release, and answers with the scripted
-// texts in order.
+// texts in order, or with bySegment's text for the segment's index when that is set, since live segments are sent in
+// parallel.
 type scriptedTranscriber struct {
 	mu         sync.Mutex
 	texts      []string
+	bySegment  map[int]string
 	err        error
 	block      chan struct{}
 	segments   []Segment
@@ -43,6 +46,12 @@ func (s *scriptedTranscriber) Transcribe(ctx context.Context, segment Segment) (
 	defer s.mu.Unlock()
 	if s.err != nil {
 		return "", s.err
+	}
+	if s.bySegment != nil {
+		return s.bySegment[segmentIndex(segment)], nil
+	}
+	if len(s.texts) == 0 {
+		return "", nil
 	}
 	text := s.texts[0]
 	s.texts = s.texts[1:]
@@ -117,7 +126,8 @@ func noWait(ctx context.Context, _ time.Duration) error {
 	return ctx.Err()
 }
 
-// speech returns seconds of a constant-level signal, enough to exercise the frame and segment logic.
+// speech returns seconds of a constant-level signal, enough to exercise the frame and segment logic. A constant level
+// is steady noise to the pause detector, so speech longer than a live segment is cut every few seconds.
 func speech(seconds float64, level int16) []int16 {
 	samples := make([]int16, int(seconds*SampleRate))
 	for i := range samples {
@@ -154,8 +164,8 @@ func TestStopTranscribesTheCapturedSpeechAsOneWebMFile(t *testing.T) {
 
 func TestLongDictationsAreSentAsOneMinuteSegmentsInOrder(t *testing.T) {
 	h := newHarness(t)
-	h.transcriber.texts = []string{"first part", "second part"}
-	h.mic.Queue(speech(61, 9000)...)
+	h.transcriber.bySegment = map[int]string{0: "first part", 1: "second part"}
+	h.mic.Queue(voice(61)...)
 	if err := h.service.Start("default"); err != nil {
 		t.Fatalf("Start: %v", err)
 	}
@@ -170,6 +180,7 @@ func TestLongDictationsAreSentAsOneMinuteSegmentsInOrder(t *testing.T) {
 	if len(ids) != 2 {
 		t.Fatalf("got %d requests, want 2 segments", len(ids))
 	}
+	slices.Sort(ids)
 	if ids[1] != ids[0]+"-1" {
 		t.Fatalf("second segment id = %q, want the first id with a -1 suffix", ids[1])
 	}

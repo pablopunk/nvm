@@ -29,11 +29,16 @@ type operation struct {
 	stream      platform.MicrophoneStream
 	restart     bool
 	// reopen opens the microphone again after its stream failed; retry bounds how often, and onRetry hears each try.
-	reopen   func(ctx context.Context) (platform.MicrophoneStream, error)
-	retry    RetryPolicy
-	onRetry  func(attempt int, err error)
-	journal  *journal
-	encoder  platform.OpusEncoder
+	reopen  func(ctx context.Context) (platform.MicrophoneStream, error)
+	retry   RetryPolicy
+	onRetry func(attempt int, err error)
+	journal *journal
+	encoder platform.OpusEncoder
+	// live transcribes each finished segment while the user goes on speaking; nil sends nothing until Stop.
+	live   *liveTranscription
+	pauses pauseDetector
+	// liveSent counts the segments handed to live; the capture touches it, then the Stop that waited for the capture.
+	liveSent int
 	done     chan struct{}
 	prepared chan struct{}
 	// preparedOK is set before prepared closes; it reports whether the backend accepted the preparation.
@@ -172,8 +177,9 @@ func (op *operation) addFrame(frame []int16) bool {
 			op.levelPeak = 0
 		}
 	}
-	if len(op.current) == framesPerSegment {
+	if len(op.current) == framesPerSegment || op.live != nil && op.pauses.cut(frame, len(op.current)) {
 		op.closeSegment()
+		op.sendLive()
 	} else if op.frames == 1 || op.frames%journalEveryFrames == 0 {
 		op.journal.note(len(op.segments), op.current)
 	}
@@ -200,6 +206,18 @@ func (op *operation) closeSegment() {
 	op.journal.note(len(op.segments), op.current)
 	op.segments = append(op.segments, op.current)
 	op.current = nil
+}
+
+// sendLive starts transcribing every finished segment not sent yet, unless the capture failed or the dictation was
+// cancelled: that audio waits in the history. The capture sends the segments it cuts while the user speaks; Stop sends
+// the last one, so a cancelled dictation never sends the words after the last pause.
+func (op *operation) sendLive() {
+	if op.live == nil || op.failure != nil || op.ctx.Err() != nil {
+		return
+	}
+	for ; op.liveSent < len(op.segments); op.liveSent++ {
+		op.live.send(op.liveSent, op.track(), op.segments[op.liveSent])
+	}
 }
 
 // hasSpeechAudio reports whether any packet was captured.

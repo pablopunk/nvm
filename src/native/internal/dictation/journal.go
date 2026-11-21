@@ -1,6 +1,7 @@
 package dictation
 
 import (
+	"context"
 	"maps"
 	"slices"
 	"sync"
@@ -27,8 +28,10 @@ type journal struct {
 	written map[int]int
 	failed  bool
 	closed  bool
-	wake    chan struct{}
-	done    chan struct{}
+	// saved closes after every write, then is replaced, so awaitSaved can wait for the next one.
+	saved chan struct{}
+	wake  chan struct{}
+	done  chan struct{}
 }
 
 // newJournal starts the writer of dictation id's audio.
@@ -36,7 +39,7 @@ func newJournal(recorder Recorder, id string, track webm.Track, warn func(string
 	j := &journal{
 		recorder: recorder, id: id, track: track, warn: warn,
 		pending: map[int][][]byte{}, written: map[int]int{},
-		wake: make(chan struct{}, 1), done: make(chan struct{}),
+		saved: make(chan struct{}), wake: make(chan struct{}, 1), done: make(chan struct{}),
 	}
 	go j.run()
 	return j
@@ -89,6 +92,8 @@ func (j *journal) write(index int, packets [][]byte) bool {
 	err := j.recorder.SaveSegment(j.id, index, webm.Mux(j.track, packets, FrameMillis))
 	j.mu.Lock()
 	defer j.mu.Unlock()
+	close(j.saved)
+	j.saved = make(chan struct{})
 	if err != nil {
 		if !j.failed && j.warn != nil {
 			j.warn("dictation.recording-save-failed", err)
@@ -98,6 +103,31 @@ func (j *journal) write(index int, packets [][]byte) bool {
 	}
 	j.written[index] = max(j.written[index], len(packets))
 	return true
+}
+
+// awaitSaved waits until count packets of segment index are on disk, so a segment never reaches the backend before
+// its audio is kept. It also returns once the disk has failed (sending beats losing the words twice), the writer has
+// stopped, or ctx ends. A nil journal keeps nothing and returns at once.
+func (j *journal) awaitSaved(ctx context.Context, index, count int) {
+	if j == nil {
+		return
+	}
+	for {
+		j.mu.Lock()
+		if j.written[index] >= count || j.failed {
+			j.mu.Unlock()
+			return
+		}
+		next := j.saved
+		j.mu.Unlock()
+		select {
+		case <-next:
+		case <-j.done:
+			return
+		case <-ctx.Done():
+			return
+		}
+	}
 }
 
 // finish stops the writer and writes every segment that is not on disk in full. It reports whether the whole recording

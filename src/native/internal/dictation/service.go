@@ -162,6 +162,9 @@ func (s *Service) StartWithLevel(deviceID string, sink func(float64, string, fun
 	if s.cfg.Recorder != nil {
 		op.journal = newJournal(s.cfg.Recorder, op.id, op.track(), s.warn)
 	}
+	if s.cfg.Transcriber != nil {
+		op.live = newLiveTranscription(s, op)
+	}
 	s.cur = op
 	safego.Go("dictation.capture", func(context.Context) { op.capture() })
 	s.mu.Unlock()
@@ -205,7 +208,7 @@ func (s *Service) releasePreparation(op *operation, userCancelled bool) {
 	})
 }
 
-// Stop ends the recording, sends the segments to the backend and returns the joined text. An empty text means no
+// Stop ends the recording, waits for the segments still being transcribed and returns the joined text. An empty text means no
 // speech was captured or the speech was silent; the caller shows that as a state, not as an error. Whatever happens,
 // audio that holds sound stays in the recorder until its text is in.
 func (s *Service) Stop() (string, error) {
@@ -245,13 +248,8 @@ func (s *Service) finish(op *operation) (string, error) {
 	if s.cfg.Transcriber == nil {
 		return "", s.keepFailed(op, saved, ErrNoTranscriber)
 	}
-	select {
-	case <-op.prepared:
-	case <-op.ctx.Done():
-		s.keepCancelled(op, saved)
-		return "", ErrCancelled
-	}
-	text, err := transcribeFiles(op.ctx, s.cfg.Transcriber, s.cfg.Retry, op.id, op.preparedOK, segmentFiles(op), s.retryWarning("dictation.transcribe-retry"))
+	op.sendLive()
+	text, err := op.live.wait(len(op.segments))
 	if op.ctx.Err() != nil {
 		s.keepCancelled(op, saved)
 		return "", ErrCancelled
