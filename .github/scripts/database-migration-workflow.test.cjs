@@ -18,7 +18,7 @@ test('production deploys the exact successful main push after migration', () => 
   assert.match(workflow, /github\.event\.workflow_run\.head_sha/);
   assert.match(workflow, /NVM_PRODUCTION_MIGRATION_APPROVED:.*'true'/);
   assert.match(workflow, /pnpm -C src\/backend db:migrate/);
-  assert.match(workflow, /vercel@latest deploy --prod/);
+  assert.match(workflow, /vercel@latest deploy --archive=tgz --prod/);
 });
 
 test('the migration workflow remains the only deployment owner', () => {
