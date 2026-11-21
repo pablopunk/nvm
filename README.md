@@ -11,9 +11,9 @@
 </p>
 
 
-<p align="center">
-  <a href="src/backend/public/videos/nevermind-demo-v3.mp4"><img src="src/backend/public/videos/nevermind-demo-v3.jpg" alt="Nevermind command palette demo" width="640" /></a>
-</p>
+https://github.com/user-attachments/assets/7104303f-eb02-4802-9c9b-5e6c2b2d9e04
+
+
 
 > [!IMPORTANT]
 > This app is in Alpha. Expect bugs.
