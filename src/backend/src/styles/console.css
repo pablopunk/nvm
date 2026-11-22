@@ -273,6 +273,9 @@
     @apply font-medium;
     color: var(--danger);
   }
+  .model-route-row__training-detail:not(:empty)::before {
+    content: " · ";
+  }
   .model-route-row__skeleton-title {
     @apply h-4 w-24;
   }

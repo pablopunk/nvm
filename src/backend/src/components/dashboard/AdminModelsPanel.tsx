@@ -37,7 +37,7 @@ function RoutePricing({ slot, modelRef }: { slot: string; modelRef: string }) {
 
 function RouteDetails({ modelRef, children }: { modelRef: string | null; children: ReactNode }) {
   if (!modelRef || !modelProviderMayTrainOnPrompts(modelRef)) return <>{children}</>;
-  return <><strong className="model-route-row__training">{PROVIDER_TRAINS_ON_PROMPTS_LABEL}</strong><br />{children}</>;
+  return <><strong className="model-route-row__training">{PROVIDER_TRAINS_ON_PROMPTS_LABEL}</strong><span className="model-route-row__training-detail">{children}</span></>;
 }
 
 function TextRouteCard({ route, thinkingLevels }: { route: AdminTextRoute; thinkingLevels: readonly string[] }) {
