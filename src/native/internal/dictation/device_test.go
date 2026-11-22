@@ -3,6 +3,7 @@ package dictation
 import (
 	"context"
 	"errors"
+	"path/filepath"
 	"slices"
 	"strings"
 	"testing"
@@ -77,7 +78,7 @@ func TestTheModelLoadsOnPrepareServesTheDictationAndUnloadsAfterIt(t *testing.T)
 			t.Fatal(err)
 		}
 	}
-	if opened := rig.speech.Opened(); len(opened) != 1 || opened[0] != "/models/tiny" {
+	if opened := rig.speech.Opened(); len(opened) != 1 || opened[0] != filepath.Join("/models", "tiny") {
 		t.Fatalf("opened %v; want the model loaded once, from its folder", opened)
 	}
 	time.Sleep(20 * time.Millisecond)
