@@ -14,6 +14,14 @@ const maxPassMillis = 120_000
 
 const maxPassFrames = maxPassMillis / FrameMillis
 
+// A pass past the longest one ends at the quietest quietSpanMillis within the last cutSearchMillis before the limit,
+// as Hex cuts a long clip, so the cut falls in a pause rather than through a word; the overlap then covers a sentence
+// that runs on across it.
+const (
+	cutSearchMillis = 15_000
+	quietSpanMillis = 300
+)
+
 // pass is one request of a whole-recording read: its WebM file, and how many of its frames repeat the pass before.
 type pass struct {
 	file    []byte
@@ -26,8 +34,11 @@ type pass struct {
 func wholeRecordingPasses(track webm.Track, segments [][][]byte) []pass {
 	packets := slices.Concat(segments...)
 	var passes []pass
-	for start := 0; start < len(packets); start += maxPassFrames {
-		end := min(start+maxPassFrames, len(packets))
+	for start, end := 0, 0; start < len(packets); start = end {
+		end = len(packets)
+		if end-start > maxPassFrames {
+			end = quietestCut(packets, start+maxPassFrames-cutSearchMillis/FrameMillis, start+maxPassFrames)
+		}
 		lead := 0
 		if start > 0 {
 			lead = min(overlapFrames, start)
@@ -77,4 +88,22 @@ func savedPasses(files [][]byte) ([]pass, error) {
 		segments = append(segments, packets)
 	}
 	return wholeRecordingPasses(track, segments), nil
+}
+
+// quietestCut returns the middle of the quietest quietSpanMillis between from and to, the latest on a tie. An Opus
+// packet's size follows how much sound its frame holds, a few bytes for silence and tens for speech, so the packets
+// tell where the pauses are without decoding them.
+func quietestCut(packets [][]byte, from, to int) int {
+	span := quietSpanMillis / FrameMillis
+	best, bestSize := to, -1
+	for start := from; start+span <= to; start++ {
+		size := 0
+		for _, packet := range packets[start : start+span] {
+			size += len(packet)
+		}
+		if bestSize < 0 || size <= bestSize {
+			best, bestSize = start+span/2, size
+		}
+	}
+	return best
 }
