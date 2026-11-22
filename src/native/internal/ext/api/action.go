@@ -91,6 +91,10 @@ const (
 	BuilderReview = "review"
 )
 
+// CameraSelectDevice is the camera op that shows the camera whose CameraDevice.ID is the action's Target, in the open
+// camera view, and remembers it as the view's camera.
+const CameraSelectDevice = "select-device"
+
 // Op values for the kinds that have sub-operations.
 var (
 	windowOps   = []string{"create", "show", "hide", "toggle", "close"}
@@ -100,7 +104,7 @@ var (
 	chatOps     = []string{ChatOpen, ChatNew, ChatContinue, ChatStop, ChatTier, ChatRemove, ChatAgain, ChatAllow, ChatRefuse, ChatRetry}
 	builderOps  = []string{BuilderStart, BuilderOpen, BuilderRemove, BuilderTweak, BuilderList, BuilderReview}
 	hostOps     = []string{"config-folder", "dictation-settings", "updates", "account-page", HostToggleMenuBar}
-	cameraOps   = []string{"switch-device", "next-device", "previous-device", "toggle-muted", "toggle-controls"}
+	cameraOps   = []string{"switch-device", "next-device", "previous-device", CameraSelectDevice, "toggle-muted", "toggle-controls"}
 	shortcutOps = []string{ShortcutOpRecord, ShortcutOpRemove, ShortcutOpCopyCommand}
 )
 
@@ -133,7 +137,7 @@ type Action struct {
 	Query   string   `json:"query,omitempty"`
 	App     string   `json:"app,omitempty"`
 	Setting string   `json:"setting,omitempty"`
-	// Target names the action a shortcut kind changes: its action ID.
+	// Target is the action ID a shortcut kind changes, or the CameraDevice.ID of CameraSelectDevice.
 	Target  string            `json:"target,omitempty"`
 	Content *ClipboardContent `json:"content,omitempty"`
 	Paste   *PasteOptions     `json:"paste,omitempty"`
@@ -281,6 +285,9 @@ func (a Action) validateDeclarative() error {
 		}
 		return validateOp(a.Op, shortcutOps)
 	case ActionCamera:
+		if a.Op == CameraSelectDevice && a.Target == "" {
+			return errors.New("a select-device camera action needs the camera ID as its target")
+		}
 		return validateOp(a.Op, cameraOps)
 	case ActionAccount:
 		return validateOp(a.Op, accountOps)

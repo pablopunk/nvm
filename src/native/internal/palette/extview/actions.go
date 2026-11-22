@@ -146,8 +146,7 @@ func (s *Session) actionBody(action api.Action, key string) search.Action {
 	case api.ActionPop:
 		return search.Action{Title: title, Dismiss: search.DismissNever, Run: func(h search.Host) { h.Pop() }}
 	case api.ActionCamera:
-		op := action.Op
-		return search.Action{Title: title, Dismiss: search.DismissNever, Run: func(h search.Host) { s.operateCamera(h, op) }}
+		return search.Action{Title: title, Dismiss: search.DismissNever, Run: func(h search.Host) { s.operateCamera(h, action) }}
 	case api.ActionSystem:
 		return s.hostOperation(action, title)
 	case api.ActionUpdate:

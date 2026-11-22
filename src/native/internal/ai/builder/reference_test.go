@@ -43,7 +43,7 @@ func TestReferenceNamesTheEntryPointsAndTheirContext(t *testing.T) {
 // chrome (section 44) grew it by about 1 KB more.
 // The AI Chats built-in's chat and builder API, merged over the shared displays, grew it to about 61 KB. Closing the
 // remaining 1.x API gaps (Self, Selection.Read) took it past that, and on-device dictation (DictationEngine,
-// DeviceModel, InstallDeviceModel, RetryOn) past 62 KB.
+// DeviceModel, InstallDeviceModel, RetryOn) past 62 KB. The camera list (Cameras, CameraDevice) grew it again.
 const maxReferenceBytes = 63 << 10
 
 func TestReferenceStaysWithinItsSizeBudget(t *testing.T) {

@@ -114,6 +114,7 @@ type Context interface {
 	Desktop() Desktop
 	OCR() OCR
 	Dictation() Dictation
+	Cameras() Cameras
 	Shortcuts() Shortcuts
 	Account() Account
 	Indicators() Indicators

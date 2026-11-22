@@ -119,6 +119,9 @@ type Deps struct {
 	Permissions platform.Permissions
 	// Cameras remembers the camera each camera view chose. Nil keeps the choice for the life of the session.
 	Cameras CameraMemory
+	// CameraList is the host's camera list, which keys camera views by stable camera IDs and fills their Cameras menu.
+	// It is read off the UI thread. Nil, or a system that cannot list cameras, falls back to the cameras the page lists.
+	CameraList platform.Cameras
 	// IsDark reports the palette's appearance, which a web page's theme follows. Nil means light.
 	IsDark func() bool
 	// Reply draws a chat reply's Markdown, streaming while it arrives. Nil draws the text plain.

@@ -47,14 +47,44 @@
     }, function () { report('devices', { devices: [] }); });
   }
 
-  function start(id, deviceId) {
+  function videoInputs() {
+    return navigator.mediaDevices.enumerateDevices().then(function (devices) {
+      return devices.filter(function (d) { return d.kind === 'videoinput'; });
+    });
+  }
+
+  // The system hides camera names until the page has been granted a camera once.
+  function videoInputsWithLabels() {
+    return videoInputs().then(function (inputs) {
+      if (!inputs.some(function (d) { return !d.label; })) return inputs;
+      return navigator.mediaDevices.getUserMedia({ audio: false, video: true }).then(function (probe) {
+        probe.getTracks().forEach(function (track) { track.stop(); });
+        return videoInputs();
+      });
+    });
+  }
+
+  function resolveDeviceId(deviceId, label) {
+    if (deviceId || !label) return Promise.resolve(deviceId);
+    return videoInputsWithLabels().then(function (inputs) {
+      var match = inputs.find(function (d) { return d.label === label; });
+      if (!match) throw { name: 'NotFoundError', message: '' };
+      return match.deviceId;
+    });
+  }
+
+  function start(id, deviceId, label) {
     current = id;
     releaseStream();
     if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) {
       report('error', { id: id, name: 'NotSupportedError', message: '' });
       return;
     }
-    navigator.mediaDevices.getUserMedia(videoConstraints(deviceId)).then(function (next) {
+    resolveDeviceId(deviceId, label).then(function (resolved) {
+      if (current !== id) return null;
+      return navigator.mediaDevices.getUserMedia(videoConstraints(resolved));
+    }).then(function (next) {
+      if (!next) return;
       if (current !== id) {
         next.getTracks().forEach(function (track) { track.stop(); });
         return;
@@ -104,7 +134,7 @@
 
   window.nvmCamera = {
     command: function (command) {
-      if (command.op === 'start') start(command.id, command.deviceId || '');
+      if (command.op === 'start') start(command.id, command.deviceId || '', command.label || '');
       else if (command.op === 'stop') stop();
       else if (command.op === 'configure') configure(command.options);
       else if (command.op === 'devices') listDevices();

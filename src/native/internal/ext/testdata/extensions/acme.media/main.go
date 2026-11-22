@@ -75,6 +75,7 @@ func Commands(ctx api.Context) ([]api.Command, error) {
 	return []api.Command{
 		{ID: "camera", Title: "Camera fixture"},
 		{ID: "camera-contain", Title: "Camera contain fixture"},
+		{ID: "cameras", Title: "Cameras fixture"},
 		{ID: "webview", Title: "Webview fixture"},
 		{ID: "webview-camera", Title: "Webview camera fixture"},
 		{ID: "webview-hostile", Title: "Webview hostile fixture"},
@@ -87,6 +88,8 @@ func RunAction(ctx api.Context, in api.Invocation) (api.Result, error) {
 		return api.Result{View: &cameraView}, nil
 	case "camera-contain":
 		return api.Result{View: &cameraContainView}, nil
+	case "cameras":
+		return camerasList(ctx)
 	case "webview":
 		return api.Result{View: &webviewView}, nil
 	case "webview-camera":
@@ -95,4 +98,29 @@ func RunAction(ctx api.Context, in api.Invocation) (api.Result, error) {
 		return api.Result{View: &webviewHostileView}, nil
 	}
 	return api.Result{}, nil
+}
+
+// camerasList is the camera submenu: one row per camera the host lists, each opening a camera view of that camera.
+func camerasList(ctx api.Context) (api.Result, error) {
+	devices, err := ctx.Cameras().Devices()
+	if err != nil {
+		view := api.ErrorView("Cameras fixture", err.Error())
+		return api.Result{View: &view}, nil
+	}
+	items := make([]api.Item, 0, len(devices))
+	for _, device := range devices {
+		items = append(items, cameraRow(device))
+	}
+	view := api.ListView("Cameras fixture", items...)
+	return api.Result{View: &view}, nil
+}
+
+func cameraRow(device api.CameraDevice) api.Item {
+	subtitle := string(device.Kind)
+	if device.IsDefault {
+		subtitle += " · default"
+	}
+	view := api.View{Kind: api.ViewCamera, Title: device.Title, Camera: &api.CameraSpec{DeviceID: device.ID}}
+	open := api.PushView(device.Title, view)
+	return api.Item{ID: device.ID, Title: device.Title, Subtitle: subtitle, Icon: "camera", Primary: &open}
 }

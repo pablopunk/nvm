@@ -43,6 +43,7 @@ func NewPorts() platform.Ports {
 		Opus:            opusCodec{},
 		Speech:          speechRecognizer{},
 		Downloads:       newFileDownloader(),
+		Cameras:         newCameras(),
 		FileDialog:      fileDialog{},
 		Text:            newTextRecognizer(helper{}),
 		FilePictures:    newFilePictures(helper{}),

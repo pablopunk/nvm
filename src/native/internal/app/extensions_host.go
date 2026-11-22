@@ -135,6 +135,7 @@ func (p *App) newExtensionManager() (*manager.Manager, error) {
 		Paste:           selections,
 		Apps:            p.appsvc,
 		Dictation:       p.dictationEngine(),
+		Cameras:         ports.Cameras,
 		Notes:           p.extensionNotes,
 	}, extensionsDir(), enablement.OpenSynced(state, p.sharedConfig), manager.Options{
 		Executable:      exe,

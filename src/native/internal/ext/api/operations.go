@@ -27,6 +27,7 @@ const (
 	OperationSystemSettings   Operation = "system.settings"
 	OperationFilePreview      Operation = "files.preview"
 	OperationSwitchDesktop    Operation = "windows.switch-desktop"
+	OperationCameraDevices    Operation = "camera.devices"
 )
 
 func validateRequirements(required []Operation) error {

@@ -43,6 +43,8 @@ type Ports struct {
 	Speech SpeechRecognizer
 	// Downloads fetches files too large for memory, such as the on-device speech model.
 	Downloads FileDownloader
+	// Cameras lists the video inputs for camera views and the extension camera service.
+	Cameras Cameras
 	// FileDialog shows the operating system's file and folder choosers for extension form fields.
 	FileDialog FileDialog
 	// Text reads the text of image files and Capture saves screenshots for the screen OCR. Only the OCR service uses them.

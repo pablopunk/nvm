@@ -41,6 +41,36 @@ type OCR interface {
 	Region(region Rect, options OCROptions) (OCRResult, error)
 }
 
+// CameraKind says what a camera is, so a picker can group, order or label it.
+type CameraKind string
+
+const (
+	CameraBuiltIn    CameraKind = "built-in"
+	CameraExternal   CameraKind = "external"
+	CameraContinuity CameraKind = "continuity" // a Continuity Camera or a Desk View camera
+	CameraVirtual    CameraKind = "virtual"    // a camera software draws, such as OBS
+	CameraOther      CameraKind = "other"
+)
+
+// CameraDevice is a camera the user can pick. ID is stable for the same camera across launches: store it, and pass it
+// as CameraSpec.DeviceID or as the Target of CameraSelectDevice to show that camera.
+type CameraDevice struct {
+	ID        string     `json:"id"`
+	Title     string     `json:"title"`
+	IsDefault bool       `json:"isDefault"`
+	Kind      CameraKind `json:"kind"`
+}
+
+// Cameras lists the cameras of this computer, the system default first. Declare camera. Probe
+// System().HasCapability("camera.devices"); where the OS cannot list them, Devices fails as unsupported and camera
+// views still offer their own switcher. Listing never asks for camera permission and never turns a camera on, so it is
+// safe in RootItems, SearchItems and LoadItems. A camera submenu is a list view of these devices whose rows open a
+// camera view with CameraSpec.DeviceID set, or, inside an open camera view, run CameraSelectDevice. Camera views
+// already add a Cameras section to their own action menu, so an extension does not need to repeat it there.
+type Cameras interface {
+	Devices() ([]CameraDevice, error)
+}
+
 // DictationStatus is the current state of the built-in speech capture.
 type DictationStatus string
 

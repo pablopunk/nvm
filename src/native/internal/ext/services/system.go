@@ -67,6 +67,8 @@ func (h *Handler) publicCapability(name string) bool {
 		return h.deps.SystemCommands.SupportsCapability(platform.Capability(name))
 	case "apps.running", "apps.quit", "apps.hide", "apps.uninstall":
 		return h.appLifecycleSupported(platform.Capability(name))
+	case "camera.devices":
+		return h.camerasListable()
 	case "window-management":
 		return h.deps.Capabilities.Supported(platform.CapabilityWindowManagement)
 	case "apps.frontmost", "notifications.show",

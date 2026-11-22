@@ -53,7 +53,7 @@ func capabilitiesFor(goos string, getenv func(string) string, hasTool func(strin
 		supported = append(supported, platform.CapabilityProcessList, platform.CapabilityProcessSignal, platform.CapabilityAppRunning, platform.CapabilityAppQuit, platform.CapabilityAppUninstall)
 	}
 	if goos == "darwin" {
-		supported = append(supported, platform.CapabilityShellQuickLook, platform.CapabilityKeyboardTypeText, platform.CapabilityAppRunning, platform.CapabilityAppQuit, platform.CapabilityAppHide, platform.CapabilityAppUninstall)
+		supported = append(supported, platform.CapabilityShellQuickLook, platform.CapabilityKeyboardTypeText, platform.CapabilityAppRunning, platform.CapabilityAppQuit, platform.CapabilityAppHide, platform.CapabilityAppUninstall, platform.CapabilityCameraDevices)
 	}
 	if notificationsCapable(goos) {
 		supported = append(supported, platform.CapabilityNotifications)

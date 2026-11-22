@@ -50,6 +50,7 @@ const (
 	CapabilitySelectionCopy         Capability = "selection.copy"
 	CapabilityWebView               Capability = "webview.embedded"
 	CapabilityCameraPreview         Capability = "camera.preview"
+	CapabilityCameraDevices         Capability = "camera.devices"
 	CapabilityKeyboardTypeText      Capability = "keyboard.type-text"
 	CapabilityAppRunning            Capability = "apps.running"
 	CapabilityAppQuit               Capability = "apps.quit"
@@ -68,7 +69,7 @@ func AllCapabilities() []Capability {
 		CapabilitySystemLock, CapabilitySystemLogOut, CapabilitySystemRestart, CapabilitySystemSettings,
 		CapabilitySystemShutDown, CapabilitySystemSleep, CapabilityTrayMenu, CapabilityWindowManagement,
 		CapabilityWindowPlacement, CapabilityTextRecognize, CapabilityScreenCapture,
-		CapabilityWebView, CapabilityCameraPreview, CapabilityKeyboardTypeText, CapabilityAppRunning, CapabilityAppQuit, CapabilityAppHide,
+		CapabilityWebView, CapabilityCameraPreview, CapabilityCameraDevices, CapabilityKeyboardTypeText, CapabilityAppRunning, CapabilityAppQuit, CapabilityAppHide,
 		CapabilityAppUninstall, CapabilityWindowAlwaysOnTop, CapabilityWindowAllSpaces, CapabilityWindowFrameRestore,
 		CapabilityWindowDisplayRecovery,
 	}

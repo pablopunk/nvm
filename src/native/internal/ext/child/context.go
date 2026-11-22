@@ -153,6 +153,10 @@ func (c hostContext) Dictation() api.Dictation {
 	return remoteDictation{link: c.link}
 }
 
+func (c hostContext) Cameras() api.Cameras {
+	return remoteCameras{link: c.link}
+}
+
 func (c hostContext) Updates() api.Updates {
 	return remoteUpdates{link: c.link}
 }

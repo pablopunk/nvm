@@ -41,6 +41,10 @@ func (m *Manager) OperationsSupported(required []api.Operation) bool {
 			if m.serviceDeps.Windows == nil || m.serviceDeps.Desktops == nil || !m.serviceDeps.Desktops.Supported() {
 				return false
 			}
+		case api.OperationCameraDevices:
+			if m.serviceDeps.Cameras == nil || !m.serviceDeps.Capabilities.Supported(platform.CapabilityCameraDevices) {
+				return false
+			}
 		default:
 			if !m.serviceDeps.SystemCommands.SupportsCapability(platform.Capability(operation)) {
 				return false

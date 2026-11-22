@@ -134,6 +134,9 @@ func (s *Session) Palette() *palette.View {
 	if s.hasPageActions() && s.view.Kind != api.ViewChat {
 		page.Actions = s.pageActions
 	}
+	if s.view.Kind == api.ViewCamera {
+		page.Actions = s.cameraPageActions
+	}
 	if len(s.view.FooterHints) > 0 {
 		page.Hint = footerHintsText(s.view.FooterHints, s.hyperKey())
 		page.HintReplacesActions = true
