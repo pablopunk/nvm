@@ -86,6 +86,8 @@ type Ports struct {
 	Indicators services.IndicatorSurface
 	// Dictation records speech for extensions. Nil makes ctx.dictation unavailable.
 	Dictation services.DictationEngine
+	// Cameras lists the cameras for extensions. Nil makes ctx.cameras unavailable.
+	Cameras platform.Cameras
 	// AI makes the model calls of extensions. Nil makes ctx.AI unavailable.
 	AI *extai.Service
 	// Selection reads, replaces and undoes the selected text of extensions. Nil makes ctx.desktop.selection unavailable.
@@ -242,6 +244,7 @@ func New(ports Ports, root string, enabled *enablement.Set, opts Options) (*Mana
 			OCR:             ports.OCR,
 			Indicators:      ports.Indicators,
 			Dictation:       ports.Dictation,
+			Cameras:         ports.Cameras,
 			AI:              ports.AI,
 			Chats:           ports.Chats,
 			Builder:         ports.Builder,

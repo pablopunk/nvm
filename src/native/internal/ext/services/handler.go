@@ -106,6 +106,8 @@ type Deps struct {
 	OCR *ocr.Service
 	// Dictation records speech and returns the hosted transcript. Nil answers unavailable.
 	Dictation DictationEngine
+	// Cameras lists the cameras for the camera service. Nil answers unavailable.
+	Cameras platform.Cameras
 	// History returns the clipboard history, or nil while it is still starting.
 	History func() *clipboard.History
 	// Bundles reads the datasets the app ships. Nil answers unavailable.
@@ -312,6 +314,8 @@ func (h *Handler) dispatch(ctx context.Context, call protocol.ServiceCall) (any,
 		return h.serveExtension(call)
 	case protocol.ServiceDictation:
 		return h.serveDictation(ctx, call)
+	case protocol.ServiceCameras:
+		return h.serveCameras(call)
 	}
 	return nil, invalid("unknown service %q", call.Service)
 }

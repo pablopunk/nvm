@@ -30,7 +30,8 @@ type cameraSelection struct {
 	Source   string
 }
 
-// cameraDevice is one video input as the page enumerated it.
+// cameraDevice is one video input. With the host's camera list, DeviceID is the host's stable camera ID and Label the
+// OS name, which the page matches against its own labels; without it, both come from the page's own enumeration.
 type cameraDevice struct {
 	DeviceID string `json:"deviceId"`
 	Label    string `json:"label"`
@@ -60,21 +61,27 @@ type cameraEvent struct {
 // cameraEngine is the capture state machine of one camera view: it decides what the page starts, stops and
 // forgets, and turns the page's reports into the state the palette draws. It runs on the UI thread only.
 type cameraEngine struct {
-	send       func(command any)
-	access     func() string
-	forget     func()
-	onState    func()
+	send    func(command any)
+	access  func() string
+	forget  func()
+	onState func()
+	// relist asks the host for its camera list again, when the page saw a camera come or go. Nil leaves the list as is.
+	relist     func()
 	generation int
 	selection  cameraSelection
 	state      cameraState
 	devices    []cameraDevice
+	// hostListed is true once devices holds the host's camera list, whose IDs the page cannot use directly.
+	hostListed bool
 }
 
-// cameraCommand is an instruction for the page: start a stream with an id, or stop the current one.
+// cameraCommand is an instruction for the page: start a stream with an id, or stop the current one. The page opens
+// DeviceID, one of its own IDs, or else the camera whose label is Label, or else the system default.
 type cameraCommand struct {
 	Op       string `json:"op"`
 	ID       int    `json:"id,omitempty"`
 	DeviceID string `json:"deviceId,omitempty"`
+	Label    string `json:"label,omitempty"`
 }
 
 // Start replaces any stream with one for selection. A system refusal from access stops before the page is asked for
@@ -88,7 +95,36 @@ func (e *cameraEngine) Start(selection cameraSelection) {
 		e.setState(cameraState{Status: cameraError, Message: message})
 		return
 	}
-	e.send(cameraCommand{Op: "start", ID: e.generation, DeviceID: selection.DeviceID})
+	command, ok := e.startCommand(selection)
+	if !ok {
+		e.startError(cameraEvent{Name: "NotFoundError"})
+		return
+	}
+	e.send(command)
+}
+
+// startCommand is the page's start command for selection. A host camera ID becomes the camera's name, which the page
+// resolves to its own ID; false means the host does not list that camera now.
+func (e *cameraEngine) startCommand(selection cameraSelection) (cameraCommand, bool) {
+	command := cameraCommand{Op: "start", ID: e.generation}
+	if !e.hostListed || selection.DeviceID == "" {
+		command.DeviceID = selection.DeviceID
+		return command, true
+	}
+	label := cameraLabelOf(e.devices, selection.DeviceID)
+	command.Label = label
+	return command, label != ""
+}
+
+// SetHostDevices replaces the camera list with the host's. The live camera keeps its state; its ID becomes the host's.
+func (e *cameraEngine) SetHostDevices(devices []cameraDevice) {
+	e.devices = devices
+	e.hostListed = true
+	if e.state.Label != "" {
+		if id := cameraIDOfLabel(devices, e.state.Label); id != "" {
+			e.state.DeviceID = id
+		}
+	}
 }
 
 // Stop releases the stream, if any, and shows the view paused.
@@ -101,7 +137,7 @@ func (e *cameraEngine) Stop() {
 // Handle applies one report of the page.
 func (e *cameraEngine) Handle(event cameraEvent) {
 	if event.Event == "devices" {
-		e.devices = event.Devices
+		e.pageListedDevices(event.Devices)
 		return
 	}
 	if event.ID != e.generation {
@@ -109,7 +145,7 @@ func (e *cameraEngine) Handle(event cameraEvent) {
 	}
 	switch event.Event {
 	case "live":
-		e.setState(cameraState{Status: cameraLive, DeviceID: event.DeviceID, Label: event.Label})
+		e.setState(cameraState{Status: cameraLive, DeviceID: e.liveDeviceID(event), Label: event.Label})
 	case "playing":
 		state := e.state
 		state.Playing = true
@@ -121,6 +157,30 @@ func (e *cameraEngine) Handle(event cameraEvent) {
 	case "playbackError":
 		e.failStream(cameraPlaybackMessage)
 	}
+}
+
+// pageListedDevices takes the page's enumeration as the list, unless the host lists the cameras: then a change the page
+// saw asks the host again, since the page's IDs are not the host's.
+func (e *cameraEngine) pageListedDevices(devices []cameraDevice) {
+	if !e.hostListed {
+		e.devices = devices
+		return
+	}
+	if e.relist != nil {
+		e.relist()
+	}
+}
+
+// liveDeviceID is the ID of the camera that went live, in the same terms as the list: the host's ID when the host
+// lists the cameras, else the page's.
+func (e *cameraEngine) liveDeviceID(event cameraEvent) string {
+	if !e.hostListed {
+		return event.DeviceID
+	}
+	if id := cameraIDOfLabel(e.devices, event.Label); id != "" {
+		return id
+	}
+	return e.selection.DeviceID
 }
 
 // startError handles a stream that never started. A saved device the system no longer has is forgotten and the
@@ -168,6 +228,26 @@ func cameraErrorMessage(name, message string) string {
 		return message
 	}
 	return "Camera unavailable."
+}
+
+// cameraLabelOf is the name of the listed camera with id, or "" when none has it.
+func cameraLabelOf(devices []cameraDevice, id string) string {
+	for _, device := range devices {
+		if device.DeviceID == id {
+			return device.Label
+		}
+	}
+	return ""
+}
+
+// cameraIDOfLabel is the ID of the first listed camera named label, or "" when none is.
+func cameraIDOfLabel(devices []cameraDevice, label string) string {
+	for _, device := range devices {
+		if device.Label == label {
+			return device.DeviceID
+		}
+	}
+	return ""
 }
 
 // nextCameraDeviceID picks the device after or before current, wrapping at the ends. With fewer than two devices

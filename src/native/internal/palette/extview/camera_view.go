@@ -60,6 +60,7 @@ type cameraView struct {
 	switcher  bool
 	active    bool
 	ready     bool
+	devices   cameraDeviceList
 	// Before the driver initializes, only the latest desired capture and configuration can still apply.
 	pendingCapture   *cameraCommand
 	pendingConfigure *cameraConfigureCommand
@@ -79,11 +80,13 @@ func (s *Session) openCamera() {
 		switcher: spec.ShowDeviceSwitcher == nil || *spec.ShowDeviceSwitcher,
 	}
 	cam.selection = initialCameraSelection(spec.DeviceID, cam.memory, cam.key)
+	cam.devices = cameraDeviceList{source: s.deps.CameraList, onUI: s.onUI}
 	cam.engine = &cameraEngine{
 		send:    cam.send,
 		access:  func() string { return cameraAccessMessage(s.deps.Permissions) },
 		forget:  func() { cam.memory.Forget(cam.key) },
 		onState: s.refreshHost,
+		relist:  cam.loadHostDevices,
 	}
 	cam.engine.state.Status = cameraIdle
 	s.camera = cam
@@ -99,6 +102,7 @@ func (s *Session) openCamera() {
 	}
 	cam.page = page
 	page.Load(cameraPageHTML(cam.config))
+	cam.loadHostDevices()
 }
 
 // cameraStorageKey names the view's remembered camera, as the Electron view does: by its id, else its title.
@@ -191,9 +195,10 @@ func (c *cameraView) setActive(active bool) {
 	}
 	c.active = active
 	if active {
-		c.engine.Start(c.selection)
+		c.start()
 		return
 	}
+	c.devices.startDeferred = false
 	c.engine.Stop()
 }
 
@@ -224,20 +229,28 @@ func (c *cameraView) operate(op string) {
 	}
 }
 
-// switchDevice moves to the next or previous camera, remembers it, and restarts the capture when it is running.
+// switchDevice moves to the next or previous camera.
 func (c *cameraView) switchDevice(direction string) {
-	current := c.engine.state.DeviceID
-	if current == "" {
-		current = c.selection.DeviceID
+	c.selectDevice(nextCameraDeviceID(c.engine.devices, c.currentDeviceID(), direction))
+}
+
+// currentDeviceID is the camera that is live, else the one the view asks for.
+func (c *cameraView) currentDeviceID() string {
+	if c.engine.state.DeviceID != "" {
+		return c.engine.state.DeviceID
 	}
-	deviceID := nextCameraDeviceID(c.engine.devices, current, direction)
+	return c.selection.DeviceID
+}
+
+// selectDevice shows the camera with deviceID, remembers it, and restarts the capture when it is running.
+func (c *cameraView) selectDevice(deviceID string) {
 	if deviceID == "" {
 		return
 	}
 	c.memory.Remember(c.key, deviceID)
 	c.selection = cameraSelection{DeviceID: deviceID, Source: cameraSourceSaved}
 	if c.active {
-		c.engine.Start(c.selection)
+		c.start()
 	}
 }
 
@@ -250,12 +263,16 @@ func (c *cameraView) showsSwitcher() bool {
 }
 
 // operateCamera runs a camera action of the view, or says the view has no camera.
-func (s *Session) operateCamera(h search.Host, op string) {
+func (s *Session) operateCamera(h search.Host, action api.Action) {
 	if s.camera == nil || s.camera.page == nil {
 		h.Toast(unavailableMessage)
 		return
 	}
-	s.camera.operate(op)
+	if action.Op == api.CameraSelectDevice {
+		s.camera.selectDevice(action.Target)
+		return
+	}
+	s.camera.operate(action.Op)
 }
 
 // drawCamera draws the camera's page with its status over it, the error when the stream failed, and the switch

@@ -133,9 +133,14 @@ type ProgressSpec struct {
 
 // CameraSpec is a live camera view. Capture runs only while the view is visible.
 type CameraSpec struct {
-	DeviceID           string `json:"deviceId,omitempty"`
-	ShowDeviceSwitcher *bool  `json:"showDeviceSwitcher,omitempty"` // default true
-	Muted              *bool  `json:"muted,omitempty"`              // default true, as the Electron view
+	// DeviceID is a CameraDevice.ID from Cameras().Devices(). It wins over the camera the view last chose and is never
+	// replaced by another camera: when it is not connected, the view says so. Empty starts with the camera the view
+	// last chose, else the system default.
+	DeviceID string `json:"deviceId,omitempty"`
+	// ShowDeviceSwitcher shows the switch button over the feed and the Cameras section of the view's action menu when
+	// more than one camera is connected. Default true.
+	ShowDeviceSwitcher *bool  `json:"showDeviceSwitcher,omitempty"`
+	Muted              *bool  `json:"muted,omitempty"` // default true, as the Electron view
 	Controls           bool   `json:"controls,omitempty"`
 	Mirrored           bool   `json:"mirrored,omitempty"`
 	Framing            string `json:"framing,omitempty"` // cover (default) or contain

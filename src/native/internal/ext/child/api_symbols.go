@@ -62,6 +62,13 @@ func init() {
 		"BuilderReview":                 reflect.ValueOf(constant.MakeFromLiteral("\"review\"", token.STRING, 0)),
 		"BuilderStart":                  reflect.ValueOf(constant.MakeFromLiteral("\"start\"", token.STRING, 0)),
 		"BuilderTweak":                  reflect.ValueOf(constant.MakeFromLiteral("\"tweak\"", token.STRING, 0)),
+		"CameraBuiltIn":                 reflect.ValueOf(api.CameraBuiltIn),
+		"CameraContinuity":              reflect.ValueOf(api.CameraContinuity),
+		"CameraExternal":                reflect.ValueOf(api.CameraExternal),
+		"CameraOther":                   reflect.ValueOf(api.CameraOther),
+		"CameraSelectDevice":            reflect.ValueOf(constant.MakeFromLiteral("\"select-device\"", token.STRING, 0)),
+		"CameraView":                    reflect.ValueOf(api.CameraView),
+		"CameraVirtual":                 reflect.ValueOf(api.CameraVirtual),
 		"CapabilityAI":                  reflect.ValueOf(api.CapabilityAI),
 		"CapabilityCamera":              reflect.ValueOf(api.CapabilityCamera),
 		"CapabilityClipboardHistory":    reflect.ValueOf(api.CapabilityClipboardHistory),
@@ -249,6 +256,7 @@ func init() {
 		"OpenPath":                      reflect.ValueOf(api.OpenPath),
 		"OpenURL":                       reflect.ValueOf(api.OpenURL),
 		"OpenWith":                      reflect.ValueOf(api.OpenWith),
+		"OperationCameraDevices":        reflect.ValueOf(api.OperationCameraDevices),
 		"OperationFilePreview":          reflect.ValueOf(api.OperationFilePreview),
 		"OperationNetworkDownload":      reflect.ValueOf(api.OperationNetworkDownload),
 		"OperationNetworkFetch":         reflect.ValueOf(api.OperationNetworkFetch),
@@ -311,6 +319,7 @@ func init() {
 		"Run":                           reflect.ValueOf(api.Run),
 		"ScheduleKeyLimit":              reflect.ValueOf(constant.MakeFromLiteral("64", token.INT, 0)),
 		"Section":                       reflect.ValueOf(api.Section),
+		"SelectCamera":                  reflect.ValueOf(api.SelectCamera),
 		"SelectionAllowed":              reflect.ValueOf(api.SelectionAllowed),
 		"SelectionDenied":               reflect.ValueOf(api.SelectionDenied),
 		"SelectionUnavailable":          reflect.ValueOf(api.SelectionUnavailable),
@@ -421,7 +430,10 @@ func init() {
 		"Bundle":                  reflect.ValueOf((*api.Bundle)(nil)),
 		"BundleRecord":            reflect.ValueOf((*api.BundleRecord)(nil)),
 		"Cache":                   reflect.ValueOf((*api.Cache)(nil)),
+		"CameraDevice":            reflect.ValueOf((*api.CameraDevice)(nil)),
+		"CameraKind":              reflect.ValueOf((*api.CameraKind)(nil)),
 		"CameraSpec":              reflect.ValueOf((*api.CameraSpec)(nil)),
+		"Cameras":                 reflect.ValueOf((*api.Cameras)(nil)),
 		"Capability":              reflect.ValueOf((*api.Capability)(nil)),
 		"ChatAction":              reflect.ValueOf((*api.ChatAction)(nil)),
 		"ChatDetail":              reflect.ValueOf((*api.ChatDetail)(nil)),
@@ -652,6 +664,7 @@ func init() {
 		"_AttachmentBuilder": reflect.ValueOf((*_github_com_pablopunk_nvm_native_internal_ext_api_AttachmentBuilder)(nil)),
 		"_Bundle":            reflect.ValueOf((*_github_com_pablopunk_nvm_native_internal_ext_api_Bundle)(nil)),
 		"_Cache":             reflect.ValueOf((*_github_com_pablopunk_nvm_native_internal_ext_api_Cache)(nil)),
+		"_Cameras":           reflect.ValueOf((*_github_com_pablopunk_nvm_native_internal_ext_api_Cameras)(nil)),
 		"_ClipboardHistory":  reflect.ValueOf((*_github_com_pablopunk_nvm_native_internal_ext_api_ClipboardHistory)(nil)),
 		"_Clock":             reflect.ValueOf((*_github_com_pablopunk_nvm_native_internal_ext_api_Clock)(nil)),
 		"_CommandProvider":   reflect.ValueOf((*_github_com_pablopunk_nvm_native_internal_ext_api_CommandProvider)(nil)),
@@ -1001,6 +1014,16 @@ func (W _github_com_pablopunk_nvm_native_internal_ext_api_Cache) Stale(key strin
 	return W.WStale(key)
 }
 
+// _github_com_pablopunk_nvm_native_internal_ext_api_Cameras is an interface wrapper for Cameras type
+type _github_com_pablopunk_nvm_native_internal_ext_api_Cameras struct {
+	IValue   interface{}
+	WDevices func() ([]api.CameraDevice, error)
+}
+
+func (W _github_com_pablopunk_nvm_native_internal_ext_api_Cameras) Devices() ([]api.CameraDevice, error) {
+	return W.WDevices()
+}
+
 // _github_com_pablopunk_nvm_native_internal_ext_api_ClipboardHistory is an interface wrapper for ClipboardHistory type
 type _github_com_pablopunk_nvm_native_internal_ext_api_ClipboardHistory struct {
 	IValue  interface{}
@@ -1050,6 +1073,7 @@ type _github_com_pablopunk_nvm_native_internal_ext_api_Context struct {
 	WAIBuilder   func() api.AIBuilder
 	WAccount     func() api.Account
 	WCache       func() api.Cache
+	WCameras     func() api.Cameras
 	WClipboard   func() api.ClipboardHistory
 	WClock       func() api.Clock
 	WData        func() api.Data
@@ -1094,6 +1118,9 @@ func (W _github_com_pablopunk_nvm_native_internal_ext_api_Context) Account() api
 }
 func (W _github_com_pablopunk_nvm_native_internal_ext_api_Context) Cache() api.Cache {
 	return W.WCache()
+}
+func (W _github_com_pablopunk_nvm_native_internal_ext_api_Context) Cameras() api.Cameras {
+	return W.WCameras()
 }
 func (W _github_com_pablopunk_nvm_native_internal_ext_api_Context) Clipboard() api.ClipboardHistory {
 	return W.WClipboard()

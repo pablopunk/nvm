@@ -47,6 +47,7 @@ const (
 	ServiceLearnings  = "learnings"
 	ServiceBundle     = "bundle"
 	ServiceDictation  = "dictation"
+	ServiceCameras    = "camera"
 	ServiceExtension  = "extension"
 )
 

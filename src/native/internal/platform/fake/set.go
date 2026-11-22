@@ -31,6 +31,7 @@ type Set struct {
 	Windows      *WindowManager
 	Desktops     *Desktops
 	Microphone   *Microphone
+	Cameras      *Cameras
 	Opus         *OpusCodec
 	FileDialog   *FileDialog
 	Text         *TextRecognizer
@@ -71,6 +72,7 @@ func NewSet() *Set {
 		Windows:      NewWindowManager(),
 		Desktops:     NewDesktops(),
 		Microphone:   NewMicrophone(),
+		Cameras:      NewCameras(),
 		Opus:         NewOpusCodec(),
 		FileDialog:   NewFileDialog(),
 		Text:         NewTextRecognizer(),
@@ -111,6 +113,7 @@ func (s *Set) Ports() platform.Ports {
 		Windows:      s.Windows,
 		Desktops:     s.Desktops,
 		Microphone:   s.Microphone,
+		Cameras:      s.Cameras,
 		Opus:         s.Opus,
 		FileDialog:   s.FileDialog,
 		Text:         s.Text,

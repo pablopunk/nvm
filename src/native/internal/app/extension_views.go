@@ -156,6 +156,7 @@ func (p *App) extensionViewDeps(m *manager.Manager) extview.Deps {
 		Pages:               real.NewWebPages(p.paletteWebWindow),
 		Permissions:         ports.Permissions,
 		Cameras:             extensionCameras,
+		CameraList:          ports.Cameras,
 		IsDark:              func() bool { return mygo.Theme.IsDark() },
 		Reply:               p.drawReply,
 		PickImages:          p.chooseChatImages,
