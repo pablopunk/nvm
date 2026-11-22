@@ -36,11 +36,21 @@ type MicrophoneStream interface {
 	Close() error
 }
 
-// OpusCodec is the intent "encode PCM as Opus packets". The Opus library is loaded at run time; where it is
-// missing the constructor returns ErrUnsupported and the caller explains what to install.
+// OpusCodec is the intent "encode PCM as Opus packets, and decode them back". The Opus library is loaded at run time;
+// where it is missing the constructors return ErrUnsupported and the caller explains what to install.
 type OpusCodec interface {
 	// NewEncoder returns an encoder for format, tuned for speech.
 	NewEncoder(format AudioFormat) (OpusEncoder, error)
+	// NewDecoder returns a decoder that answers PCM in format.
+	NewDecoder(format AudioFormat) (OpusDecoder, error)
+}
+
+// OpusDecoder turns one Opus packet at a time back into interleaved PCM.
+type OpusDecoder interface {
+	// Decode returns the samples of one packet.
+	Decode(packet []byte) ([]int16, error)
+	// Close releases the decoder.
+	Close() error
 }
 
 // OpusEncoder encodes fixed-size frames of 20 ms. Each Encode call takes exactly one frame of
@@ -51,5 +61,21 @@ type OpusEncoder interface {
 	// Lookahead is the encoder delay in samples at the input rate, which the container records as pre-skip.
 	Lookahead() int
 	// Close releases the encoder.
+	Close() error
+}
+
+// SpeechRecognizer is the intent "turn speech into text on this device". Open returns ErrUnsupported where the
+// runtime the model needs is missing.
+type SpeechRecognizer interface {
+	// Open starts loading the model in dir and returns at once, so the load runs while the user speaks. The model's
+	// memory is held until the session is closed.
+	Open(dir string) (SpeechSession, error)
+}
+
+// SpeechSession is one loaded model. It is safe for concurrent use; requests are answered one at a time.
+type SpeechSession interface {
+	// Transcribe returns the text of 16 kHz mono PCM. The first call waits for the model to finish loading.
+	Transcribe(ctx context.Context, pcm []int16) (string, error)
+	// Close gives the model's memory back. A request in flight fails.
 	Close() error
 }

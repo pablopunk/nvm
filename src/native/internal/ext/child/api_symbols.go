@@ -127,8 +127,14 @@ func init() {
 		"DiagnosticsProblemComponent":   reflect.ValueOf(constant.MakeFromLiteral("\"support.report\"", token.STRING, 0)),
 		"DiagnosticsRequested":          reflect.ValueOf(constant.MakeFromLiteral("\"requested\"", token.STRING, 0)),
 		"DiagnosticsStored":             reflect.ValueOf(constant.MakeFromLiteral("\"stored\"", token.STRING, 0)),
+		"DictationEngineCloud":          reflect.ValueOf(api.DictationEngineCloud),
+		"DictationEngineDevice":         reflect.ValueOf(api.DictationEngineDevice),
 		"DictationError":                reflect.ValueOf(api.DictationError),
 		"DictationIdle":                 reflect.ValueOf(api.DictationIdle),
+		"DictationModelDownloading":     reflect.ValueOf(constant.MakeFromLiteral("\"downloading\"", token.STRING, 0)),
+		"DictationModelFailed":          reflect.ValueOf(constant.MakeFromLiteral("\"failed\"", token.STRING, 0)),
+		"DictationModelMissing":         reflect.ValueOf(constant.MakeFromLiteral("\"missing\"", token.STRING, 0)),
+		"DictationModelReady":           reflect.ValueOf(constant.MakeFromLiteral("\"ready\"", token.STRING, 0)),
 		"DictationRecording":            reflect.ValueOf(api.DictationRecording),
 		"DictationTranscribing":         reflect.ValueOf(api.DictationTranscribing),
 		"DragImagePath":                 reflect.ValueOf(api.DragImagePath),
@@ -457,6 +463,8 @@ func init() {
 		"Diagnostics":             reflect.ValueOf((*api.Diagnostics)(nil)),
 		"Dictation":               reflect.ValueOf((*api.Dictation)(nil)),
 		"DictationDevice":         reflect.ValueOf((*api.DictationDevice)(nil)),
+		"DictationDeviceModel":    reflect.ValueOf((*api.DictationDeviceModel)(nil)),
+		"DictationEngine":         reflect.ValueOf((*api.DictationEngine)(nil)),
 		"DictationStartOptions":   reflect.ValueOf((*api.DictationStartOptions)(nil)),
 		"DictationStatus":         reflect.ValueOf((*api.DictationStatus)(nil)),
 		"Dimension":               reflect.ValueOf((*api.Dimension)(nil)),
@@ -1279,16 +1287,19 @@ func (W _github_com_pablopunk_nvm_native_internal_ext_api_Diagnostics) Reporting
 
 // _github_com_pablopunk_nvm_native_internal_ext_api_Dictation is an interface wrapper for Dictation type
 type _github_com_pablopunk_nvm_native_internal_ext_api_Dictation struct {
-	IValue           interface{}
-	WAPIAvailable    func() (bool, error)
-	WCancel          func() error
-	WDeleteRecording func(id string) error
-	WDevices         func() ([]api.DictationDevice, error)
-	WRecordings      func() ([]api.SavedDictation, error)
-	WRetry           func(id string) (transcript string, err error)
-	WStart           func(options api.DictationStartOptions) error
-	WStatus          func() (api.DictationStatus, error)
-	WStop            func() (transcript string, err error)
+	IValue              interface{}
+	WAPIAvailable       func() (bool, error)
+	WCancel             func() error
+	WDeleteRecording    func(id string) error
+	WDeviceModel        func() (api.DictationDeviceModel, error)
+	WDevices            func() ([]api.DictationDevice, error)
+	WInstallDeviceModel func() error
+	WRecordings         func() ([]api.SavedDictation, error)
+	WRetry              func(id string) (transcript string, err error)
+	WRetryOn            func(id string, engine api.DictationEngine) (transcript string, err error)
+	WStart              func(options api.DictationStartOptions) error
+	WStatus             func() (api.DictationStatus, error)
+	WStop               func() (transcript string, err error)
 }
 
 func (W _github_com_pablopunk_nvm_native_internal_ext_api_Dictation) APIAvailable() (bool, error) {
@@ -1300,14 +1311,23 @@ func (W _github_com_pablopunk_nvm_native_internal_ext_api_Dictation) Cancel() er
 func (W _github_com_pablopunk_nvm_native_internal_ext_api_Dictation) DeleteRecording(id string) error {
 	return W.WDeleteRecording(id)
 }
+func (W _github_com_pablopunk_nvm_native_internal_ext_api_Dictation) DeviceModel() (api.DictationDeviceModel, error) {
+	return W.WDeviceModel()
+}
 func (W _github_com_pablopunk_nvm_native_internal_ext_api_Dictation) Devices() ([]api.DictationDevice, error) {
 	return W.WDevices()
+}
+func (W _github_com_pablopunk_nvm_native_internal_ext_api_Dictation) InstallDeviceModel() error {
+	return W.WInstallDeviceModel()
 }
 func (W _github_com_pablopunk_nvm_native_internal_ext_api_Dictation) Recordings() ([]api.SavedDictation, error) {
 	return W.WRecordings()
 }
 func (W _github_com_pablopunk_nvm_native_internal_ext_api_Dictation) Retry(id string) (transcript string, err error) {
 	return W.WRetry(id)
+}
+func (W _github_com_pablopunk_nvm_native_internal_ext_api_Dictation) RetryOn(id string, engine api.DictationEngine) (transcript string, err error) {
+	return W.WRetryOn(id, engine)
 }
 func (W _github_com_pablopunk_nvm_native_internal_ext_api_Dictation) Start(options api.DictationStartOptions) error {
 	return W.WStart(options)

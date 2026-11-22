@@ -119,6 +119,11 @@ func (s *Service) Start(deviceID string) error {
 
 // StartWithLevel binds a host-owned meter to the admitted recording only.
 func (s *Service) StartWithLevel(deviceID string, sink func(float64, string, func() bool)) error {
+	return s.StartOn(s.cfg.Transcriber, deviceID, sink)
+}
+
+// StartOn is StartWithLevel with the transcriber this dictation's segments go to, such as the on-device model.
+func (s *Service) StartOn(transcriber Transcriber, deviceID string, sink func(float64, string, func() bool)) error {
 	s.mu.Lock()
 	if s.phase != PhaseIdle {
 		s.mu.Unlock()
@@ -127,6 +132,7 @@ func (s *Service) StartWithLevel(deviceID string, sink func(float64, string, fun
 	s.phase = PhaseRecording
 	s.level.Store(0)
 	op := newOperation()
+	op.transcriber = transcriber
 	op.levelSink = sink
 	op.onLevel = func(level float64) { s.publishOperationLevel(op, level) }
 	op.retry = s.cfg.Retry
@@ -162,6 +168,9 @@ func (s *Service) StartWithLevel(deviceID string, sink func(float64, string, fun
 	if s.cfg.Recorder != nil {
 		op.journal = newJournal(s.cfg.Recorder, op.id, op.track(), s.warn)
 	}
+	if op.transcriber != nil && !readsWholeRecording(op.transcriber) {
+		op.live = newLiveTranscription(s, op)
+	}
 	s.cur = op
 	safego.Go("dictation.capture", func(context.Context) { op.capture() })
 	s.mu.Unlock()
@@ -183,29 +192,30 @@ func (s *Service) retryWarning(event string) func(attempt int, err error) {
 // transcription request repeats the admission check.
 func (s *Service) prepare(op *operation) {
 	op.prepared = make(chan struct{})
-	if s.cfg.Transcriber == nil {
+	if op.transcriber == nil {
 		close(op.prepared)
 		return
 	}
 	s.cfg.Background("dictation.prepare", func() {
 		defer close(op.prepared)
-		op.preparedOK = s.cfg.Transcriber.Prepare(op.ctx, op.id) == nil
+		op.preparedOK = op.transcriber.Prepare(op.ctx, op.id) == nil
 	})
 }
 
 // releasePreparation cancels op's context and releases its backend admission once the preparation has finished.
 func (s *Service) releasePreparation(op *operation, userCancelled bool) {
 	op.cancel()
-	if s.cfg.Transcriber == nil {
+	if op.transcriber == nil {
 		return
 	}
 	s.cfg.Background("dictation.cancel-preparation", func() {
 		<-op.prepared
-		_ = s.cfg.Transcriber.CancelPreparation(context.Background(), op.id, userCancelled)
+		_ = op.transcriber.CancelPreparation(context.Background(), op.id, userCancelled)
+		op.transcriber.Finished(op.id)
 	})
 }
 
-// Stop ends the recording, sends the segments to the backend and returns the joined text. An empty text means no
+// Stop ends the recording, waits for the segments still being transcribed and returns the joined text. An empty text means no
 // speech was captured or the speech was silent; the caller shows that as a state, not as an error. Whatever happens,
 // audio that holds sound stays in the recorder until its text is in.
 func (s *Service) Stop() (string, error) {
@@ -227,6 +237,9 @@ func (s *Service) Stop() (string, error) {
 	}
 	op.cancel()
 	s.release(op)
+	if op.transcriber != nil {
+		op.transcriber.Finished(op.id)
+	}
 	return text, err
 }
 
@@ -242,16 +255,10 @@ func (s *Service) finish(op *operation) (string, error) {
 	if op.failure != nil {
 		return "", s.keepFailed(op, saved, op.failure)
 	}
-	if s.cfg.Transcriber == nil {
+	if op.transcriber == nil {
 		return "", s.keepFailed(op, saved, ErrNoTranscriber)
 	}
-	select {
-	case <-op.prepared:
-	case <-op.ctx.Done():
-		s.keepCancelled(op, saved)
-		return "", ErrCancelled
-	}
-	text, err := transcribeFiles(op.ctx, s.cfg.Transcriber, s.cfg.Retry, op.id, op.preparedOK, segmentFiles(op), s.retryWarning("dictation.transcribe-retry"))
+	text, err := s.transcribe(op)
 	if op.ctx.Err() != nil {
 		s.keepCancelled(op, saved)
 		return "", ErrCancelled
@@ -267,7 +274,12 @@ func (s *Service) finish(op *operation) (string, error) {
 // ID, as the desktop app does. It runs only while the service is idle, and holds the service until it returns, so a
 // dictation cannot start over it. The caller decides what to do with the text; the recording is left as it is.
 func (s *Service) Retry(ctx context.Context, id string) (string, error) {
-	if s.cfg.Recorder == nil || s.cfg.Transcriber == nil {
+	return s.RetryOn(ctx, id, s.cfg.Transcriber)
+}
+
+// RetryOn is Retry with the transcriber the saved dictation goes to, such as the on-device model.
+func (s *Service) RetryOn(ctx context.Context, id string, transcriber Transcriber) (string, error) {
+	if s.cfg.Recorder == nil || transcriber == nil {
 		return "", ErrNoRecordings
 	}
 	s.mu.Lock()
@@ -282,7 +294,7 @@ func (s *Service) Retry(ctx context.Context, id string) (string, error) {
 	if err != nil {
 		return "", err
 	}
-	return s.retryRecording(ctx, id, files)
+	return s.retryRecording(ctx, id, files, transcriber)
 }
 
 // endRetry returns the service to idle after a retry, unless a dictation has taken it over meanwhile.
@@ -329,4 +341,20 @@ func randomHex() string {
 	var raw [16]byte
 	_, _ = rand.Read(raw[:])
 	return hex.EncodeToString(raw[:])
+}
+
+// transcribe returns the text of a captured dictation: the live pieces once the last one is answered, or the whole
+// recording in one pass for a transcriber that reads it whole.
+func (s *Service) transcribe(op *operation) (string, error) {
+	if op.live != nil {
+		op.sendLive()
+		return op.live.wait(len(op.segments))
+	}
+	select {
+	case <-op.prepared:
+	case <-op.ctx.Done():
+		return "", op.ctx.Err()
+	}
+	passes := wholeRecordingPasses(op.track(), op.segments)
+	return transcribePasses(op.ctx, op.transcriber, s.cfg.Retry, op.id, op.preparedOK, passes, s.retryWarning("dictation.transcribe-retry"))
 }

@@ -32,8 +32,8 @@ func TestSavingSettingsPublishesTheNewMicrophoneTitle(t *testing.T) {
 	ctx.dictation.devices = append(ctx.dictation.devices, api.DictationDevice{ID: "mic-2", Title: "Desk Mic"})
 	ext := New(Legacy{})
 	form := api.FormValues{fieldDevice: api.TextValue("mic-2")}
-	if result := run(t, ext, ctx, refSaveSettings, nil, form); result.Navigation != api.NavPop {
-		t.Fatalf("navigation %q; want pop", result.Navigation)
+	if result := run(t, ext, ctx, refSaveSettings, nil, form); result.Navigation != "" {
+		t.Fatalf("navigation %q; want the settings form to stay open while it saves each change", result.Navigation)
 	}
 	if got := ctx.settings.displays[SettingDevice]; got != "Desk Mic" {
 		t.Fatalf("published %q after the save; want the saved microphone's title", got)

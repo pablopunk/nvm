@@ -107,8 +107,8 @@ func TestSettingsFormSavesTheChoicesAndKeepsCleaningOffWithoutAnAccount(t *testi
 	ctx.ai.available = false
 	ext := New(Legacy{})
 	view := run(t, ext, ctx, RefOpenSettings, nil, nil).View
-	if view == nil || view.Form == nil || len(view.Form.Fields) != 5 {
-		t.Fatalf("settings view %+v; want the five fields", view)
+	if view == nil || view.Form == nil || len(view.Form.Fields) != 6 || !view.Form.SaveOnChange {
+		t.Fatalf("settings view %+v; want the six fields, saved as they change", view)
 	}
 	form := api.FormValues{
 		fieldDevice:     api.TextValue("mic-1"),
@@ -117,8 +117,8 @@ func TestSettingsFormSavesTheChoicesAndKeepsCleaningOffWithoutAnAccount(t *testi
 		fieldClipboard:  api.FlagValue(true),
 		fieldScreen:     api.FlagValue(true),
 	}
-	if result := run(t, ext, ctx, refSaveSettings, nil, form); result.Navigation != api.NavPop {
-		t.Fatalf("navigation %q; want pop", result.Navigation)
+	if result := run(t, ext, ctx, refSaveSettings, nil, form); result.Navigation != "" {
+		t.Fatalf("navigation %q; want the settings form to stay open while it saves each change", result.Navigation)
 	}
 	settings := ext.readSettings(ctx)
 	if settings.DeviceID != "mic-1" || settings.CleanupWithAI || settings.Dictionary != "Kubernetes" || !settings.CopyToClipboard || !settings.UseScreenContext {

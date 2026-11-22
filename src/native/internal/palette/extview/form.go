@@ -49,6 +49,9 @@ func newFormState(s *Session) *formState {
 		OnKey:   f.key,
 		Primary: f.submitHint,
 	}
+	if f.spec.SaveOnChange {
+		f.page.Hint, f.page.Primary = "↵ Edit", nil
+	}
 	return f
 }
 
@@ -64,6 +67,9 @@ func (f *formState) rows(q string) []search.Item {
 			continue
 		}
 		out = append(out, f.fieldRow(field))
+	}
+	if f.spec.SaveOnChange {
+		return out
 	}
 	return append(out, f.saveRow())
 }
@@ -125,7 +131,7 @@ func (f *formState) key(c *ui.Context, h search.Host) bool {
 	switch {
 	case f.editing != "" && c.Shortcut(0, ui.KeyEscape):
 		f.stopEditing(h)
-	case c.Shortcut(palette.Mod, ui.KeyEnter):
+	case c.Shortcut(palette.Mod, ui.KeyEnter) && !f.spec.SaveOnChange:
 		f.applyDraft(h)
 		f.save(h)
 	default:
@@ -145,6 +151,7 @@ func (f *formState) open(h search.Host, field api.Field) {
 	case field.Type == api.FieldCheckbox:
 		f.setValue(field.ID, api.FlagValue(!value.Flag))
 		h.Refresh()
+		f.saveChange(h)
 	case isPath(field.Type) && isEmptyValue(value):
 		f.choose(h, field)
 	case field.Type == api.FieldTextarea:
@@ -239,6 +246,7 @@ func (f *formState) toggleOption(h search.Host, field api.Field, value string) {
 	}
 	f.setValue(field.ID, api.ListValue(next...))
 	h.Refresh()
+	f.saveChange(h)
 }
 
 func (f *formState) pathRows(field api.Field, q string) []search.Item {
@@ -270,6 +278,7 @@ func (f *formState) commit(h search.Host, field api.Field, value api.FormValue) 
 	f.selectID = rowID(field.ID)
 	f.stopEditingState()
 	h.SetQuery("")
+	f.saveChange(h)
 }
 
 // stopEditing leaves the editing state without a value change; the query is cleared and the field's row selected.
@@ -288,20 +297,7 @@ func (f *formState) stopEditingState() {
 // save validates every field the way the host does before a submit runs. A failure marks its rows and selects the
 // first; success runs the submit action with every field's value.
 func (f *formState) save(h search.Host) {
-	f.errors = map[string]string{}
-	first := ""
-	for _, field := range f.spec.Fields {
-		if !takesValue(field.Type) || field.Disabled {
-			continue
-		}
-		if err := api.ValidateFieldValue(field, f.value(field)); err != nil {
-			f.errors[field.ID] = fieldErrorCopy(field, err)
-			if first == "" {
-				first = field.ID
-			}
-		}
-	}
-	if first != "" {
+	if first := f.validate(); first != "" {
 		f.selectID = rowID(first)
 		if h.Query() != "" {
 			h.SetQuery("")

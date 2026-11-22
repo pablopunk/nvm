@@ -29,6 +29,7 @@ func transientFailure(err error) bool {
 	switch {
 	case errors.Is(err, ErrCancelled), errors.Is(err, context.Canceled), errors.Is(err, ErrBusy),
 		errors.Is(err, ErrNoRecordings), errors.Is(err, ErrNoTranscriber), errors.Is(err, ErrCodec),
+		errors.Is(err, ErrDeviceUnavailable),
 		errors.Is(err, platform.ErrDenied), unsupportedSystem(err),
 		errors.Is(err, recordings.ErrNotFound), errors.Is(err, recordings.ErrInvalidID):
 		return false

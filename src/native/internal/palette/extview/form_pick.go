@@ -32,6 +32,7 @@ func (f *formState) choose(h search.Host, field api.Field) {
 			f.stopEditing(h)
 		}
 		h.Refresh()
+		f.saveChange(h)
 	})
 }
 

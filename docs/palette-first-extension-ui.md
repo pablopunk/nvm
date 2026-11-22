@@ -39,3 +39,9 @@ searchable list rows with current values and one save row; opening a field uses
 the palette input, choice rows, editor, or native picker as appropriate. Values
 stay in a draft until submission. Do not use forms for lightweight arguments
 that fit `ctx.input.prompt`.
+
+Settings are not drafts: a user who changes a setting expects it saved, and a
+save row at the bottom of a long form is easy to miss. Settings forms set
+`SaveOnChange`, which saves every change as it is made and shows no save row.
+Keep the draft-and-save form for creating or sending something, where the
+submit is the point.

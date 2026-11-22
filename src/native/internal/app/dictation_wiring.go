@@ -2,11 +2,13 @@ package app
 
 import (
 	"context"
+	"path/filepath"
 	"sync"
 
 	"github.com/pablopunk/nvm/native/internal/backend"
 	"github.com/pablopunk/nvm/native/internal/backend/auth"
 	dict "github.com/pablopunk/nvm/native/internal/dictation"
+	"github.com/pablopunk/nvm/native/internal/dictation/devicemodel"
 	"github.com/pablopunk/nvm/native/internal/dictation/recordings"
 	"github.com/pablopunk/nvm/native/internal/ext/api"
 	dictbuiltin "github.com/pablopunk/nvm/native/internal/ext/builtins/dictation"
@@ -40,6 +42,9 @@ func (t dictationTranscriber) Prepare(ctx context.Context, operationID string) e
 func (t dictationTranscriber) CancelPreparation(ctx context.Context, operationID string, userCancelled bool) error {
 	return t.session.Client().CancelTranscriptionPreparation(ctx, operationID, userCancelled)
 }
+
+// Finished holds nothing: the backend settles each request on its own.
+func (t dictationTranscriber) Finished(string) {}
 
 // appDictationAccount adapts the app's account session to the engine's account port.
 type appDictationAccount struct {
@@ -85,6 +90,8 @@ func (p *App) newDictationEngine() *dict.Engine {
 		Account:    appDictationAccount{app: p},
 		Recordings: p.dictationRecordingStore(),
 		Muter:      p.dictationMuter(),
+		Speech:     p.ports.Speech,
+		Model:      p.dictationDeviceModel(),
 		Background: supervisedDictation,
 		Warn: func(event string, fields map[string]any) {
 			logx.Default().Warn(event, logx.F(fields))
@@ -140,8 +147,16 @@ func (d *extensionDictation) Recordings() ([]api.SavedDictation, error) {
 	return d.engineFor().Recordings()
 }
 
-func (d *extensionDictation) Retry(ctx context.Context, id string) (string, error) {
-	return d.engineFor().Retry(ctx, id)
+func (d *extensionDictation) RetryOn(ctx context.Context, id string, engine api.DictationEngine) (string, error) {
+	return d.engineFor().RetryOn(ctx, id, engine)
+}
+
+func (d *extensionDictation) DeviceModel() api.DictationDeviceModel {
+	return d.engineFor().DeviceModel()
+}
+
+func (d *extensionDictation) InstallDeviceModel() {
+	d.engineFor().InstallDeviceModel()
 }
 
 func (d *extensionDictation) DeleteRecording(id string) error {
@@ -150,6 +165,14 @@ func (d *extensionDictation) DeleteRecording(id string) error {
 
 func supervisedDictation(name string, fn func()) {
 	safego.Go(name, func(context.Context) { fn() })
+}
+
+// dictationDeviceModel keeps the on-device speech model under the data folder, or nil when the folder is read only.
+func (p *App) dictationDeviceModel() *devicemodel.Manager {
+	if p.userReadOnly || p.ports.Downloads == nil {
+		return nil
+	}
+	return devicemodel.New(p.ports.FS, p.ports.Downloads, filepath.Join(dataDir(), "models"), devicemodel.Parakeet())
 }
 
 // dictationRecordingStore returns the store of unfinished dictations, or nil when the data folder is read only.
