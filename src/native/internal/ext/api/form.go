@@ -119,6 +119,9 @@ type FormSpec struct {
 	Submit *Action `json:"submit,omitempty"`
 	// SubmitTitle labels the prominent submit row and persistent Command-Enter footer action. Empty means "Save".
 	SubmitTitle string `json:"submitTitle,omitempty"`
+	// SaveOnChange suits settings: Submit runs whenever a field's value changes, with no save row or shortcut. The
+	// form stays open; only the result's toast is shown.
+	SaveOnChange bool `json:"saveOnChange,omitempty"`
 }
 
 // Validate checks field ids and types. Value validation is ValidateFieldValue.

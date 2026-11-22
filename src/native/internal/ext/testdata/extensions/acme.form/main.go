@@ -24,6 +24,7 @@ func Commands(ctx api.Context) ([]api.Command, error) {
 	return []api.Command{
 		{ID: "form", Title: "Form fixture"},
 		{ID: "prompt", Title: "Prompt fixture"},
+		{ID: "preferences", Title: "Preferences fixture"},
 	}, nil
 }
 
@@ -43,6 +44,16 @@ func RunAction(ctx api.Context, in api.Invocation) (api.Result, error) {
 		})
 		view := api.ListView("Prompt fixture", api.Item{ID: "ask", Title: "Ask for a name", Primary: api.Primary(prompt)})
 		return api.Result{View: &view}, nil
+	case "preferences":
+		theme := api.FieldOf("theme", api.FieldDropdown, "Theme")
+		theme.Value = api.TextValue("system")
+		theme.Options = []api.Option{{Title: "System", Value: "system"}, {Title: "Light", Value: "light"}, {Title: "Dark", Value: "dark"}}
+		sounds := api.FieldOf("sounds", api.FieldCheckbox, "Play sounds")
+		view := api.FormView("Preferences", []api.Field{theme, sounds}, api.Run("save-preference", "Save", nil))
+		view.Form.SaveOnChange = true
+		return api.Result{View: &view}, nil
+	case "save-preference":
+		return api.Result{Toast: &api.Toast{Message: "Saved"}}, nil
 	case "save":
 		view := summaryView(in.Form)
 		return api.Result{View: &view}, nil
