@@ -120,6 +120,7 @@ func cameraRow(device api.CameraDevice) api.Item {
 	if device.IsDefault {
 		subtitle += " · default"
 	}
-	open := api.PushView(device.Title, api.CameraView(device.Title, device.ID))
+	view := api.View{Kind: api.ViewCamera, Title: device.Title, Camera: &api.CameraSpec{DeviceID: device.ID}}
+	open := api.PushView(device.Title, view)
 	return api.Item{ID: device.ID, Title: device.Title, Subtitle: subtitle, Icon: "camera", Primary: &open}
 }

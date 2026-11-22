@@ -182,6 +182,7 @@
       "AIBuilder",
       "Account",
       "Cache",
+      "Cameras",
       "Clipboard",
       "Clock",
       "Data",
@@ -259,6 +260,15 @@
       "Recent",
       "ReportProblem",
       "Reporting"
+    ]
+  },
+  {
+    "interface": "Cameras",
+    "kind": "service",
+    "package": "child",
+    "implementation": "remoteCameras",
+    "methods": [
+      "Devices"
     ]
   },
   {

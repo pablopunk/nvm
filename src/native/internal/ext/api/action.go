@@ -137,8 +137,7 @@ type Action struct {
 	Query   string   `json:"query,omitempty"`
 	App     string   `json:"app,omitempty"`
 	Setting string   `json:"setting,omitempty"`
-	// Target names what the action changes: the action ID for a shortcut kind, the CameraDevice.ID for
-	// CameraSelectDevice.
+	// Target is the action ID a shortcut kind changes, or the CameraDevice.ID of CameraSelectDevice.
 	Target  string            `json:"target,omitempty"`
 	Content *ClipboardContent `json:"content,omitempty"`
 	Paste   *PasteOptions     `json:"paste,omitempty"`

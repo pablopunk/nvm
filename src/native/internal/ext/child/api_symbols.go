@@ -67,7 +67,6 @@ func init() {
 		"CameraExternal":                reflect.ValueOf(api.CameraExternal),
 		"CameraOther":                   reflect.ValueOf(api.CameraOther),
 		"CameraSelectDevice":            reflect.ValueOf(constant.MakeFromLiteral("\"select-device\"", token.STRING, 0)),
-		"CameraView":                    reflect.ValueOf(api.CameraView),
 		"CameraVirtual":                 reflect.ValueOf(api.CameraVirtual),
 		"CapabilityAI":                  reflect.ValueOf(api.CapabilityAI),
 		"CapabilityCamera":              reflect.ValueOf(api.CapabilityCamera),
