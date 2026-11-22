@@ -63,7 +63,7 @@ func parseOptions(args []string, stderr io.Writer) (options, error) {
 	}
 	opts.clips = flags.Args()
 	if opts.tokenFile == "" && opts.parakeet == "" && opts.models == "" || len(opts.clips) == 0 {
-		return opts, errors.New("usage: dictbench (-token-file FILE | -parakeet DIR -ort LIB | -device ROOT -ort LIB) [-runs N] clip.wav...")
+		return opts, errors.New("usage: dictbench (-token-file FILE | -parakeet DIR -ort LIB | -device ROOT -ort LIB) [-runs N] CLIP.wav [CLIP.wav]")
 	}
 	return opts, nil
 }
