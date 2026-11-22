@@ -51,6 +51,8 @@ func (t j20Transcriber) CancelPreparation(ctx context.Context, operationID strin
 	return t.client.CancelTranscriptionPreparation(ctx, operationID, userCancelled)
 }
 
+func (t j20Transcriber) Finished(string) {}
+
 // TestJourneyJ20DictationPipelineCarriesToneToTranscript runs the dictation pipeline on a private PulseAudio server. A
 // 440 Hz tone is written into a pipe source that stands in for the microphone; the real capture and libopus encode it;
 // the real backend client sends the WebM to a fake backend; the transcript comes back. The paste into a focused app and

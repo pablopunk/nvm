@@ -7,7 +7,7 @@ import (
 )
 
 // Capture geometry. Speech is recorded mono at 16 kHz, which the transcription model decodes without loss, in
-// 20 ms Opus frames, and a segment is one minute long, the same split the desktop app makes.
+// 20 ms Opus frames. A segment ends at a pause (see pauses.go) or after one minute, the desktop app's split.
 const (
 	SampleRate       = 16000
 	Channels         = 1

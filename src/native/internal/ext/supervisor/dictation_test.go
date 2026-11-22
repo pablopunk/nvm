@@ -45,10 +45,16 @@ func (f *fakeDictationEngine) Recordings() ([]api.SavedDictation, error) {
 	return []api.SavedDictation{{ID: "dictation-saved", CreatedAtMs: 1, SegmentCount: 3}}, nil
 }
 
-func (f *fakeDictationEngine) Retry(_ context.Context, id string) (string, error) {
+func (f *fakeDictationEngine) RetryOn(_ context.Context, id string, _ api.DictationEngine) (string, error) {
 	f.retried = append(f.retried, id)
 	return "retried text", nil
 }
+
+func (f *fakeDictationEngine) DeviceModel() api.DictationDeviceModel {
+	return api.DictationDeviceModel{Status: api.DictationModelMissing}
+}
+
+func (f *fakeDictationEngine) InstallDeviceModel() {}
 
 func (f *fakeDictationEngine) DeleteRecording(id string) error {
 	f.deleted = append(f.deleted, id)

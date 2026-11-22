@@ -349,3 +349,33 @@ func TestPasswordEditingConcealsTheSearchFieldUntilItIsSet(t *testing.T) {
 		t.Fatal("the search field stayed concealed after the password was set")
 	}
 }
+
+func TestASaveOnChangeFormSavesEachChangeInPlaceWithoutASaveRow(t *testing.T) {
+	theme := api.FieldOf("theme", api.FieldDropdown, "Theme")
+	theme.Value = api.TextValue("system")
+	theme.Options = []api.Option{{Title: "System", Value: "system"}, {Title: "Dark", Value: "dark"}}
+	sounds := api.FieldOf("sounds", api.FieldCheckbox, "Play sounds")
+	submit := api.Run("save", "Save", nil)
+	r := openForm(t, api.FormSpec{Fields: []api.Field{theme, sounds}, Submit: &submit, SaveOnChange: true})
+	for _, row := range r.rows("") {
+		if row.ID == "form:save" {
+			t.Fatal("a form that saves on change shows a save row")
+		}
+	}
+	if r.page.Primary != nil || strings.Contains(r.page.Hint, "Save") {
+		t.Fatalf("hint %q; want no save shortcut", r.page.Hint)
+	}
+	r.press(r.row("Theme"))
+	r.press(r.row("Dark"))
+	r.press(r.row("Play sounds"))
+	if len(r.invokes) != 2 {
+		t.Fatalf("invokes = %d; want one save per change", len(r.invokes))
+	}
+	last := r.invokes[1].Form
+	if last["theme"].Text != "dark" || !last["sounds"].Flag {
+		t.Fatalf("last save = %+v; want every field's current value", last)
+	}
+	if r.host.hidden || r.host.pops != 0 {
+		t.Fatalf("hidden %v, pops %d; want the form to stay open", r.host.hidden, r.host.pops)
+	}
+}

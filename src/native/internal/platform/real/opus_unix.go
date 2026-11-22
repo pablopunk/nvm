@@ -36,6 +36,9 @@ type libopus struct {
 	encode         func(encoder uintptr, pcm *int16, frameSize int32, data *byte, maxBytes int32) int32
 	encoderControl func(encoder uintptr, request int32, value *int32) int32
 	encoderDestroy func(encoder uintptr)
+	decoderCreate  func(sampleRate, channels int32, errOut *int32) uintptr
+	decode         func(decoder uintptr, data *byte, length int32, pcm *int16, frameSize int32, decodeFEC int32) int32
+	decoderDestroy func(decoder uintptr)
 }
 
 var (
@@ -100,6 +103,9 @@ func bindLibopus(handle uintptr, lib *libopus) (err error) {
 		{"opus_encode", func() { purego.RegisterLibFunc(&lib.encode, handle, "opus_encode") }},
 		{"opus_encoder_ctl", func() { purego.RegisterLibFunc(&lib.encoderControl, handle, "opus_encoder_ctl") }},
 		{"opus_encoder_destroy", func() { purego.RegisterLibFunc(&lib.encoderDestroy, handle, "opus_encoder_destroy") }},
+		{"opus_decoder_create", func() { purego.RegisterLibFunc(&lib.decoderCreate, handle, "opus_decoder_create") }},
+		{"opus_decode", func() { purego.RegisterLibFunc(&lib.decode, handle, "opus_decode") }},
+		{"opus_decoder_destroy", func() { purego.RegisterLibFunc(&lib.decoderDestroy, handle, "opus_decoder_destroy") }},
 	}
 	for _, binding := range bindings {
 		if _, symErr := purego.Dlsym(handle, binding.name); symErr != nil {
@@ -162,6 +168,53 @@ func (e *libopusEncoder) Close() error {
 	if e.state != 0 {
 		e.lib.encoderDestroy(e.state)
 		e.state = 0
+	}
+	return nil
+}
+
+// opusMaxFrameMillis is the longest audio one Opus packet can carry.
+const opusMaxFrameMillis = 120
+
+// NewDecoder creates a libopus decoder that answers PCM in format.
+func (opusCodec) NewDecoder(format platform.AudioFormat) (platform.OpusDecoder, error) {
+	lib, err := loadLibopus()
+	if err != nil {
+		return nil, err
+	}
+	var code int32
+	state := lib.decoderCreate(int32(format.SampleRate), int32(format.Channels), &code)
+	if code != opusOK || state == 0 {
+		return nil, fmt.Errorf("libopus refused the decoder settings (error %d)", code)
+	}
+	return &libopusDecoder{lib: lib, state: state, format: format}, nil
+}
+
+// libopusDecoder decodes one packet per call. The state is freed by Close.
+type libopusDecoder struct {
+	lib    *libopus
+	state  uintptr
+	format platform.AudioFormat
+}
+
+// Decode returns the interleaved samples of one packet.
+func (d *libopusDecoder) Decode(packet []byte) ([]int16, error) {
+	if len(packet) == 0 {
+		return nil, errors.New("an Opus packet cannot be empty")
+	}
+	maxFrame := d.format.SampleRate * opusMaxFrameMillis / 1000
+	pcm := make([]int16, maxFrame*d.format.Channels)
+	n := d.lib.decode(d.state, &packet[0], int32(len(packet)), &pcm[0], int32(maxFrame), 0)
+	if n < 0 {
+		return nil, fmt.Errorf("libopus failed to decode a packet (error %d)", n)
+	}
+	return pcm[:int(n)*d.format.Channels], nil
+}
+
+// Close frees the libopus state. Decode must not be called afterwards.
+func (d *libopusDecoder) Close() error {
+	if d.state != 0 {
+		d.lib.decoderDestroy(d.state)
+		d.state = 0
 	}
 	return nil
 }

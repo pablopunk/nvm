@@ -3,9 +3,11 @@ package dictation
 import (
 	"context"
 	"errors"
+	"fmt"
 	"sync"
 
 	"github.com/pablopunk/nvm/native/internal/dictation/audiomute"
+	"github.com/pablopunk/nvm/native/internal/dictation/devicemodel"
 	"github.com/pablopunk/nvm/native/internal/dictation/recordings"
 	"github.com/pablopunk/nvm/native/internal/ext/api"
 	"github.com/pablopunk/nvm/native/internal/platform"
@@ -28,6 +30,9 @@ type EngineConfig struct {
 	Recordings *recordings.Store
 	Retry      RetryPolicy
 	Muter      *audiomute.Muter
+	// Speech and Model run dictations on the device; nil leaves only the cloud.
+	Speech     platform.SpeechRecognizer
+	Model      *devicemodel.Manager
 	OnLevel    func(level float64, current func() bool)
 	Background func(name string, fn func())
 	Warn       func(event string, fields map[string]any)
@@ -38,6 +43,7 @@ type EngineConfig struct {
 type Engine struct {
 	cfg     EngineConfig
 	service *Service
+	device  *DeviceTranscriber
 	muteMu  sync.Mutex
 	lease   *audiomute.Lease
 }
@@ -60,6 +66,9 @@ func NewEngine(cfg EngineConfig) *Engine {
 		serviceConfig.Recorder = cfg.Recordings
 	}
 	engine.service = NewService(serviceConfig)
+	if cfg.Speech != nil && cfg.Model != nil {
+		engine.device = NewDeviceTranscriber(cfg.Speech, cfg.Codec, cfg.Model)
+	}
 	return engine
 }
 
@@ -110,7 +119,12 @@ func (e *Engine) StartWithLevel(options api.DictationStartOptions, sink func(flo
 	if options.MuteSystemAudioWhileRecord {
 		e.beginMute()
 	}
-	if err := e.service.StartWithLevel(microphoneID(options.DeviceID), sink); err != nil {
+	transcriber, err := e.transcriberFor(options.Engine)
+	if err != nil {
+		e.restoreMute()
+		return e.failure("start", err)
+	}
+	if err := e.service.StartOn(transcriber, microphoneID(options.DeviceID), sink); err != nil {
 		e.restoreMute()
 		return e.failure("start", err)
 	}
@@ -155,9 +169,18 @@ func (e *Engine) Recordings() ([]api.SavedDictation, error) {
 	return out, nil
 }
 
-// Retry transcribes a saved dictation again. The recording stays until the caller deletes it.
+// Retry transcribes a saved dictation again in the cloud. The recording stays until the caller deletes it.
 func (e *Engine) Retry(ctx context.Context, id string) (string, error) {
-	text, err := e.service.Retry(ctx, id)
+	return e.RetryOn(ctx, id, api.DictationEngineCloud)
+}
+
+// RetryOn transcribes a saved dictation again on engine. The recording stays until the caller deletes it.
+func (e *Engine) RetryOn(ctx context.Context, id string, engine api.DictationEngine) (string, error) {
+	transcriber, err := e.transcriberFor(engine)
+	if err != nil {
+		return "", e.failure("retry", err)
+	}
+	text, err := e.service.RetryOn(ctx, id, transcriber)
 	if err != nil {
 		return "", e.failure("retry", err)
 	}
@@ -255,4 +278,46 @@ func apiCauseOf(err error) error {
 		return api.ErrNotFound
 	}
 	return api.ErrNotAvailable
+}
+
+// transcriberFor returns where a dictation on engine goes: the cloud's transcriber, or the device's once its model is
+// downloaded.
+func (e *Engine) transcriberFor(engine api.DictationEngine) (Transcriber, error) {
+	switch engine {
+	case "", api.DictationEngineCloud:
+		return e.service.cfg.Transcriber, nil
+	case api.DictationEngineDevice:
+		if e.device == nil {
+			return nil, fmt.Errorf("%w: %w", ErrDeviceUnavailable, platform.ErrUnsupported)
+		}
+		if !e.cfg.Model.Ready() {
+			return nil, fmt.Errorf("%w: %w", ErrDeviceUnavailable, devicemodel.ErrNotReady)
+		}
+		return e.device, nil
+	}
+	return nil, fmt.Errorf("%w: dictation has no engine %q", api.ErrInvalidInput, engine)
+}
+
+// DeviceModel describes the on-device model and its download.
+func (e *Engine) DeviceModel() api.DictationDeviceModel {
+	if e.cfg.Model == nil {
+		return api.DictationDeviceModel{Status: api.DictationModelMissing, Error: "On-device dictation is not available in this build."}
+	}
+	manifest, state := e.cfg.Model.Manifest(), e.cfg.Model.State()
+	return api.DictationDeviceModel{
+		Title: manifest.Title, Credit: manifest.Credit, SizeBytes: state.Size,
+		Status: string(state.Status), Progress: state.Progress, Error: state.Error,
+	}
+}
+
+// InstallDeviceModel starts the model's download in the background.
+func (e *Engine) InstallDeviceModel() {
+	if e.cfg.Model == nil {
+		return
+	}
+	background := e.cfg.Background
+	if background == nil {
+		background = supervisedBackground
+	}
+	e.cfg.Model.Install(background)
 }

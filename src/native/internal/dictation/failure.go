@@ -5,6 +5,7 @@ import (
 
 	"github.com/pablopunk/nvm/native/internal/backend"
 	"github.com/pablopunk/nvm/native/internal/backend/auth"
+	"github.com/pablopunk/nvm/native/internal/dictation/devicemodel"
 	"github.com/pablopunk/nvm/native/internal/platform"
 )
 
@@ -35,6 +36,15 @@ func FailureMessage(err error) string {
 	}
 	if errors.Is(err, ErrNotReady) {
 		return "The microphone did not start picking up sound. Check that it is connected, then try again."
+	}
+	if errors.Is(err, devicemodel.ErrNotReady) {
+		return "Download the on-device model in Dictation Settings first."
+	}
+	if errors.Is(err, ErrDeviceUnavailable) {
+		return "On-device dictation is not available in this build. Choose Cloud in Dictation Settings."
+	}
+	if errors.Is(err, ErrDeviceFailed) {
+		return "On-device transcription failed. Try again."
 	}
 	if errors.Is(err, ErrNoTranscriber) {
 		return "Cloud transcription is not set up. Sign in to use API dictation."

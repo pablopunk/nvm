@@ -2,6 +2,7 @@ package fake
 
 import (
 	"encoding/binary"
+	"fmt"
 
 	"github.com/pablopunk/nvm/native/internal/platform"
 )
@@ -52,3 +53,28 @@ func (e *opusEncoder) Lookahead() int { return e.lookahead }
 
 // Close is a no-op.
 func (e *opusEncoder) Close() error { return nil }
+
+// NewDecoder returns a decoder of the fake encoder's packets.
+func (c *OpusCodec) NewDecoder(format platform.AudioFormat) (platform.OpusDecoder, error) {
+	if err := c.faults.take("opus.decoder"); err != nil {
+		return nil, err
+	}
+	return opusDecoder{}, nil
+}
+
+type opusDecoder struct{}
+
+// Decode turns a fake packet back into a frame of its length, every sample the frame's first one.
+func (opusDecoder) Decode(packet []byte) ([]int16, error) {
+	if len(packet) != 6 {
+		return nil, fmt.Errorf("a fake Opus packet holds 6 bytes, got %d", len(packet))
+	}
+	pcm := make([]int16, binary.LittleEndian.Uint32(packet))
+	for i := range pcm {
+		pcm[i] = int16(binary.LittleEndian.Uint16(packet[4:]))
+	}
+	return pcm, nil
+}
+
+// Close is a no-op.
+func (opusDecoder) Close() error { return nil }

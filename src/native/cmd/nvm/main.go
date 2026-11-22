@@ -1,5 +1,5 @@
 // Command nvm runs Nevermind as a native MyGo app. It only wires the app entry point. The same binary also
-// serves as an extension child process when the host starts it with the child flag, reads one image for OCR, and runs
+// serves as an extension child process when the host starts it with the child flag, reads one image for OCR, holds the on-device speech model for dictation, and runs
 // the public "run <action-id>" command line.
 package main
 
@@ -10,6 +10,7 @@ import (
 	"github.com/pablopunk/nvm/native/internal/app"
 	"github.com/pablopunk/nvm/native/internal/ext/child"
 	"github.com/pablopunk/nvm/native/internal/platform/onnxocr"
+	"github.com/pablopunk/nvm/native/internal/platform/parakeet"
 	"github.com/pablopunk/nvm/native/internal/shortcuts/actioncli"
 )
 
@@ -21,6 +22,9 @@ func main() {
 		os.Exit(code)
 	}
 	if code, handled := onnxocr.Main(os.Args, os.Stdout, os.Stderr); handled {
+		os.Exit(code)
+	}
+	if code, handled := parakeet.Main(os.Args, os.Stdin, os.Stdout, os.Stderr); handled {
 		os.Exit(code)
 	}
 	if actioncli.IsCommand(os.Args[1:]) {

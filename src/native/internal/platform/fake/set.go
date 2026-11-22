@@ -33,6 +33,8 @@ type Set struct {
 	Microphone   *Microphone
 	Cameras      *Cameras
 	Opus         *OpusCodec
+	Speech       *SpeechRecognizer
+	Downloads    *Downloads
 	FileDialog   *FileDialog
 	Text         *TextRecognizer
 	Capture      *ScreenCapturer
@@ -74,6 +76,8 @@ func NewSet() *Set {
 		Microphone:   NewMicrophone(),
 		Cameras:      NewCameras(),
 		Opus:         NewOpusCodec(),
+		Speech:       NewSpeechRecognizer(),
+		Downloads:    NewDownloads(),
 		FileDialog:   NewFileDialog(),
 		Text:         NewTextRecognizer(),
 		Capture:      NewScreenCapturer(),
@@ -115,6 +119,8 @@ func (s *Set) Ports() platform.Ports {
 		Microphone:   s.Microphone,
 		Cameras:      s.Cameras,
 		Opus:         s.Opus,
+		Speech:       s.Speech,
+		Downloads:    s.Downloads,
 		FileDialog:   s.FileDialog,
 		Text:         s.Text,
 		Capture:      s.Capture,

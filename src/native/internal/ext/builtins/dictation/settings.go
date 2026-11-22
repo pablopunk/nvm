@@ -37,6 +37,8 @@ type Settings struct {
 	Dictionary       string `json:"dictionary"`
 	CopyToClipboard  bool   `json:"copyToClipboard"`
 	UseScreenContext bool   `json:"useScreenContext"`
+	// Engine is where speech becomes text; empty is the cloud.
+	Engine api.DictationEngine `json:"engine,omitempty"`
 }
 
 // defaultSettings are the choices a new install starts with.
@@ -77,12 +79,14 @@ func (e Extension) openSettings(ctx api.Context) (api.Result, error) {
 	return pushView(ctx, e.settingsView(ctx)), nil
 }
 
-// settingsView is the Dictation Settings form. Each field is a palette row, and the save row stores all of them.
+// settingsView is the Dictation Settings form. Each field is a palette row, saved as soon as it changes.
 func (e Extension) settingsView(ctx api.Context) api.View {
 	settings := e.readSettings(ctx)
 	available := aiAvailable(ctx)
+	model, _ := ctx.Dictation().DeviceModel()
 	fields := []api.Field{
 		deviceField(settings.DeviceID, devicesOf(ctx)),
+		engineField(settings.Engine, model),
 		cleanupField(settings.CleanupWithAI && available, available),
 		dictionaryField(settings.Dictionary),
 		checkboxField(fieldClipboard, "Copy transcription to clipboard", settings.CopyToClipboard,
@@ -90,7 +94,9 @@ func (e Extension) settingsView(ctx api.Context) api.View {
 		checkboxField(fieldScreen, "Use screen text", settings.UseScreenContext,
 			"Read words from the screen to fix names and terms. Off unless you turn it on."),
 	}
-	return api.FormView(settingsTitle, fields, api.Run(refSaveSettings, settingsSave, nil))
+	view := api.FormView(settingsTitle, fields, api.Run(refSaveSettings, settingsSave, nil))
+	view.Form.SaveOnChange = true
+	return view
 }
 
 // devicesOf lists the microphones the picker offers. The system default is always first.
@@ -143,7 +149,7 @@ func checkboxField(id, label string, value bool, description string) api.Field {
 	return field
 }
 
-// saveSettings stores the form's choices, and returns to the page that opened the form. Cleaning with AI stays off
+// saveSettings stores the form's choices each time one changes; the form stays open. Cleaning with AI stays off
 // when the account cannot use it, as 1.x stored it.
 func (e Extension) saveSettings(ctx api.Context, form api.FormValues) (api.Result, error) {
 	settings := normalizedSettings(Settings{
@@ -152,12 +158,13 @@ func (e Extension) saveSettings(ctx api.Context, form api.FormValues) (api.Resul
 		Dictionary:       form[fieldDictionary].Text,
 		CopyToClipboard:  form[fieldClipboard].Flag,
 		UseScreenContext: form[fieldScreen].Flag,
+		Engine:           engineOrCloud(api.DictationEngine(form[fieldEngine].Text)),
 	})
 	if err := ctx.Storage().Set(storageSettingsKey, settings); err != nil {
 		return api.Result{}, err
 	}
 	publishDeviceTitle(ctx, settings)
-	return api.Result{Navigation: api.NavPop}, nil
+	return api.Result{Toast: installNotice(ctx, settings.Engine)}, nil
 }
 
 // publishDeviceTitle publishes the title of the microphone the settings choose, for the Settings page's Dictation row.

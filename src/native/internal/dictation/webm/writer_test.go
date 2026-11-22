@@ -17,10 +17,10 @@ func parseElements(t *testing.T, data []byte) []rawElement {
 	t.Helper()
 	var out []rawElement
 	for len(data) > 0 {
-		idLen := vintLength(t, data[0])
+		idLen := mustVintLength(t, data[0])
 		id := data[:idLen]
 		data = data[idLen:]
-		sizeLen := vintLength(t, data[0])
+		sizeLen := mustVintLength(t, data[0])
 		size := vintValue(data[:sizeLen])
 		data = data[sizeLen:]
 		if uint64(len(data)) < size {
@@ -32,15 +32,13 @@ func parseElements(t *testing.T, data []byte) []rawElement {
 	return out
 }
 
-func vintLength(t *testing.T, first byte) int {
+func mustVintLength(t *testing.T, first byte) int {
 	t.Helper()
-	for length := 1; length <= 8; length++ {
-		if first&(0x80>>(length-1)) != 0 {
-			return length
-		}
+	length := vintLength(first)
+	if length == 0 {
+		t.Fatalf("byte %x starts no EBML vint", first)
 	}
-	t.Fatalf("byte %x starts no EBML vint", first)
-	return 0
+	return length
 }
 
 func vintValue(raw []byte) uint64 {

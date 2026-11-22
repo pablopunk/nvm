@@ -32,8 +32,8 @@ func (s *Service) markFailed(id string, cause error) {
 // retryRecording transcribes the loaded audio of saved dictation id under a fresh operation ID, retrying passing
 // failures under the policy. The reason of a failure is written beside the audio, which stays until the caller
 // deletes it.
-func (s *Service) retryRecording(ctx context.Context, id string, files [][]byte) (string, error) {
-	text, err := transcribeFiles(ctx, s.cfg.Transcriber, s.cfg.Retry, newRetryOperationID(), false, files, s.retryWarning("dictation.transcribe-retry"))
+func (s *Service) retryRecording(ctx context.Context, id string, files [][]byte, transcriber Transcriber) (string, error) {
+	text, err := s.retryFiles(ctx, transcriber, files)
 	if err != nil && ctx.Err() == nil {
 		s.markFailed(id, err)
 	}
@@ -48,4 +48,18 @@ func (s *Service) discardRecording(id string) {
 	if err := s.cfg.Recorder.Remove(id); err != nil {
 		s.warn("dictation.recording-remove-failed", err)
 	}
+}
+
+// retryFiles transcribes saved segment files: one request each for the cloud, or whole-recording passes for a
+// transcriber that reads the whole recording, so a retry reads as well as the first try would have.
+func (s *Service) retryFiles(ctx context.Context, transcriber Transcriber, files [][]byte) (string, error) {
+	onRetry := s.retryWarning("dictation.transcribe-retry")
+	if !readsWholeRecording(transcriber) {
+		return transcribeFiles(ctx, transcriber, s.cfg.Retry, newRetryOperationID(), false, files, onRetry)
+	}
+	passes, err := savedPasses(files)
+	if err != nil {
+		return "", err
+	}
+	return transcribePasses(ctx, transcriber, s.cfg.Retry, newRetryOperationID(), false, passes, onRetry)
 }

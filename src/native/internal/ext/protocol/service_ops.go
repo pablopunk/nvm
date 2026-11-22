@@ -65,6 +65,8 @@ const (
 	OpRecordings      = "recordings"
 	OpRetry           = "retry"
 	OpDeleteRecording = "delete-recording"
+	OpDeviceModel     = "device-model"
+	OpInstallModel    = "install-device-model"
 )
 
 // OnceArgs schedules one run of the handler Ref names, at At, under Key.
@@ -173,7 +175,9 @@ type DraftLookup struct {
 	Draft DraftRecord `json:"draft"`
 }
 
-// DictationRecordingArgs names the saved dictation a retry or a delete acts on.
+// DictationRecordingArgs names the saved dictation a retry or a delete acts on, and the engine a retry runs on (empty
+// is the cloud).
 type DictationRecordingArgs struct {
-	ID string `json:"id"`
+	ID     string              `json:"id"`
+	Engine api.DictationEngine `json:"engine,omitempty"`
 }

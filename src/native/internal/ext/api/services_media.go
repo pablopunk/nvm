@@ -88,8 +88,35 @@ type DictationDevice struct {
 	IsDefault bool   `json:"isDefault"`
 }
 
-// DictationStartOptions chooses a microphone and whether system audio is muted while recording. An empty DeviceID
-// is the system default microphone.
+// DictationEngine is where speech becomes text: the account's cloud (the default, needs APIAvailable) or the
+// downloadable on-device model, which needs no account and keeps audio local.
+type DictationEngine string
+
+const (
+	DictationEngineCloud  DictationEngine = "cloud"
+	DictationEngineDevice DictationEngine = "device"
+)
+
+// The statuses of DictationDeviceModel.
+const (
+	DictationModelMissing     = "missing"
+	DictationModelDownloading = "downloading"
+	DictationModelReady       = "ready"
+	DictationModelFailed      = "failed"
+)
+
+// DictationDeviceModel is the on-device model and its download. Progress runs 0..1; Error is the last failure.
+type DictationDeviceModel struct {
+	Title     string  `json:"title"`
+	Credit    string  `json:"credit"`
+	SizeBytes int64   `json:"sizeBytes"`
+	Status    string  `json:"status"`
+	Progress  float64 `json:"progress"`
+	Error     string  `json:"error,omitempty"`
+}
+
+// DictationStartOptions chooses a microphone, the engine, and whether system audio is muted while recording. An
+// empty DeviceID is the system default microphone.
 type DictationStartOptions struct {
 	// IndicatorID binds host-owned microphone levels to this extension’s recording indicator.
 	// Show that indicator with IndicatorRecording first. Levels never cross into extension code;
@@ -97,6 +124,8 @@ type DictationStartOptions struct {
 	IndicatorID                string `json:"indicatorId,omitempty"`
 	DeviceID                   string `json:"deviceId,omitempty"`
 	MuteSystemAudioWhileRecord bool   `json:"muteSystemAudioWhileRecording,omitempty"`
+	// Engine device fails until DeviceModel is ready.
+	Engine DictationEngine `json:"engine,omitempty"`
 }
 
 // SavedDictation is a saved dictation whose transcript did not complete. Its audio stays on this device and is
@@ -108,7 +137,7 @@ type SavedDictation struct {
 	Failure      string `json:"failure,omitempty"`
 }
 
-// Dictation records speech and returns the hosted transcript. Audio is never exposed to extension code. Start resolves
+// Dictation records speech and returns its transcript, from the hosted service or the on-device model. Audio is never exposed to extension code. Start resolves
 // after a microphone frame is captured (and Bluetooth input is ready), and Stop is the call that waits for the hosted transcription, so an
 // action that runs it should declare Background. The host retries passing failures before it reports one, and keeps
 // the audio of every dictation that holds sound until its transcript is in: Recordings, Retry and DeleteRecording
@@ -126,5 +155,9 @@ type Dictation interface {
 	Recordings() ([]SavedDictation, error)
 	// Retry transcribes a saved recording again. Each retry is a new, billable request.
 	Retry(id string) (transcript string, err error)
+	RetryOn(id string, engine DictationEngine) (transcript string, err error)
 	DeleteRecording(id string) error
+	DeviceModel() (DictationDeviceModel, error)
+	// InstallDeviceModel starts the model download in the background and returns at once.
+	InstallDeviceModel() error
 }

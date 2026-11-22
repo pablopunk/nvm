@@ -39,6 +39,10 @@ type Ports struct {
 	// Microphone records PCM for dictation; Opus encodes it. Both are used only by the dictation service.
 	Microphone Microphone
 	Opus       OpusCodec
+	// Speech transcribes dictations on the device when the user chose the on-device model.
+	Speech SpeechRecognizer
+	// Downloads fetches files too large for memory, such as the on-device speech model.
+	Downloads FileDownloader
 	// Cameras lists the video inputs for camera views and the extension camera service.
 	Cameras Cameras
 	// FileDialog shows the operating system's file and folder choosers for extension form fields.

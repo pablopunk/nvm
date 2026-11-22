@@ -4,8 +4,6 @@ import (
 	"context"
 	"fmt"
 	"strings"
-
-	"github.com/pablopunk/nvm/native/internal/dictation/webm"
 )
 
 // Segment is one WebM file of a dictation as the backend receives it. OperationID keys the request's idempotency;
@@ -17,13 +15,15 @@ type Segment struct {
 	File           []byte
 }
 
-// Transcriber is the backend port. Prepare warms the backend's admission before the recording ends, Transcribe sends
-// one segment, and CancelPreparation releases an admission nobody will use. userCancelled marks a dictation the user
-// stopped, as opposed to one that failed on its own.
+// Transcriber turns segments into text: the backend, or the model on this device. Prepare readies it when the
+// microphone opens (the backend's admission, the device's model load), Transcribe sends one segment, CancelPreparation
+// releases a preparation nobody will use, and Finished says the dictation is over, whatever its outcome, so held
+// resources can go. userCancelled marks a dictation the user stopped, as opposed to one that failed on its own.
 type Transcriber interface {
 	Prepare(ctx context.Context, operationID string) error
 	Transcribe(ctx context.Context, segment Segment) (string, error)
 	CancelPreparation(ctx context.Context, operationID string, userCancelled bool) error
+	Finished(operationID string)
 }
 
 // Recorder keeps a dictation's audio on disk from its first captured frame until its transcript is in, so a dictation
@@ -48,14 +48,16 @@ func (e *SavedError) Error() string { return e.Err.Error() }
 // Unwrap returns the transcription's own error.
 func (e *SavedError) Unwrap() error { return e.Err }
 
-// segmentFiles muxes every captured segment of op into a WebM file, in order.
-func segmentFiles(op *operation) [][]byte {
-	track := op.track()
-	files := make([][]byte, 0, len(op.segments))
-	for _, packets := range op.segments {
-		files = append(files, webm.Mux(track, packets, FrameMillis))
-	}
-	return files
+// wholeRecordingReader is a transcriber that reads a dictation in one pass at Stop instead of piece by piece while the
+// user speaks, as the on-device model does: it is fast enough that the wait stays short, and seeing the whole
+// recording keeps it from ending a sentence at every pause.
+type wholeRecordingReader interface {
+	ReadsWholeRecording() bool
+}
+
+func readsWholeRecording(t Transcriber) bool {
+	reader, ok := t.(wholeRecordingReader)
+	return ok && reader.ReadsWholeRecording()
 }
 
 // transcribeFiles sends every segment file in order and joins the texts with spaces, as the desktop app does. The
