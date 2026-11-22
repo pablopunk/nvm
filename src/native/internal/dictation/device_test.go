@@ -166,3 +166,57 @@ func waitFor(t *testing.T, done func() bool, what string) {
 		time.Sleep(time.Millisecond)
 	}
 }
+
+func TestAnOnDeviceDictationLongerThanTheCaptureCutIsReadInOnePass(t *testing.T) {
+	rig := newDeviceRig(t, true)
+	h := newHarness(t)
+	h.mic.Queue(voice(61)...)
+	if err := h.service.StartOn(rig.device, "default", nil); err != nil {
+		t.Fatalf("Start: %v", err)
+	}
+	if _, err := h.service.Stop(); err != nil {
+		t.Fatalf("Stop: %v", err)
+	}
+	heard := rig.speech.Heard()
+	if len(heard) != 1 || len(heard[0]) < 60*SampleRate {
+		t.Fatalf("heard %v samples in %d requests; want the whole 61 s read once, across the capture's one-minute cut", lengths(heard), len(heard))
+	}
+}
+
+func TestAnOnDeviceDictationPastTheLongestPassIsReadInOverlappingPasses(t *testing.T) {
+	rig := newDeviceRig(t, true)
+	h := newHarness(t)
+	h.mic.Queue(voice(130)...)
+	if err := h.service.StartOn(rig.device, "default", nil); err != nil {
+		t.Fatalf("Start: %v", err)
+	}
+	if _, err := h.service.Stop(); err != nil {
+		t.Fatalf("Stop: %v", err)
+	}
+	heard := rig.speech.Heard()
+	if len(heard) != 2 || len(heard[0]) < 119*SampleRate || len(heard[1]) < (10+overlapMillis/1000)*SampleRate-SampleRate/10 {
+		t.Fatalf("heard %v samples; want a two-minute pass, then the rest opening with the overlap", lengths(heard))
+	}
+}
+
+func TestARetryOnTheDeviceReadsTheSavedSegmentsInOnePass(t *testing.T) {
+	rig := newDeviceRig(t, true)
+	h := newHarness(t)
+	codec := fake.NewOpusCodec()
+	encoder, _ := codec.NewEncoder(Format())
+	track := webm.Track{SampleRate: SampleRate, Channels: Channels}
+	segment := func(frames int) []byte {
+		packets := make([][]byte, frames)
+		for i := range packets {
+			packets[i], _ = encoder.Encode(make([]int16, samplesPerFrame))
+		}
+		return webm.Mux(track, packets, FrameMillis)
+	}
+	text, err := h.service.retryFiles(context.Background(), rig.device, [][]byte{segment(3000), segment(500)})
+	if err != nil {
+		t.Fatalf("retry: %v", err)
+	}
+	if heard := rig.speech.Heard(); len(heard) != 1 || len(heard[0]) != 3500*samplesPerFrame || text == "" {
+		t.Fatalf("heard %v samples, text %q; want both saved segments read in one pass", lengths(heard), text)
+	}
+}

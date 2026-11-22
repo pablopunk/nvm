@@ -355,5 +355,6 @@ func (s *Service) transcribe(op *operation) (string, error) {
 	case <-op.ctx.Done():
 		return "", op.ctx.Err()
 	}
-	return transcribeFiles(op.ctx, op.transcriber, s.cfg.Retry, op.id, op.preparedOK, segmentFiles(op), s.retryWarning("dictation.transcribe-retry"))
+	passes := wholeRecordingPasses(op.track(), op.segments)
+	return transcribePasses(op.ctx, op.transcriber, s.cfg.Retry, op.id, op.preparedOK, passes, s.retryWarning("dictation.transcribe-retry"))
 }
