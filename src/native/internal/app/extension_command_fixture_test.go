@@ -2,6 +2,7 @@ package app
 
 import (
 	"slices"
+	"sync/atomic"
 	"testing"
 	"time"
 
@@ -17,7 +18,7 @@ import (
 func awaitFixtureCommand(t *testing.T, id, query, title string) (*App, *manager.Manager, search.Item) {
 	t.Helper()
 	p := goldenPalette(t)
-	w := uiWindow{stubWindow: &stubWindow{}, jobs: make(chan func(), 1024)}
+	w := uiWindow{stubWindow: &stubWindow{}, jobs: make(chan func(), 1024), thread: new(atomic.Uint64)}
 	p.uiQueue = w
 	p.Attach(w)
 	m := newManagerWithFakes(t, managerFakes{onChange: p.extensionsStateChanged, commandsChange: p.extensionCommandsChanged}, nil, nil, nil, nil)
