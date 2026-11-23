@@ -27,6 +27,7 @@ func Commands(ctx api.Context) ([]api.Command, error) {
 		{ID: "failing", Title: "Failing source fixture"},
 		{ID: "empty", Title: "Empty fixture"},
 		{ID: "selected", Title: "Selected fixture"},
+		{ID: "busy", Title: "Busy row fixture"},
 		{ID: "shortcuts", Title: "Shortcut fixture"},
 		{ID: "images", Title: "Image fixture"},
 		{ID: "image-file", Title: "Image file fixture"},
@@ -66,6 +67,8 @@ func RunAction(ctx api.Context, in api.Invocation) (api.Result, error) {
 		return api.Result{View: &emptyView}, nil
 	case "selected":
 		return api.Result{View: &selectedView}, nil
+	case "busy":
+		return api.Result{View: &busyView}, nil
 	case "shortcuts":
 		return api.Result{View: &shortcutView}, nil
 	case "images":
@@ -259,6 +262,14 @@ var selectedView = api.View{
 		{ID: "b", Title: "Send the invoice", Icon: "check", Subtitle: "Selected by the extension"},
 		{ID: "c", Title: "Archived task", Icon: "archive", Disabled: true},
 		{ID: "notice", Title: "Sync is paused while offline", Contextual: true, Disabled: true},
+	},
+}
+
+var busyView = api.View{
+	Kind: api.ViewList, Title: "Sync",
+	Items: []api.Item{
+		{ID: "syncing", Title: "Syncing 3 of 12 files", Subtitle: "The tile spins while the work runs", Icon: "refresh-cw", Busy: true},
+		{ID: "done", Title: "Last sync finished", Icon: "check"},
 	},
 }
 

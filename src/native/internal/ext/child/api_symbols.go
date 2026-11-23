@@ -377,6 +377,8 @@ func init() {
 		"UpdateOpCheck":                 reflect.ValueOf(constant.MakeFromLiteral("\"check\"", token.STRING, 0)),
 		"UpdateOpDownload":              reflect.ValueOf(constant.MakeFromLiteral("\"download\"", token.STRING, 0)),
 		"UpdateOpInstall":               reflect.ValueOf(constant.MakeFromLiteral("\"install\"", token.STRING, 0)),
+		"UpdateStageCheck":              reflect.ValueOf(constant.MakeFromLiteral("\"check\"", token.STRING, 0)),
+		"UpdateStageInstall":            reflect.ValueOf(constant.MakeFromLiteral("\"install\"", token.STRING, 0)),
 		"UpdateStatusAvailable":         reflect.ValueOf(constant.MakeFromLiteral("\"available\"", token.STRING, 0)),
 		"UpdateStatusChecking":          reflect.ValueOf(constant.MakeFromLiteral("\"checking\"", token.STRING, 0)),
 		"UpdateStatusCurrent":           reflect.ValueOf(constant.MakeFromLiteral("\"current\"", token.STRING, 0)),

@@ -153,8 +153,8 @@ func (s *Session) actionBody(action api.Action, key string) search.Action {
 		if s.deps.RunUpdate == nil {
 			break
 		}
-		op := action.Op
-		return search.Action{Title: title, Dismiss: runDismissal(action), Run: func(h search.Host) { s.runUpdate(h, op) }}
+		op, target := action.Op, action.Target
+		return search.Action{Title: title, Dismiss: runDismissal(action), Run: func(h search.Host) { s.runUpdate(h, op, target) }}
 	case api.ActionShellExec, api.ActionOpenPath, api.ActionRevealPath, api.ActionSetQuery, api.ActionQuickLook, api.ActionOpenWith, api.ActionTrash, api.ActionWindow:
 		return s.hostOperation(action, title)
 	case api.ActionAccount:

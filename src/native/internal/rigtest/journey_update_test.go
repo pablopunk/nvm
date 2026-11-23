@@ -46,6 +46,9 @@ type updateFeed struct {
 	manifest []byte
 	archive  []byte
 	served   map[string]int
+	// older is a manifest that offers a version older than the running one; behavior says which answer a request gets.
+	older    []byte
+	behavior feedBehavior
 }
 
 func newUpdateFeed(t *testing.T, newBinary string, tamper bool) *updateFeed {
@@ -53,14 +56,20 @@ func newUpdateFeed(t *testing.T, newBinary string, tamper bool) *updateFeed {
 	binary, err := os.ReadFile(newBinary)
 	must(t, err)
 	archive := tarGzipBinary(t, binary)
-	digest := sha256.Sum256(archive)
 	signer := rigUpdateKey()
 	if tamper {
 		other := sha256.Sum256([]byte("someone else"))
 		signer = ed25519.NewKeyFromSeed(other[:])
 	}
+	return &updateFeed{manifest: signedManifest(t, "2.0.1", archive, signer), older: signedManifest(t, "1.0.0", archive, signer), archive: archive, served: map[string]int{}}
+}
+
+// signedManifest is a feed manifest offering version with archive, signed by signer.
+func signedManifest(t *testing.T, version string, archive []byte, signer ed25519.PrivateKey) []byte {
+	t.Helper()
+	digest := sha256.Sum256(archive)
 	manifest, err := json.Marshal(map[string]any{
-		"version":   "2.0.1",
+		"version":   version,
 		"notes":     "Rig update",
 		"date":      time.Now().UTC().Format(time.RFC3339),
 		"url":       "http://127.0.0.1:" + updatePort() + rigUpdateArchive,
@@ -68,7 +77,7 @@ func newUpdateFeed(t *testing.T, newBinary string, tamper bool) *updateFeed {
 		"signature": base64.StdEncoding.EncodeToString(ed25519.Sign(signer, digest[:])),
 	})
 	must(t, err)
-	return &updateFeed{manifest: manifest, archive: archive, served: map[string]int{}}
+	return manifest
 }
 
 func tarGzipBinary(t *testing.T, binary []byte) []byte {
@@ -87,12 +96,13 @@ func tarGzipBinary(t *testing.T, binary []byte) []byte {
 func (f *updateFeed) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	f.mu.Lock()
 	f.served[r.URL.Path]++
+	behavior := f.behavior
 	f.mu.Unlock()
 	switch r.URL.Path {
 	case rigUpdateManifest:
-		w.Write(f.manifest)
+		serveManifest(w, behavior, f.manifest, f.older)
 	case rigUpdateArchive:
-		w.Write(f.archive)
+		servePaced(w, f.archive, behavior.archivePace)
 	default:
 		http.NotFound(w, r)
 	}

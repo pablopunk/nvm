@@ -23,7 +23,7 @@ func (p *App) updatesPage() *palette.View {
 var errNoUpdateToDownload = errors.New("no update is waiting to download")
 
 // runUpdateOp performs the update operation an Updates built-in action names, and returns the reason it refused.
-func (p *App) runUpdateOp(op string) error {
+func (p *App) runUpdateOp(op, target string) error {
 	switch op {
 	case api.UpdateOpCheck:
 		p.checkForUpdates(func(string) {})
@@ -33,7 +33,7 @@ func (p *App) runUpdateOp(op string) error {
 	case api.UpdateOpInstall:
 		return p.restartToUpdate()
 	case api.UpdateOpChannel:
-		return p.toggleUpdateChannel()
+		return p.chooseUpdateChannel(target)
 	}
 	return fmt.Errorf("there is no update operation %q", op)
 }

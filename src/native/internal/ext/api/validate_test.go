@@ -55,6 +55,9 @@ func TestActionValidationRequiresKindSpecificFields(t *testing.T) {
 		{name: "system op unknown", action: Action{Kind: ActionSystem, Op: "reboot-the-moon"}, wantErr: true},
 		{name: "window needs id or view", action: Action{Kind: ActionWindow, Op: "show", Window: &WindowRef{}}, wantErr: true},
 		{name: "window show by id", action: Action{Kind: ActionWindow, Op: "show", Window: &WindowRef{ID: "notes"}}},
+		{name: "update channel picks a channel", action: Action{Kind: ActionUpdate, Op: UpdateOpChannel, Target: UpdateChannelDev}},
+		{name: "update channel unknown target", action: Action{Kind: ActionUpdate, Op: UpdateOpChannel, Target: "beta"}, wantErr: true},
+		{name: "update check takes no target", action: Action{Kind: ActionUpdate, Op: UpdateOpCheck, Target: UpdateChannelDev}, wantErr: true},
 		{name: "unknown kind", action: Action{Kind: "teleport"}, wantErr: true},
 	}
 	for _, tt := range tests {

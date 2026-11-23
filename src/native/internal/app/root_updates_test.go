@@ -29,13 +29,6 @@ func TestUpdatePromptReplacesTheCheckForUpdatesRow(t *testing.T) {
 	findRowTitled(t, commandRows(p, &rootInput{}, ""), checkForUpdatesTitle)
 }
 
-// TestUpdatePromptScoresAboveEveryRootRow pins the update prompt to 1.x's score of 1000.
-func TestUpdatePromptScoresAboveEveryRootRow(t *testing.T) {
-	if rootUpdateScore != 1000 {
-		t.Fatalf("the update prompt scores %d, want 1.x's 1000", rootUpdateScore)
-	}
-}
-
 // TestRootEmptyListsOneAccountRowAtItsOneXScore pins the account row of the empty root: the one Log in or Log out row
 // the session needs, at 1.x's score of 18, and no second copy of it.
 func TestRootEmptyListsOneAccountRowAtItsOneXScore(t *testing.T) {

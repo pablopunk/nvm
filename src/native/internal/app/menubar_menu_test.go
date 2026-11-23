@@ -1,10 +1,14 @@
 package app
 
 import (
+	"bytes"
 	"context"
 	"errors"
+	"runtime"
 	"slices"
+	"strconv"
 	"sync"
+	"sync/atomic"
 	"testing"
 	"time"
 
@@ -18,10 +22,28 @@ import (
 // loop runs it, so background updates and clicks never touch the palette at the same time.
 type uiWindow struct {
 	*stubWindow
-	jobs chan func()
+	jobs   chan func()
+	thread *atomic.Uint64
 }
 
-func (w uiWindow) Update(fn func()) { w.jobs <- fn }
+// Update runs fn at once when the UI thread asks, as the platform does, and queues it from any other goroutine.
+func (w uiWindow) Update(fn func()) {
+	if w.onThread() {
+		fn()
+		return
+	}
+	w.jobs <- fn
+}
+
+func (w uiWindow) onThread() bool { return w.thread.Load() == goroutineID() }
+
+// goroutineID is the running goroutine's number, read from its stack header ("goroutine 7 [running]:").
+func goroutineID() uint64 {
+	buf := make([]byte, 32)
+	buf = buf[:runtime.Stack(buf, false)]
+	id, _ := strconv.ParseUint(string(bytes.Fields(buf)[1]), 10, 64)
+	return id
+}
 
 // menuUpdates is a wired app whose updater is the real update service over a scripted engine. The menu bar is the fake
 // tray's item, drawn as macOS draws it. It records the drawn menu by the updater's status, so each state's menu is
@@ -45,13 +67,15 @@ func newMenuUpdates(t *testing.T, engine *updatefake.Engine) *menuUpdates {
 	p, set := wiredApp(t)
 	p.menuOS = "darwin"
 	m := &menuUpdates{app: p, set: set, window: &stubWindow{}, engine: engine, menu: map[update.Status][]platform.MenuItem{}}
-	m.ui = uiWindow{stubWindow: m.window, jobs: make(chan func(), 1024)}
+	m.ui = uiWindow{stubWindow: m.window, jobs: make(chan func(), 1024), thread: new(atomic.Uint64)}
 	go func() {
+		m.ui.thread.Store(goroutineID())
 		for fn := range m.ui.jobs {
 			fn()
 		}
 	}()
 	p.Attach(m.ui)
+	p.uiQueue = m.ui
 	p.updates = update.NewService(update.Options{
 		Engine: engine, Clock: set.Clock, Current: nativeClientVersion, OnChange: m.onChange,
 	})
@@ -63,9 +87,10 @@ func newMenuUpdates(t *testing.T, engine *updatefake.Engine) *menuUpdates {
 	return m
 }
 
-// onChange redraws the menu on the UI thread, as the app does, and records what it drew.
+// onChange redraws the menu on the UI thread and records what it drew. It waits for the redraw, so every state the
+// updater passes through is drawn before the next one.
 func (m *menuUpdates) onChange(update.State) {
-	m.app.onUI(func() {
+	m.onUIThread(func() {
 		status := m.app.updates.State().Status
 		m.app.refreshUpdateSurfaces()
 		m.record(status)
@@ -82,6 +107,10 @@ func (m *menuUpdates) record(status update.Status) {
 
 // onUIThread runs fn on the UI thread and waits for it, as a click from the menu bar does.
 func (m *menuUpdates) onUIThread(fn func()) {
+	if m.ui.onThread() {
+		fn()
+		return
+	}
 	done := make(chan struct{})
 	m.ui.jobs <- func() {
 		fn()

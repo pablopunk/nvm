@@ -28,7 +28,7 @@ func TestRootShowsTheCompatibilityRowInPlaceOfTheUpdateRow(t *testing.T) {
 	m := newMenuUpdates(t, updatefake.NewEngine(nil))
 	m.app.compat.setActive(connectedBase)
 	m.app.compat.record(connectedBase, false)
-	rows := updateRootRows(m.app, nil, "")
+	rows := compatibilityRootRows(m.app, nil, "")
 	if len(rows) != 1 || rows[0].Title != "Update Nevermind" {
 		t.Fatalf("root rows = %+v, want one Update Nevermind row", rows)
 	}
@@ -46,7 +46,7 @@ func TestRootHasNoCompatibilityRowWhileAccepted(t *testing.T) {
 	m := newMenuUpdates(t, updatefake.NewEngine(nil))
 	m.app.compat.setActive(connectedBase)
 	m.app.compat.record(connectedBase, true)
-	if rows := updateRootRows(m.app, nil, ""); len(rows) != 0 {
+	if rows := compatibilityRootRows(m.app, nil, ""); len(rows) != 0 {
 		t.Fatalf("accepted backend root rows = %+v, want none for an idle updater", rows)
 	}
 }

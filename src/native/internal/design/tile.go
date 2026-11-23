@@ -22,6 +22,8 @@ type TileData struct {
 	// Tone tints a glyph or icon with the named tone; Prominent gives the tile the gold key.
 	Tone      string
 	Prominent bool
+	// Busy draws a spinner in place of the icon while the row's work runs. Reduced motion keeps the icon.
+	Busy bool
 }
 
 // ImageRadius is the corner radius of a picture of the given size with the named shape.
@@ -66,6 +68,10 @@ func Tile(c *ui.Context, d TileData) {
 
 // tileSymbol draws the icon of a key, or its letters when it has none.
 func tileSymbol(c *ui.Context, d TileData, fg ui.Color) {
+	if d.Busy && !c.Preferences().ReduceMotion {
+		ui.Spinner(c)
+		return
+	}
 	if d.Icon != "" {
 		ui.Icon(c, Icon(d.Icon)).FontSize(17).TextColor(fg)
 		return
