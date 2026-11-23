@@ -19,7 +19,7 @@ func (p *App) builtInOpenPage(id string, fallback *palette.View) *palette.View {
 	if !ok || result.View == nil {
 		return fallback
 	}
-	return extview.NewSession(p.extensionViewDeps(p.extensionManager()), id, *result.View, result.SnapshotEvidence).Palette()
+	return p.openBuiltInSession(extview.NewSession(p.extensionViewDeps(p.extensionManager()), id, *result.View, result.SnapshotEvidence))
 }
 
 // builtInRun runs one of a built-in's actions in process and returns its result. It reports false without the extension
@@ -40,7 +40,16 @@ func (p *App) builtInRun(id, actionID string) (api.Result, bool) {
 
 // builtInPalette draws a view a built-in produced, as the palette draws the built-in's pages.
 func (p *App) builtInPalette(id string, view api.View) *palette.View {
-	return extview.NewSession(p.extensionViewDeps(p.extensionManager()), id, view).Palette()
+	return p.openBuiltInSession(extview.NewSession(p.extensionViewDeps(p.extensionManager()), id, view))
+}
+
+// openBuiltInSession opens a built-in's page on the palette, so its refreshes run and redraw it while it shows, as an
+// extension page pushed by an action does. Without a palette the page is drawn but never refreshed.
+func (p *App) openBuiltInSession(session *extview.Session) *palette.View {
+	if p.Palette == nil {
+		return session.Palette()
+	}
+	return session.Open(p.Palette)
 }
 
 // openActionID is the action a built-in's page opens with.
