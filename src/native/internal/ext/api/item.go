@@ -35,6 +35,8 @@ type Item struct {
 	ActionPanel           *ActionPanel    `json:"actionPanel,omitempty"`
 	ActionPanelVisibility PanelVisibility `json:"actionPanelVisibility,omitempty"`
 	Appearance            *Appearance     `json:"appearance,omitempty"`
+	// Busy spins the tile while the row's work runs.
+	Busy bool `json:"busy,omitempty"`
 	// Disabled rows stay visible as informational context and cannot be selected.
 	Disabled bool `json:"disabled,omitempty"`
 	// Contextual, with Disabled, renders full-contrast guidance text that wraps. Use it for

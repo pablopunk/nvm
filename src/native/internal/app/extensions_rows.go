@@ -171,6 +171,9 @@ func searchRowsFor(p *App, m *manager.Manager, q string, result manager.SearchRe
 	if result.Failure != nil {
 		return failureRows(p, result.ExtensionID, result.Title, q, result.Failure)
 	}
+	if compatibilityReplacesUpdateRows(p, result.ExtensionID) {
+		return nil
+	}
 	var out []search.Item
 	for _, item := range result.Items {
 		if !m.OperationsSupported(item.Requires) {
@@ -197,7 +200,7 @@ func searchRow(p *App, m *manager.Manager, result manager.SearchResult, item api
 // rootRowsFor turns one extension's empty-query rows into rows. A failed extension contributes none at the root, as
 // for its commands.
 func rootRowsFor(p *App, m *manager.Manager, result manager.SearchResult, bound map[string]string) []search.Item {
-	if result.Failure != nil {
+	if result.Failure != nil || compatibilityReplacesUpdateRows(p, result.ExtensionID) {
 		return nil
 	}
 	var out []search.Item
@@ -223,7 +226,7 @@ func extensionRow(p *App, m *manager.Manager, extID, title string, origin any, i
 		Kind:   title, Title: item.Title, Subtitle: item.Subtitle, Icon: iconOr(item.Icon, "puzzle"), Tone: "purple",
 		Score: scoreExtension, LastUsed: item.LastUsedMs, Detail: extview.DetailFor(deps, extID, item.Detail),
 		QueryFallback: item.QueryFallback, Answers: item.AnswersQuery, Names: slices.Concat(item.Aliases, item.Keywords),
-		DragPaths: api.DragPaths(item), DragImage: api.DragImagePath(item),
+		DragPaths: api.DragPaths(item), DragImage: api.DragImagePath(item), Busy: item.Busy,
 	}
 	if m.IsBuiltIn(extID) {
 		row.ID = item.ID

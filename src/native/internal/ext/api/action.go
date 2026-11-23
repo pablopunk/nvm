@@ -97,15 +97,16 @@ const CameraSelectDevice = "select-device"
 
 // Op values for the kinds that have sub-operations.
 var (
-	windowOps   = []string{"create", "show", "hide", "toggle", "close"}
-	systemOps   = []string{"lock-screen", "sleep", "restart", "restart-app", "shut-down", "log-out", "empty-trash", "quit", "open-system-settings", "open-keyboard-settings"}
-	updateOps   = []string{UpdateOpCheck, UpdateOpDownload, UpdateOpInstall, UpdateOpChannel}
-	accountOps  = []string{AccountSignIn}
-	chatOps     = []string{ChatOpen, ChatNew, ChatContinue, ChatStop, ChatTier, ChatRemove, ChatAgain, ChatAllow, ChatRefuse, ChatRetry}
-	builderOps  = []string{BuilderStart, BuilderOpen, BuilderRemove, BuilderTweak, BuilderList, BuilderReview}
-	hostOps     = []string{"config-folder", "dictation-settings", "updates", "account-page", HostToggleMenuBar}
-	cameraOps   = []string{"switch-device", "next-device", "previous-device", CameraSelectDevice, "toggle-muted", "toggle-controls"}
-	shortcutOps = []string{ShortcutOpRecord, ShortcutOpRemove, ShortcutOpCopyCommand}
+	windowOps      = []string{"create", "show", "hide", "toggle", "close"}
+	systemOps      = []string{"lock-screen", "sleep", "restart", "restart-app", "shut-down", "log-out", "empty-trash", "quit", "open-system-settings", "open-keyboard-settings"}
+	updateOps      = []string{UpdateOpCheck, UpdateOpDownload, UpdateOpInstall, UpdateOpChannel}
+	updateChannels = []string{UpdateChannelStable, UpdateChannelNightly, UpdateChannelDev}
+	accountOps     = []string{AccountSignIn}
+	chatOps        = []string{ChatOpen, ChatNew, ChatContinue, ChatStop, ChatTier, ChatRemove, ChatAgain, ChatAllow, ChatRefuse, ChatRetry}
+	builderOps     = []string{BuilderStart, BuilderOpen, BuilderRemove, BuilderTweak, BuilderList, BuilderReview}
+	hostOps        = []string{"config-folder", "dictation-settings", "updates", "account-page", HostToggleMenuBar}
+	cameraOps      = []string{"switch-device", "next-device", "previous-device", CameraSelectDevice, "toggle-muted", "toggle-controls"}
+	shortcutOps    = []string{ShortcutOpRecord, ShortcutOpRemove, ShortcutOpCopyCommand}
 )
 
 // Action is one declarative operation attached to an item, view, command or menu row. Helper
@@ -137,7 +138,7 @@ type Action struct {
 	Query   string   `json:"query,omitempty"`
 	App     string   `json:"app,omitempty"`
 	Setting string   `json:"setting,omitempty"`
-	// Target is the action ID a shortcut kind changes, or the CameraDevice.ID of CameraSelectDevice.
+	// Target is the action ID a shortcut kind changes, a CameraDevice.ID or an UpdateChannel.
 	Target  string            `json:"target,omitempty"`
 	Content *ClipboardContent `json:"content,omitempty"`
 	Paste   *PasteOptions     `json:"paste,omitempty"`
@@ -278,7 +279,7 @@ func (a Action) validateDeclarative() error {
 	case ActionSystem:
 		return validateOp(a.Op, systemOps)
 	case ActionUpdate:
-		return validateOp(a.Op, updateOps)
+		return validateUpdate(a)
 	case ActionShortcut:
 		if a.Target == "" {
 			return errors.New("a shortcut action needs the action it changes")
@@ -310,6 +311,17 @@ func (a Action) validateDeclarative() error {
 		return fmt.Errorf("unknown action kind %q", a.Kind)
 	}
 	return nil
+}
+
+// validateUpdate checks an update action's op, and that only a channel op names a Target, which must be a channel.
+func validateUpdate(a Action) error {
+	if err := validateOp(a.Op, updateOps); err != nil || a.Target == "" {
+		return err
+	}
+	if a.Op != UpdateOpChannel {
+		return fmt.Errorf("update op %q takes no target", a.Op)
+	}
+	return validateOp(a.Target, updateChannels)
 }
 
 func validateOp(op string, allowed []string) error {

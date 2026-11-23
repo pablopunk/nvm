@@ -39,6 +39,7 @@ func (p *App) settingsHostOperation(h search.Host, extID, op string) {
 	case "dictation-settings":
 		p.dictationSettingsAction().Run(h)
 	case "updates":
+		p.refreshStaleUpdateAnswer()
 		h.Push(p.updatesPage())
 	case "account-page":
 		p.openAccountPage(h)

@@ -1,103 +1,93 @@
 package updates
 
-import "github.com/pablopunk/nvm/native/internal/ext/api"
+import (
+	"time"
 
-// Ids of the rows.
+	"github.com/pablopunk/nvm/native/internal/ext/api"
+)
+
+// Ids of the page's rows.
 const (
 	rowStatus  = "update-status"
-	rowRestart = "update-restart"
-	rowCheck   = "update-check"
 	rowChannel = "update-channel"
 )
 
-// checksEvery is the schedule the status line states; the updater checks on it.
+// checksEvery is the schedule the status line states before the first check; the updater checks on it.
 const checksEvery = "Checks every 4 hours"
 
-// updateRows are the rows of the page: the status line, a restart when an update is downloaded, the check and the
-// channel switch.
-func updateRows(state api.UpdateState) []api.Item {
-	rows := []api.Item{statusRow(state)}
-	if state.Status == api.UpdateStatusDownloaded {
-		rows = append(rows, restartRow(state))
-	}
-	return append(rows, checkRow(), channelRow(state))
+// updateRows are the rows of the page: the status row, which is also the check and the restart, and the channel.
+func updateRows(state api.UpdateState, now time.Time) []api.Item {
+	return []api.Item{statusRow(state, now), channelRow(state)}
 }
 
-// statusRow says where the updater stands in the words the updater reports, and the channel and schedule under it.
-func statusRow(state api.UpdateState) api.Item {
-	return api.Item{
-		ID: rowStatus, Title: state.Message, Subtitle: statusSubtitle(state), Icon: statusIcon(state.Status),
-		Contextual: state.Status == api.UpdateStatusError, Disabled: true,
+// statusRow says where the updater stands, and Enter on it does the next thing that state allows: check, try again or
+// restart. While a check, a download or a restart runs, the row spins and has no action, so Enter cannot start another.
+func statusRow(state api.UpdateState, now time.Time) api.Item {
+	row := api.Item{ID: rowStatus, Title: state.Message, Subtitle: checkedSubtitle(state, now), Icon: "check"}
+	switch state.Status {
+	case api.UpdateStatusUnsupported:
+		row.Icon, row.Subtitle, row.Disabled = "info", "", true
+	case api.UpdateStatusIdle:
+		row.Title, row.Subtitle, row.Icon = "Check for Updates", "Not checked yet · "+channelLabel(state.Channel)+" channel", "rotate-ccw"
+		row.Actions = []api.Action{checkAction("Check")}
+	case api.UpdateStatusCurrent:
+		row.Actions = []api.Action{checkAction("Check Again")}
+	case api.UpdateStatusChecking:
+		row.Title, row.Subtitle, row.Busy = "Checking for updates…", "Looking for a newer version", true
+	case api.UpdateStatusAvailable, api.UpdateStatusDownloading:
+		row.Subtitle, row.Icon, row.Busy = "Installs in the background; keep working", "arrow-down", true
+	case api.UpdateStatusDownloaded:
+		return restartRow(state)
+	case api.UpdateStatusInstalling:
+		row.Subtitle, row.Icon, row.Busy = "Nevermind opens again in a moment", "rotate-ccw", true
+	case api.UpdateStatusError:
+		row.Title, row.Subtitle, row.Icon = failureTitle(state), state.ErrorMessage, "circle-alert"
+		row.Actions = []api.Action{checkAction("Try Again")}
 	}
+	return row
 }
 
-// restartRow installs the downloaded update, which restarts the app; the palette closes as the restart begins.
+// restartRow is the status row once an update is downloaded: Enter restarts into it, and the palette closes as the
+// restart begins.
 func restartRow(state api.UpdateState) api.Item {
 	return api.Item{
-		ID: rowRestart, Title: "Restart to Update", Subtitle: "Nevermind " + state.DownloadedVersion + " is installed; restart to run it",
+		ID: rowStatus, Title: "Restart to Update", Subtitle: "Nevermind " + state.DownloadedVersion + " is ready",
 		Icon: "rotate-ccw", Appearance: &api.Appearance{Foreground: api.ColorNone, Prominence: api.ProminencePrimary},
 		Actions: []api.Action{{Kind: api.ActionUpdate, Op: api.UpdateOpInstall, Title: "Restart", DismissAfterRun: true}},
 	}
 }
 
-// checkRow looks for a newer version now, and the page shows the answer as its status line.
-func checkRow() api.Item {
-	return api.Item{
-		ID: rowCheck, Title: "Check for Updates", Subtitle: "Look for a newer version now", Icon: "rotate-ccw",
-		Actions: []api.Action{{Kind: api.ActionUpdate, Op: api.UpdateOpCheck, Title: "Check"}},
-	}
+// checkAction looks for a newer version now; the status row shows the check as it runs.
+func checkAction(title string) api.Action {
+	return api.Action{Kind: api.ActionUpdate, Op: api.UpdateOpCheck, Title: title}
 }
 
-// channelRow moves to the next release channel, Stable, Nightly, Dev and back, and checks it at once.
+// failureTitle names the step that failed: the check, or the install of the version it found.
+func failureTitle(state api.UpdateState) string {
+	if state.FailedStage == api.UpdateStageInstall {
+		return "Could not install the update"
+	}
+	return "Could not check for updates"
+}
+
+// checkedSubtitle says when the last check finished and on which channel, or the schedule before the first check.
+func checkedSubtitle(state api.UpdateState, now time.Time) string {
+	channel := channelLabel(state.Channel) + " channel"
+	if state.CheckedAtMs == 0 {
+		return channel + " · " + checksEvery
+	}
+	return "Checked " + timeAgo(now, time.UnixMilli(state.CheckedAtMs)) + " · " + channel
+}
+
+// channelRow opens the list of channels. Its accessory names the channel the updater follows.
 func channelRow(state api.UpdateState) api.Item {
-	return api.Item{
-		ID: rowChannel, Title: "Update Channel", Subtitle: channelSubtitle(state), Icon: "shield-check",
+	row := api.Item{
+		ID: rowChannel, Title: "Update Channel", Icon: "shield-check",
 		Accessories: []api.Accessory{{Text: channelLabel(state.Channel)}},
-		Actions:     []api.Action{{Kind: api.ActionUpdate, Op: api.UpdateOpChannel, Title: "Switch"}},
+		Actions:     []api.Action{api.PushView("Change", channelsView(state))},
 	}
-}
-
-// statusSubtitle names the channel and the schedule, but only in a build that checks: an unsupported build checks nothing.
-func statusSubtitle(state api.UpdateState) string {
 	if state.Status == api.UpdateStatusUnsupported {
-		return ""
+		row.Actions, row.Disabled = nil, true
 	}
-	return channelLabel(state.Channel) + " channel · " + checksEvery
-}
-
-// statusIcon is the icon of the status line for a status.
-func statusIcon(status string) string {
-	switch status {
-	case api.UpdateStatusError:
-		return "circle-alert"
-	case api.UpdateStatusAvailable, api.UpdateStatusDownloading:
-		return "arrow-down"
-	case api.UpdateStatusDownloaded, api.UpdateStatusInstalling:
-		return "rotate-ccw"
-	}
-	return "check"
-}
-
-// channelLabel is the name a channel shows as.
-func channelLabel(channel string) string {
-	switch channel {
-	case api.UpdateChannelNightly:
-		return "Nightly"
-	case api.UpdateChannelDev:
-		return "Dev"
-	}
-	return "Stable"
-}
-
-// channelSubtitle says what a channel offers. An unsupported build has no channel to choose.
-func channelSubtitle(state api.UpdateState) string {
-	switch {
-	case state.Status == api.UpdateStatusUnsupported:
-		return "Not available in this build yet"
-	case state.Channel == api.UpdateChannelNightly:
-		return "Includes nightly prereleases; a final release still wins when newer"
-	case state.Channel == api.UpdateChannelDev:
-		return "Includes frequent dev builds and nightly prereleases; a final release still wins when newer"
-	}
-	return "Final releases only"
+	return row
 }

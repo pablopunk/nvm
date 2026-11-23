@@ -69,14 +69,22 @@ func (s *Session) revealPath(h search.Host, path string) {
 }
 
 // runUpdate performs an update operation of the host's updater. A refused operation shows its reason as a toast.
-func (s *Session) runUpdate(h search.Host, op string) {
-	if err := s.deps.RunUpdate(op); err != nil {
+func (s *Session) runUpdate(h search.Host, op, target string) {
+	if err := s.deps.RunUpdate(op, target); err != nil {
 		h.Toast(err.Error())
 		return
+	}
+	if choosesChannel(op, target) {
+		h.Pop()
 	}
 	// The page re-reads the updater at once, so a switched channel or a started check shows without waiting for the
 	// page's own refresh.
 	h.Refresh()
+}
+
+// choosesChannel is true for an update action that picks one channel from a list, which goes back to the page below.
+func choosesChannel(op, target string) bool {
+	return op == api.UpdateOpChannel && target != ""
 }
 
 func (s *Session) runSystemOp(h search.Host, op string) {

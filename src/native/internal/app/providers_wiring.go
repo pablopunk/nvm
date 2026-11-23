@@ -17,5 +17,5 @@ var rootSources = []rootSource{
 	{id: "extension-commands", rows: extensionCommandRows},
 	{id: "extensions", provider: extensionProvider},
 	{id: "commands", provider: rootCommandsProvider},
-	{id: "updates", rows: updateRootRows},
+	{id: "updates", rows: compatibilityRootRows},
 }

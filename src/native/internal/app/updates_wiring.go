@@ -5,10 +5,12 @@ import (
 	"errors"
 	"log"
 	"sync"
+	"time"
 
 	"github.com/egoist/mygo"
 
 	"github.com/pablopunk/nvm/native/internal/diag/analytics"
+	updatesbuiltin "github.com/pablopunk/nvm/native/internal/ext/builtins/updates"
 	"github.com/pablopunk/nvm/native/internal/platform/real"
 	"github.com/pablopunk/nvm/native/internal/safego"
 	"github.com/pablopunk/nvm/native/internal/update"
@@ -98,8 +100,25 @@ func (p *App) restartToUpdate() error {
 	return p.updates.RestartToUpdate()
 }
 
-// refreshUpdateSurfaces redraws what shows the update: the menu bar's update row and the open palette.
+// refreshUpdateSurfaces redraws what shows the update: the menu bar's update row, the Updates built-in's root row and
+// its open page, so a check or a download moves on screen as the updater reports it.
 func (p *App) refreshUpdateSurfaces() {
 	p.refreshMenubarMenu()
+	p.rootRows.markPending(updatesbuiltin.ID)
+	p.NotifyTopDataChanged(updatesbuiltin.ID)
 	p.Refresh()
+}
+
+// updatesAnswerMaxAge is how old the last check may be when the Updates page opens before the page checks again.
+const updatesAnswerMaxAge = 10 * time.Minute
+
+// refreshStaleUpdateAnswer checks in the background when the last answer is older than updatesAnswerMaxAge, for an
+// opener of the Updates page that does not check by itself (Settings), so the page never shows an old answer for long.
+// A check or a download already running refuses it.
+func (p *App) refreshStaleUpdateAnswer() {
+	updates := p.updates
+	if updates == nil {
+		return
+	}
+	safego.Go("updates.stale-check", func(ctx context.Context) { updates.CheckIfStale(ctx, updatesAnswerMaxAge) })
 }

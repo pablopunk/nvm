@@ -96,8 +96,9 @@ type Deps struct {
 	// remove drops the user's shortcut. Nil makes the action report unavailable.
 	ShortcutAction func(h search.Host, op, target string)
 	// RunUpdate performs an update operation of the app's updater (check, download, install or channel) and returns the
-	// reason it refused, if it did. Nil makes update actions report unavailable.
-	RunUpdate func(op string) error
+	// reason it refused, if it did. Target is the channel a channel operation chooses, or empty for the next channel.
+	// Nil makes update actions report unavailable.
+	RunUpdate func(op, target string) error
 	Files     platform.FS
 	Clock     platform.Clock
 	Cache     Cache

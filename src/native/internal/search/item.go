@@ -112,6 +112,8 @@ type Item struct {
 	Disabled bool
 	// Contextual rows are plain guidance text, such as a load error, drawn full contrast and wrapped.
 	Contextual bool
+	// Busy rows draw a spinner in their tile while the work they stand for runs, such as a download.
+	Busy bool
 	// Answers marks a row that answers the query outright, such as a calculation. While one is in the merged result,
 	// the rows marked QueryFallback are left out.
 	Answers bool

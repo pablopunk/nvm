@@ -3,6 +3,7 @@ package update
 import (
 	"context"
 	"sync"
+	"time"
 
 	"github.com/pablopunk/nvm/native/internal/platform"
 )
@@ -36,6 +37,8 @@ type Service struct {
 	checking bool
 	epoch    int
 	cancel   context.CancelFunc
+	// checkedAt is when the last check on the current channel finished; zero before the first one.
+	checkedAt time.Time
 }
 
 // NewService returns a service at the running version, on the channel the store keeps.
@@ -132,6 +135,7 @@ func (s *Service) SetChannel(channel Channel) error {
 	}
 	s.channel = channel
 	s.epoch++
+	s.checkedAt = time.Time{}
 	s.cancelDownloadLocked()
 	s.state = State{Status: StatusIdle, CurrentVersion: s.state.CurrentVersion}
 	state := s.state
@@ -197,6 +201,7 @@ func (s *Service) finishCheck(ctx context.Context, epoch int, offer Offer, found
 		s.mu.Unlock()
 		return s.State(), false
 	}
+	s.checkedAt = s.now()
 	state, download := s.answerLocked(offer, found, err)
 	beginDownload := func() {}
 	if download {

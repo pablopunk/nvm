@@ -306,7 +306,7 @@ func (p *Palette) row(c *ui.Context, i int) {
 // tileData resolves a result's icon: a preview image, else the system icon of its file, else the Lucide icon
 // or letters the design tile draws.
 func (p *Palette) tileData(it search.Item) design.TileData {
-	data := design.TileData{Image: it.Image, ImageShape: it.ImageShape, Icon: it.Icon, Glyph: it.Glyph}
+	data := design.TileData{Image: it.Image, ImageShape: it.ImageShape, Icon: it.Icon, Glyph: it.Glyph, Busy: it.Busy}
 	if it.Image == nil && it.IconPath != "" && p.opts.Icon != nil {
 		if bitmap, picture := p.opts.Icon(it.IconPath); picture {
 			data.Image = bitmap

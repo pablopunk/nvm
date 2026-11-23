@@ -1,14 +1,17 @@
 package app
 
 import (
+	"time"
+
 	"github.com/pablopunk/nvm/native/internal/ext/api"
 	"github.com/pablopunk/nvm/native/internal/update"
 )
 
 // updateStatus is what the updater reports at one moment: its state and the channel its checks follow.
 type updateStatus struct {
-	State   update.State
-	Channel update.Channel
+	State     update.State
+	Channel   update.Channel
+	CheckedAt time.Time
 }
 
 // updateSnapshot is the updater's status. Without an updater it is unsupported on stable.
@@ -16,7 +19,7 @@ func (p *App) updateSnapshot() updateStatus {
 	if p.updates == nil {
 		return updateStatus{State: update.NoUpdates{}.State(), Channel: update.ChannelStable}
 	}
-	return updateStatus{State: p.updates.State(), Channel: p.updates.Channel()}
+	return updateStatus{State: p.updates.State(), Channel: p.updates.Channel(), CheckedAt: p.updates.CheckedAt()}
 }
 
 // updatesSurface serves the updater to the extension API: the state the Updates built-in reads.
@@ -44,8 +47,18 @@ func apiUpdateState(status updateStatus) api.UpdateState {
 		AvailableVersion:  availableVersion(state),
 		DownloadedVersion: downloadedVersion(state),
 		ErrorMessage:      failureMessage(state),
+		FailedStage:       failedStage(state),
 		Message:           update.Message(state),
+		CheckedAtMs:       epochMillis(status.CheckedAt),
 	}
+}
+
+// epochMillis is t in epoch milliseconds, and 0 for the zero time.
+func epochMillis(t time.Time) int64 {
+	if t.IsZero() {
+		return 0
+	}
+	return t.UnixMilli()
 }
 
 // availableVersion is the newer version the updater has found, from the check until the update is installed.
@@ -72,4 +85,12 @@ func failureMessage(state update.State) string {
 		return ""
 	}
 	return state.Message
+}
+
+// failedStage is the step a failed updater failed at, and nothing when it did not fail.
+func failedStage(state update.State) string {
+	if state.Status != update.StatusFailed {
+		return ""
+	}
+	return string(state.Stage)
 }
