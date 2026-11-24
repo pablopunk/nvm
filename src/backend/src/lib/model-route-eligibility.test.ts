@@ -59,7 +59,7 @@ test('any catalog model with the tier capabilities is selectable without a code 
   assert.equal(await modelFitsRouteKind('openrouter', 'vendor/brand-new-fast', 'fast'), true);
 });
 
-test('models missing a capability every tier uses are not selectable', async () => {
+test('models missing a capability their tier uses are not selectable', async () => {
   await mockCatalog({
     openrouter: {
       models: {
@@ -72,9 +72,11 @@ test('models missing a capability every tier uses are not selectable', async () 
 
   for (const kind of ['smart', 'fast'] as const) {
     const choices = await listModelsForRouteKind('openrouter', kind);
-    for (const model of ['vendor/no-tools', 'vendor/text-only', 'vendor/unpriced'])
+    for (const model of ['vendor/no-tools', 'vendor/unpriced'])
       assert.ok(!choices.includes(model), `${model} offered for ${kind}`);
   }
+  assert.ok(!(await listModelsForRouteKind('openrouter', 'smart')).includes('vendor/text-only'));
+  assert.ok((await listModelsForRouteKind('openrouter', 'fast')).includes('vendor/text-only'));
 });
 
 test('the upstream API follows the SDK the catalog declares for each model', async () => {

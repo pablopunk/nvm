@@ -797,3 +797,22 @@ export const pricingSnapshots = pgTable('pricing_snapshots', {
   validatedAt: bigint('validated_at', { mode: 'number' }).notNull(),
   payload: jsonb('payload').notNull(),
 });
+
+export const modelCapabilityProbes = pgTable(
+  'model_capability_probes',
+  {
+    provider: text('provider').notNull(),
+    modelId: text('model_id').notNull(),
+    capability: text('capability').notNull(),
+    passed: boolean('passed').notNull(),
+    detail: text('detail'),
+    probedAt: bigint('probed_at', { mode: 'number' }).notNull(),
+  },
+  (t) => [
+    uniqueIndex('model_capability_probes_model_capability_unique').on(
+      t.provider,
+      t.modelId,
+      t.capability,
+    ),
+  ],
+);

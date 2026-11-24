@@ -4,6 +4,7 @@ import { modelProviderMayTrainOnPrompts, PROVIDER_TRAINS_ON_PROMPTS_LABEL } from
 import { useDashboardQuery } from '../../lib/use-dashboard-query';
 import { ConsoleCombobox } from '../ConsoleCombobox';
 import { ConsoleSelect } from '../ConsoleSelect';
+import { AdminModelCheck } from './AdminModelCheck';
 import { AdminModelRouteCard, type AdminModelTier } from './AdminModelRouteCard';
 import { AdminModelsSkeletonRows } from './AdminModelsSkeletonRows';
 import { DashboardQueryError } from './DashboardQueryError';
@@ -86,6 +87,7 @@ export function AdminModelsPanel() {
   if (!query.data) return query.isError ? <DashboardQueryError what="model configuration" retry={query.refetch} /> : <AdminModelsSkeletonRows />;
   const { textRoutes, dictation, decisions, thinkingLevels } = query.data;
   return <>
+    <AdminModelCheck />
     {textRoutes.map((route) => <TextRouteCard key={route.slot} route={route} thinkingLevels={thinkingLevels} />)}
     <SingleRouteCard title="Dictation" tier="dictation" path="/api/admin/audio-model" route={dictation} select={selectDictation} details="Budget-checked for a one-minute recording; longer ones can exceed it." />
     <SingleRouteCard title="Decisions" tier="decisions" path="/api/admin/decision-model" route={decisions} select={selectDecisions} details="Only image-capable models." />
