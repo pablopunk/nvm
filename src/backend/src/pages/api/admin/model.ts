@@ -14,6 +14,11 @@ import {
   modelFitsRouteKind,
   routeKindForSlot,
 } from '../../../lib/pricing';
+import { CAPABILITY_LABELS } from '../../../lib/model-capabilities/criteria';
+import {
+  type RouteKindVerification,
+  verifyModelForRouteKind,
+} from '../../../lib/model-capabilities/verify';
 import { refreshRoutePricing } from '../../../lib/pricing-refresh';
 import {
   DEFAULT_THINKING_LEVEL,
@@ -29,6 +34,8 @@ import {
   type ThinkingLevel,
 } from '../../../lib/settings';
 import { safeJsonBody } from '../../../lib/validation';
+
+export const config = { maxDuration: 60 };
 
 const putModelSchema = z.object({
   tier: z.enum(['paid', 'free']).optional(),
@@ -55,6 +62,13 @@ const putModelSchema = z.object({
       'Invalid thinking level',
     ),
 });
+
+function unverifiedRouteModelMessage(kind: 'smart' | 'fast', verification: RouteKindVerification) {
+  const failures = verification.failed.map(
+    ({ capability, detail }) => `it ${CAPABILITY_LABELS[capability]} (${detail ?? 'not checked'})`,
+  );
+  return `This model can't be a ${kind} route. A live check failed: ${failures.join('; ')}.`;
+}
 
 async function listModelRefs(kind: 'smart' | 'fast') {
   return (await listAdminModelRefs(kind)).map((ref) => {
@@ -141,6 +155,17 @@ export const PUT: APIRoute = async ({ request }) => {
             kind === 'smart'
               ? 'Smart routes need a priced, image-capable model with function tools, a context limit, and reasoning.'
               : 'Fast routes need a priced, image-capable model with function tools and a context limit.',
+        },
+      },
+      { status: 400 },
+    );
+  const verification = await verifyModelForRouteKind(route, kind);
+  if (!verification.fits)
+    return Response.json(
+      {
+        error: {
+          type: 'unsupported_route_model',
+          message: unverifiedRouteModelMessage(kind, verification),
         },
       },
       { status: 400 },

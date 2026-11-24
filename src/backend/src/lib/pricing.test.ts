@@ -319,10 +319,12 @@ test('route choices come from catalog capabilities, images, tools, pricing and c
   assert.ok(!smart.includes('vendor/non-reasoner'));
   assert.ok(fast.includes('vendor/reasoner'));
   assert.ok(fast.includes('vendor/non-reasoner'));
-  for (const model of ['vendor/text-only', 'vendor/no-context', 'vendor/unpriced', 'vendor/spoofed']) {
+  for (const model of ['vendor/no-context', 'vendor/unpriced', 'vendor/spoofed']) {
     assert.equal(await modelFitsRouteKind('openrouter', model, 'smart'), false);
     assert.equal(await modelFitsRouteKind('openrouter', model, 'fast'), false);
   }
+  assert.equal(await modelFitsRouteKind('openrouter', 'vendor/text-only', 'smart'), false);
+  assert.equal(await modelFitsRouteKind('openrouter', 'vendor/text-only', 'fast'), true);
 });
 
 test('route listing and validation use the same current catalog capabilities', async () => {

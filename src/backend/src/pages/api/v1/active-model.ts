@@ -5,7 +5,9 @@ import {
 } from '../../../shared/public-origin';
 import { chooseFundedAccountRoute } from '../../../lib/active-model-funding';
 import {
+  clientSpeaksOnlyChatCompletions,
   compatibilityHeaders,
+  desktopClientFromRequest,
   requestIdFromHeaders,
 } from '../../../lib/compatibility';
 import { computeUsdCost, usdToCredits, usdToMicrocents } from '../../../lib/cost';
@@ -32,7 +34,10 @@ import {
   parseExtensionAiModelRole,
 } from '../../../lib/settings';
 import { getUserFromBearer } from '../../../lib/tokens';
-import { selectApiForModel } from '../../../lib/upstream';
+import {
+  providerServesEveryModelAsChatCompletions,
+  selectApiForModel,
+} from '../../../lib/upstream';
 import { ensureMonthlyFreeCredits, getBalances } from '../../../lib/users';
 
 const NEVERMIND_PROVIDER_ID = 'nevermind';
@@ -50,6 +55,19 @@ function requestEstimateFor(
     reservationMarginFor(cost) *
     computeUsdCost(cost, inputTokens, maxOutputTokens);
   return { credits: usdToCredits(costUsd), costUsd };
+}
+
+async function apiTheClientShouldSpeak(
+  request: Request,
+  provider: string,
+  modelId: string,
+) {
+  if (
+    clientSpeaksOnlyChatCompletions(desktopClientFromRequest(request)) &&
+    providerServesEveryModelAsChatCompletions(provider)
+  )
+    return 'openai-completions';
+  return selectApiForModel(provider, modelId);
 }
 
 export const GET: APIRoute = async ({ request }) => {
@@ -229,7 +247,7 @@ export const GET: APIRoute = async ({ request }) => {
     );
   }
 
-  const api = await selectApiForModel(provider, modelId);
+  const api = await apiTheClientShouldSpeak(request, provider, modelId);
   const requestScopedOrigin = previewTarget || localOrigin;
   const baseUrl =
     api === 'anthropic-messages'

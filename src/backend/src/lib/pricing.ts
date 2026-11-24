@@ -367,12 +367,15 @@ function supportsEveryTierFeature(model: ModelsDevModel): boolean {
   return (
     model.tool_call === true &&
     input.includes('text') &&
-    input.includes('image') &&
     output.includes('text') &&
     hasValidPricing(model.cost) &&
     Number.isSafeInteger(model.limit?.context) &&
     (model.limit?.context ?? 0) > 0
   );
+}
+
+function supportsSmartTierFeatures(model: ModelsDevModel): boolean {
+  return Boolean(model.reasoning) && (model.modalities?.input ?? []).includes('image');
 }
 
 function fitsRouteKind(
@@ -381,7 +384,7 @@ function fitsRouteKind(
   kind: RouteKind,
 ): boolean {
   if (model.id !== modelId || !supportsEveryTierFeature(model)) return false;
-  return kind === 'fast' || Boolean(model.reasoning);
+  return kind === 'fast' || supportsSmartTierFeatures(model);
 }
 
 export async function modelFitsRouteKind(

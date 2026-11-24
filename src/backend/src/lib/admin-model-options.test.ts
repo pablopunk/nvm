@@ -2,6 +2,11 @@ import assert from 'node:assert/strict';
 import { afterEach, test } from 'node:test';
 import { resetDbForTests, setDbForTests } from '../db/client';
 import { listAdminModelRefs, openRouterAccessibleModels } from './admin-model-options';
+import { CAPABILITIES_FOR_ROUTE_KIND } from './model-capabilities/criteria';
+import {
+  resetModelCapabilityStoreForTests,
+  useMemoryModelCapabilityStoreForTests,
+} from './model-capabilities/store';
 import { resetPricingCacheForTests } from './pricing';
 import { refreshPricingSnapshots } from './pricing-refresh';
 
@@ -32,6 +37,16 @@ test('model options include only enabled providers with configured keys', async 
   })) as unknown as typeof fetch;
   try {
     assert.equal((await refreshPricingSnapshots([])).catalog, 'refreshed');
+    await useMemoryModelCapabilityStoreForTests().save(
+      CAPABILITIES_FOR_ROUTE_KIND.fast.map((capability) => ({
+        provider: 'openrouter',
+        modelId: 'google/gemini-2.5-flash',
+        capability,
+        passed: true,
+        detail: null,
+        probedAt: Date.now(),
+      })),
+    );
     const refs = await listAdminModelRefs('fast');
     assert.ok(refs.includes('openrouter/google/gemini-2.5-flash'));
     assert.ok(refs.every((ref) => !ref.startsWith('opencode_zen/')));
@@ -47,6 +62,7 @@ test('model options include only enabled providers with configured keys', async 
 afterEach(() => {
   resetDbForTests();
   resetPricingCacheForTests();
+  resetModelCapabilityStoreForTests();
 });
 
 test('OpenRouter model access uses the configured key and fails closed', async () => {

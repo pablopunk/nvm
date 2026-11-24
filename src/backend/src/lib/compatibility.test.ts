@@ -3,6 +3,7 @@ import { readFileSync } from 'node:fs';
 import { afterEach, test } from 'node:test';
 import {
   backendKillSwitchEnabled,
+  clientSpeaksOnlyChatCompletions,
   compatibilityError,
   compatibilityManifestForRequest,
   desktopClientFromRequest,
@@ -171,4 +172,13 @@ test('returns a stable unsupported-client error shape', async () => {
   assert.equal(response.status, 426);
   assert.equal(response.headers.get('x-request-id'), 'req_123');
   assert.deepEqual(body, fixture('unsupported-client-error'));
+});
+
+test('only the Go desktop (2.x and later) is limited to Chat Completions', () => {
+  const client = (version: string | null, name: string | null = 'desktop') => ({ name, version, apiVersion: 1, platform: 'darwin', arch: 'arm64' });
+  assert.equal(clientSpeaksOnlyChatCompletions(client('2.0.0-go')), true);
+  assert.equal(clientSpeaksOnlyChatCompletions(client('2.1.0')), true);
+  assert.equal(clientSpeaksOnlyChatCompletions(client('0.17.3')), false);
+  assert.equal(clientSpeaksOnlyChatCompletions(client(null)), false);
+  assert.equal(clientSpeaksOnlyChatCompletions(client('2.0.0', 'web')), false);
 });

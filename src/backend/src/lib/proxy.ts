@@ -46,6 +46,7 @@ import {
   supportsBoundedImageInput,
   withoutSchemaDefinitions,
 } from './limits';
+import type { RouteReasoning } from './chat-completions-request';
 import { log } from './log';
 import {
   lookupModelDescriptor,
@@ -74,6 +75,7 @@ import {
 } from './tokens';
 import {
   getUpstreamConfig,
+  providerServesEveryModelAsChatCompletions,
   providerSupportsFormat,
   selectApiForModel,
   type UpstreamApi,
@@ -108,6 +110,7 @@ export type ProxyConfig = {
     bodyText: string,
     routing: Pick<ModelRouting, 'activeModelId' | 'provider' | 'thinkingLevel'>,
     maxOutputTokens: number,
+    reasoning?: RouteReasoning,
   ) => string;
   parseUsageFromJson: (json: any) => UsageTokens | null;
   parseUsageFromStreamChunk: (
@@ -1052,6 +1055,50 @@ function chainExhaustedResponse(requestId: string): Response {
   );
 }
 
+function gatewayTranslatesChatCompletions(
+  wireApi: ProxyConfig['wireApi'],
+  provider: string,
+) {
+  return (
+    wireApi === 'openai-completions' &&
+    providerServesEveryModelAsChatCompletions(provider)
+  );
+}
+
+const UPSTREAM_REJECTION_DETAIL_LIMIT = 300;
+
+function errorEnvelopeMessage(text: string): string | undefined {
+  try {
+    const message = JSON.parse(text)?.error?.message;
+    return typeof message === 'string' ? message : undefined;
+  } catch {
+    return undefined;
+  }
+}
+
+async function upstreamRejectionDetail(resp: Response): Promise<string> {
+  const text = await resp
+    .clone()
+    .text()
+    .catch(() => '');
+  return (errorEnvelopeMessage(text) ?? text).slice(0, UPSTREAM_REJECTION_DETAIL_LIMIT);
+}
+
+async function logUpstreamRejection(
+  resp: Response,
+  requestId: string,
+  provider: string,
+  model: string,
+) {
+  log.warn('upstream_rejected', {
+    request_id: requestId,
+    provider,
+    model,
+    status: resp.status,
+    detail: await upstreamRejectionDetail(resp),
+  });
+}
+
 async function hasConfiguredImageRoute(
   routing: ModelRouting,
   primaryDescriptor: ModelDescriptor | null,
@@ -1185,8 +1232,9 @@ async function tryUpstreamProviders(
     const candidateIsPrimary =
       providerId === routing.provider && modelId === routing.activeModelId;
     if (
-      !providerSupportsFormat(providerId, apiFormat) ||
-      (await selectApiForModel(providerId, modelId)) !== apiFormat
+      !gatewayTranslatesChatCompletions(cfg.wireApi, providerId) &&
+      (!providerSupportsFormat(providerId, apiFormat) ||
+        (await selectApiForModel(providerId, modelId)) !== apiFormat)
     ) {
       log.info('upstream_format_skip', {
         request_id: requestId,
@@ -1406,6 +1454,32 @@ async function tryUpstreamProviders(
         headers,
         body: forwardBody,
       });
+      if (resp.status === 400) {
+        await logUpstreamRejection(resp, requestId, providerId, modelId);
+        const providerDefaultBody =
+          cfg.rewriteRequestBody && candidateMaxOutputTokens != null
+            ? cfg.rewriteRequestBody(
+                requestBodyText,
+                candidateRouting,
+                candidateMaxOutputTokens,
+                'providerDefault',
+              )
+            : forwardBody;
+        if (providerDefaultBody !== forwardBody) {
+          log.info('upstream_retry_provider_default_thinking', {
+            request_id: requestId,
+            provider: providerId,
+            model: modelId,
+          });
+          resp = await fetch(upstreamUrl, {
+            method: cfg.request.method,
+            headers,
+            body: providerDefaultBody,
+          });
+          if (resp.status === 400)
+            await logUpstreamRejection(resp, requestId, providerId, modelId);
+        }
+      }
     } catch (err) {
       log.warn('upstream_fetch_error', {
         request_id: requestId,
@@ -1509,7 +1583,12 @@ export async function proxyAndBill(cfg: ProxyConfig): Promise<Response> {
   let routing = await resolveRouting(cfg.request, cfg.authHeaderName);
   if (routing instanceof Response) return withRequestId(routing, requestId);
   const resolvedApi = await selectApiForModel(routing.provider, routing.activeModelId);
-  if (cfg.wireApi && cfg.wireApi !== resolvedApi && (cfg.wireApi === 'openai-responses' || resolvedApi === 'openai-responses')) {
+  if (
+    cfg.wireApi &&
+    cfg.wireApi !== resolvedApi &&
+    (cfg.wireApi === 'openai-responses' || resolvedApi === 'openai-responses') &&
+    !gatewayTranslatesChatCompletions(cfg.wireApi, routing.provider)
+  ) {
     return modelRouteChangedResponse(requestId);
   }
   if (cfg.requiredApi && resolvedApi !== cfg.requiredApi) {

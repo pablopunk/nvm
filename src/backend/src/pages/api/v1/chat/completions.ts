@@ -6,49 +6,9 @@ import {
   type StreamUsageAccumulator,
   type UsageTokens,
 } from '../../../../lib/proxy';
+import { rewriteChatCompletionsBody } from '../../../../lib/chat-completions-request';
 
 export const config = { maxDuration: 300 };
-
-function rewriteOpenAiModel(
-  bodyText: string,
-  routing: {
-    activeModelId: string;
-    provider: string;
-    thinkingLevel: string;
-  },
-  maxOutputTokens: number,
-): string {
-  if (!bodyText) return bodyText;
-  const parsed = JSON.parse(bodyText);
-  parsed.model = routing.activeModelId;
-  // The server owns billing; don't let clients select an unreserved provider tier.
-  delete parsed.service_tier;
-  if (routing.provider === 'openrouter') {
-    parsed.max_tokens = maxOutputTokens;
-    delete parsed.max_completion_tokens;
-    delete parsed.models;
-    delete parsed.route;
-    delete parsed.provider;
-    delete parsed.plugins;
-    delete parsed.web_search_options;
-    delete parsed.reasoning_effort;
-    parsed.reasoning = {
-      effort: routing.thinkingLevel === 'off' ? 'none' : routing.thinkingLevel,
-    };
-  } else if (parsed.max_completion_tokens !== undefined) {
-    parsed.max_completion_tokens = maxOutputTokens;
-    delete parsed.max_tokens;
-  } else {
-    parsed.max_tokens = maxOutputTokens;
-  }
-  if (parsed.stream === true) {
-    parsed.stream_options = {
-      ...(parsed.stream_options ?? {}),
-      include_usage: true,
-    };
-  }
-  return JSON.stringify(parsed);
-}
 
 function parseUsageFromOpenAiJson(json: any): UsageTokens | null {
   const u = json?.usage;
@@ -117,7 +77,7 @@ export const POST: APIRoute = ({ request }) =>
     formatUpstreamAuthValue: (k) => `Bearer ${k}`,
     buildUpstreamUrl: ({ upstreamBaseUrl }) =>
       `${upstreamBaseUrl}/chat/completions`,
-    rewriteRequestBody: rewriteOpenAiModel,
+    rewriteRequestBody: rewriteChatCompletionsBody,
     parseUsageFromJson: parseUsageFromOpenAiJson,
     parseUsageFromStreamChunk: parseUsageFromOpenAiStreamChunk,
     idempotencyKey: request.headers.get('Idempotency-Key') ?? undefined,

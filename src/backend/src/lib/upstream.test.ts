@@ -2,7 +2,7 @@ import assert from 'node:assert/strict';
 import { test, describe, afterEach } from 'node:test';
 import { resetPricingCacheForTests } from './pricing';
 import { refreshPricingSnapshots } from './pricing-refresh';
-import { getUpstreamConfig, getUpstreamProbeSpec, selectApiForModel, selectApiForModelChain, providerSupportsFormat, UpstreamConfigError } from './upstream';
+import { chatCompletionsReasoningParameter, getUpstreamConfig, getUpstreamProbeSpec, providerServesEveryModelAsChatCompletions, selectApiForModel, selectApiForModelChain, providerSupportsFormat, UpstreamConfigError } from './upstream';
 
 const originalFetch = globalThis.fetch;
 
@@ -143,5 +143,22 @@ describe('getUpstreamProbeSpec', () => {
     delete process.env.OPENAI_API_KEY;
     assert.throws(() => getUpstreamProbeSpec('openai'), UpstreamConfigError);
     assert.throws(() => getUpstreamProbeSpec('made-up-provider'), UpstreamConfigError);
+  });
+});
+
+describe('providerServesEveryModelAsChatCompletions', () => {
+  test('only the OpenCode gateway translates Chat Completions for every model', () => {
+    assert.equal(providerServesEveryModelAsChatCompletions('opencode_zen'), true);
+    assert.equal(providerServesEveryModelAsChatCompletions('openrouter'), false);
+    assert.equal(providerServesEveryModelAsChatCompletions('anthropic'), false);
+    assert.equal(providerServesEveryModelAsChatCompletions('made-up-provider'), false);
+  });
+});
+
+describe('chatCompletionsReasoningParameter', () => {
+  test('names the thinking parameter each Chat Completions provider reads', () => {
+    assert.equal(chatCompletionsReasoningParameter('openrouter'), 'openrouter-reasoning');
+    assert.equal(chatCompletionsReasoningParameter('opencode_zen'), 'reasoning-effort');
+    assert.equal(chatCompletionsReasoningParameter('openai'), 'none');
   });
 });

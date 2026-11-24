@@ -20,6 +20,16 @@ export async function selectApiForModel(provider: string, modelId: string): Prom
   return apiForCatalogSdk(await catalogSdkForModel(provider, modelId));
 }
 
+export function providerServesEveryModelAsChatCompletions(provider: string): boolean {
+  return PROVIDER_CONFIGS[provider]?.servesEveryModelAsChatCompletions === true;
+}
+
+export type ChatCompletionsReasoningParameter = 'openrouter-reasoning' | 'reasoning-effort' | 'none';
+
+export function chatCompletionsReasoningParameter(provider: string): ChatCompletionsReasoningParameter {
+  return PROVIDER_CONFIGS[provider]?.chatCompletionsReasoning ?? 'none';
+}
+
 export async function selectApiForModelChain(primary: { provider: string; modelId: string } | null, modelId: string): Promise<UpstreamApi> {
   return primary?.modelId === modelId ? selectApiForModel(primary.provider, modelId) : 'openai-completions';
 }
@@ -46,6 +56,8 @@ type ProviderConfig = {
   catalogListKey?: UpstreamCatalogListKey;
   extraHeaders?: Record<string, string>;
   verification: UpstreamVerification;
+  servesEveryModelAsChatCompletions?: true;
+  chatCompletionsReasoning?: ChatCompletionsReasoningParameter;
 };
 
 const PROVIDER_CONFIGS: Record<string, ProviderConfig> = {
@@ -56,6 +68,8 @@ const PROVIDER_CONFIGS: Record<string, ProviderConfig> = {
     apiFormats: ['openai-completions', 'openai-responses', 'anthropic-messages', 'google-generative-ai'],
     authHeader: 'authorization',
     verification: { kind: 'catalog' },
+    servesEveryModelAsChatCompletions: true,
+    chatCompletionsReasoning: 'reasoning-effort',
   },
   openrouter: {
     apiKeyEnv: 'OPENROUTER_API_KEY',
@@ -64,6 +78,7 @@ const PROVIDER_CONFIGS: Record<string, ProviderConfig> = {
     apiFormats: ['openai-completions', 'openai-responses'],
     authHeader: 'authorization',
     verification: { kind: 'key', path: '/key' },
+    chatCompletionsReasoning: 'openrouter-reasoning',
   },
   anthropic: {
     apiKeyEnv: 'ANTHROPIC_API_KEY',

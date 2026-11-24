@@ -1,4 +1,6 @@
 import type { APIRoute } from 'astro';
+import { listVerifiedModelsForRouteKind } from '../../../lib/admin-model-options';
+import { verifyModelForRouteKind } from '../../../lib/model-capabilities/verify';
 import { z } from 'zod';
 import { requireAdmin } from '../../../lib/admin';
 import {
@@ -9,7 +11,6 @@ import {
 import { recordAuditStrict } from '../../../lib/audit';
 import { requireSameOrigin } from '../../../lib/csrf';
 import {
-  listModelsForRouteKind,
   lookupModelPricing,
   modelFitsRouteKind,
   routeKindForSlot,
@@ -88,6 +89,8 @@ async function everyRouteUsesFormat(
   return true;
 }
 
+export const config = { maxDuration: 60 };
+
 export const GET: APIRoute = async ({ request, url }) => {
   if (!(await requireAdmin(request)))
     return new Response('Forbidden', { status: 403 });
@@ -106,7 +109,7 @@ export const GET: APIRoute = async ({ request, url }) => {
       const compatibleModels = providerSupportsFormat(provider.id, format)
         ? await modelsUsingFormat(
             provider.id,
-            await listModelsForRouteKind(provider.id, routeKindForSlot(slot)),
+            await listVerifiedModelsForRouteKind(provider.id, routeKindForSlot(slot)),
             format,
           )
         : [];
@@ -232,6 +235,21 @@ export const PUT: APIRoute = async ({ request }) => {
         error: {
           type: 'unsupported_route_model',
           message: 'Every provider route must fit the slot (smart or fast).',
+        },
+      },
+      { status: 400 },
+    );
+  const verifications = await Promise.all(
+    routes.map((route) =>
+      verifyModelForRouteKind({ provider: route.providerId, modelId: route.modelId }, routeKindForSlot(slot)),
+    ),
+  );
+  if (verifications.some((verification) => !verification.fits))
+    return Response.json(
+      {
+        error: {
+          type: 'unsupported_route_model',
+          message: 'A fallback model failed a live check for this slot (smart or fast).',
         },
       },
       { status: 400 },
