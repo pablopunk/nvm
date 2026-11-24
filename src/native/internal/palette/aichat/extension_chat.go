@@ -101,7 +101,7 @@ func (x *ExtensionChat) body(c *ui.Context, h search.Host) {
 	}
 	k := design.Tokens(c)
 	x.refocusWhenAReplyEnds()
-	ui.Column(c).Grow(1).FillHeight().MinHeight(0).Padding(8, 16, 12, 16).Children(func() {
+	ui.Column(c).Grow(1).FillHeight().MinHeight(0).Padding(design.Inset, design.Inset, 0, design.Inset).Children(func() {
 		x.transcript(c)
 		x.activity(c)
 		x.composer(c, k)
@@ -119,24 +119,25 @@ func (x *ExtensionChat) refocusWhenAReplyEnds() {
 	x.wasBusy = busy
 }
 
-// composer is the card under the transcript: pictures, the input, and its send and attachment controls.
+// composer is the lens under the transcript: pictures, the input, and its attachment control.
 func (x *ExtensionChat) composer(c *ui.Context, k *design.TokenSet) {
 	placeholder := x.spec.Placeholder
 	if placeholder == "" {
 		placeholder = "Message AI"
 	}
-	ui.Column(c).Key("chat-composer").Radius(8).Background(k.Surface).Border(1, k.EdgeStrong).InsetShadow(0, 1, 0, 0, k.Hi).Children(func() {
+	card := ui.Column(c).Key("chat-composer").MinHeight(design.ControlHeight).Radius(design.ControlRadius)
+	design.Lens(card, k).Children(func() {
 		if len(x.images) > 0 {
 			attachmentsRow(c, x.images, x.removeImage)
 		}
-		ui.TextAreaBase(c, &x.draft).Bind(&x.input).Lines(3, 3).Placeholder(placeholder).
-			PlaceholderColor(k.Faint).FontSize(13).TextColor(k.Strong).Padding(10, 12, 4, 12).
+		ui.TextAreaBase(c, &x.draft).Bind(&x.input).Lines(1, 6).Placeholder(placeholder).
+			PlaceholderColor(k.Tertiary).FontSize(13).TextColor(k.Strong).Padding(8, design.ControlPad).
 			OnTextKey(x.composerKey)
-		ui.Row(c).Padding(0, 6, 6, 6).AlignItems(ui.Center).Gap(4).Children(func() {
-			if x.attaches() {
+		if x.attaches() {
+			ui.Row(c).Padding(0, 6, 6, 6).AlignItems(ui.Center).Gap(4).Children(func() {
 				attachButton(c, x.spec.PickImages, x.addImages)
-			}
-		})
+			})
+		}
 	})
 }
 
@@ -283,10 +284,14 @@ func (x *ExtensionChat) sideFor() *palette.Side {
 	return x.side
 }
 
-// primaryKey is the footer's primary action: Stop while a reply streams, otherwise Send.
+// primaryKey is the footer's primary action: Stop while a reply streams, Send while there is something to send, and
+// none otherwise, because the footer shows only actions that can run.
 func (x *ExtensionChat) primaryKey() *design.KeyHint {
 	if x.streaming() && x.spec.Stop != nil {
 		return &design.KeyHint{Title: "Stop", Emphasized: true}
+	}
+	if !x.canSend(strings.TrimSpace(x.draft)) {
+		return nil
 	}
 	return &design.KeyHint{Title: "Send", Key: palette.KeyLabel("↵"), Emphasized: true}
 }

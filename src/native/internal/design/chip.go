@@ -9,11 +9,11 @@ type ChipData struct {
 	Text string
 }
 
-// Chip draws a hint such as "Tab to ask AI": a raised, rounded label in the muted ink.
+// Chip draws a hint such as "Tab to ask AI": a lens pill with the label in the muted ink.
 func Chip(c *ui.Context, d ChipData) {
 	k := Tokens(c)
-	ui.Row(c).Gap(6).AlignItems(ui.Center).Padding(3, 8).Radius(6).Background(k.Surface).Border(1, k.EdgeStrong).
-		InsetShadow(0, 1, 0, 0, k.Hi).Children(func() {
+	chip := ui.Row(c).Gap(6).AlignItems(ui.Center).Height(InnerHeight).Padding(0, 10).Radius(InnerRadius)
+	Lens(chip, k).Children(func() {
 		if d.Icon != "" {
 			ui.Icon(c, Icon(d.Icon)).FontSize(12).TextColor(k.Muted)
 		}

@@ -28,6 +28,17 @@ Colors are spelled only here. The hex-literal lint (`hexlint_test.go`) fails on 
 on, in both appearances. The known failures are listed there with their measured ratios; a waiver whose pair starts
 passing fails the test, so the list only shrinks.
 
+## Glass
+
+The pane is the one material. Everything on it is a lens (`Lens`): a lighter glass with an edge, a lit top and a small
+drop, used by the composer, the user bubble, chips and the footer groups. A control nested in a group, such as a select,
+is an `InnerPill` of ink at alpha. Gold is reserved for the one action Enter runs, as `GoldGlass`. A key cap has no
+surface of its own: it is raised out of its control in that control's ink (`keycapFace`).
+
+The footer has two groups. The left one holds context: the view's name and its control. The right one holds the
+secondary action, then the primary action last. It shows only actions that can run, so a chat with an empty composer
+shows no Send.
+
 ## Depth
 
 The surfaces are told apart by light, not by heavy outlines:
@@ -56,8 +67,9 @@ subtitles are single lines with an ellipsis (`SingleLine`); a glyph is never cut
 
 ## Spacing and sizes
 
-The target is a 4 px grid, with icon tiles at 32 (`TileSize`), keycaps at 1 by 6 padding, and the pane radius
-(`PaneRadius`, 18) shared by the window cut, the border and the clip. The palette does not yet keep every spacing on
+The target is a 4 px grid, with icon tiles at 32 (`TileSize`) and keycaps at 1 by 6 padding. `geometry.go` holds the
+control geometry: `Inset` 8, `ControlHeight` 32 and `ControlPad` 14, with concentric radii, so the pane radius
+(`PaneRadius`, 24) is a control's radius plus the inset. The window cut, the border and the clip share it. The palette does not yet keep every spacing on
 the grid: 5, 6, 10 and 14 px paddings remain. They are listed as debt below, not changed, because changing them moves
 the palette goldens.
 
@@ -83,6 +95,7 @@ context. The doc comment of each says what it draws and when to use it.
 | `form.go` | `FormField`, `FormError` | `FieldData` |
 | `user_bubble.go` | `UserBubble` | a chat message |
 | `icons.go`, `lucide.go` | `Icon(name)` | the Lucide table, parsed once |
+| `geometry.go`, `lens.go` | `Inset`, `ControlHeight`, `Lens`, `GoldGlass`, `InnerPill` | control geometry and the glass helpers |
 | `depth.go` | `Etched`, `Glossy`, `SelectedFill` | depth helpers |
 
 `Markdown` replies are drawn by `internal/app/markdown.go`: the layer rules keep the Markdown renderer out of design.

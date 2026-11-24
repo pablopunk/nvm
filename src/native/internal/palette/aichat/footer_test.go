@@ -44,6 +44,7 @@ func TestChatFooterStopCancelsTheReply(t *testing.T) {
 func TestChatInputClearsFloatingFooterAfterResize(t *testing.T) {
 	x := NewExtensionChat(func(c *ui.Context, text string, _ bool) { ui.Text(c, text) }, func() time.Time { return goldenNow })
 	x.SetSpec(ExtensionChatSpec{Title: "Chat", Attach: true, PickImages: func(func([]chat.Image)) {}})
+	x.draft = "a message, so the footer offers Send"
 	r := newRig(t, nil)
 	r.open(x.View())
 	tester := ui.NewTester(r.palette.View, goldenWidth, goldenHeight)

@@ -19,6 +19,14 @@ type TokenSet struct {
 	AccentMuted, AccentSoft, AccentFill     ui.Color
 	AccentEmphasis, AccentContrast, Shadow  ui.Color
 	Hi, Lo, Wash                            ui.Color
+	// Lens is the glass of every control on the pane: a lighter glass with an edge, a lit top and a small drop.
+	Lens, LensEdge, LensHi, LensLo ui.Color
+	// Fill is the ink-at-alpha plate of a control nested in a lens, such as a select.
+	Fill ui.Color
+	// GoldGlass is the lens tinted gold: only the action Enter runs wears it.
+	GoldGlass, GoldGlassEdge, GoldGlassText ui.Color
+	// KeyHi lights the top edge of a key cap, and Focus rings a control that has keyboard focus.
+	KeyHi, Focus ui.Color
 	// Tones are the colors of the tinted titles and tiles, by tone name (yellow, blue, ...).
 	Tones map[string]ui.Color
 }
@@ -51,6 +59,10 @@ var (
 		AccentSoft: rgba("#8a6a00", 0.11), AccentMuted: rgba("#8a6a00", 0.22), AccentEmphasis: rgba("#8a6a00", 0.52),
 		Danger: ui.Hex("#9b4141"), Success: ui.Hex("#356d45"),
 		Hi: ui.RGBA(255, 254, 250, 0.9), Lo: rgba("#3e3528", 0.13), Wash: rgba("#3e3528", 0.05),
+		Lens: ui.RGBA(255, 255, 255, 0.62), LensEdge: rgba("#1e1d19", 0.14), LensHi: ui.RGBA(255, 255, 255, 0.9), LensLo: rgba("#1e1d19", 0.10),
+		Fill:      rgba("#1e1d19", 0.07),
+		GoldGlass: rgba("#e6bd32", 0.62), GoldGlassEdge: rgba("#8a6a00", 0.45), GoldGlassText: ui.Hex("#2e2400"),
+		KeyHi: ui.RGBA(255, 255, 255, 0.55), Focus: rgba("#1e1d19", 0.55),
 		Tones: map[string]ui.Color{"yellow": ui.Hex("#745d00"), "blue": ui.Hex("#285d82"), "purple": ui.Hex("#654c86"), "green": ui.Hex("#376b45"),
 			"red": ui.Hex("#984646"), "orange": ui.Hex("#875325"), "pink": ui.Hex("#884f72"), "teal": ui.Hex("#285d82"), "indigo": ui.Hex("#654c86"), "gray": ui.Hex("#5e5a51")},
 	}
@@ -66,6 +78,10 @@ var (
 		AccentSoft: rgba("#f1cf54", 0.12), AccentMuted: rgba("#f1cf54", 0.24), AccentEmphasis: rgba("#f1cf54", 0.5),
 		Danger: ui.Hex("#e2a6a6"), Success: ui.Hex("#9fc9a8"),
 		Hi: ui.RGBA(220, 231, 249, 0.10), Lo: ui.RGBA(0, 0, 0, 0.5), Wash: ui.RGBA(0, 0, 0, 0.2),
+		Lens: ui.RGBA(255, 255, 255, 0.10), LensEdge: rgba("#f0f3f7", 0.16), LensHi: ui.RGBA(255, 255, 255, 0.14), LensLo: ui.RGBA(0, 0, 0, 0.35),
+		Fill:      rgba("#f0f3f7", 0.10),
+		GoldGlass: rgba("#f1cf54", 0.34), GoldGlassEdge: rgba("#f1cf54", 0.55), GoldGlassText: ui.Hex("#fff3c4"),
+		KeyHi: ui.RGBA(255, 255, 255, 0.14), Focus: rgba("#f0f3f7", 0.6),
 		Tones: map[string]ui.Color{"yellow": ui.Hex("#dfce84"), "blue": ui.Hex("#a9c9df"), "purple": ui.Hex("#c8b6df"), "green": ui.Hex("#acd1b2"),
 			"red": ui.Hex("#e0aaaa"), "orange": ui.Hex("#dfbd96"), "pink": ui.Hex("#dfb2cc"), "teal": ui.Hex("#a9c9df"), "indigo": ui.Hex("#c8b6df"), "gray": ui.Hex("#b8c0cc")},
 	}

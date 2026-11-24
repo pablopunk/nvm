@@ -42,7 +42,9 @@ func (p *Palette) footer(c *ui.Context, v *View) {
 			data.Secondary = actionsKeyHint()
 		}
 		if v.Primary != nil {
-			data.Secondary = v.Primary()
+			if hint := v.Primary(); hint != nil {
+				data.Secondary = hint
+			}
 		}
 	} else if v.Body != nil && (v.Primary != nil || len(p.menuActions()) > 0) && !v.HintReplacesActions {
 		p.bodyFooterKeys(v, &data)

@@ -2,7 +2,7 @@ package design
 
 import "github.com/egoist/mygo/ui"
 
-// SelectData is a popup button: the title of the selected option, then up and down chevrons.
+// SelectData is a popup button, drawn as a pill nested in a group: the title of the selected option, then up and down chevrons.
 type SelectData struct {
 	// Options are the titles, in order. Selected is the index of the current one, checked in the menu.
 	Options  []string
@@ -16,19 +16,20 @@ type SelectData struct {
 // was. Escape and a click elsewhere close the menu with no choice.
 func Select(c *ui.Context, d SelectData) int {
 	k := Tokens(c)
-	color := k.Secondary
+	color := k.Strong
 	if d.Disabled {
 		color = k.Faint
 	}
 	chosen := -1
-	button := ui.ButtonBase(c).Height(footerButtonHeight).Padding(0, 10).Radius(footerButtonHeight / 2).Disabled(d.Disabled)
+	button := ui.ButtonBase(c).Height(InnerHeight).Padding(0, 8, 0, 10).Radius(InnerRadius).Disabled(d.Disabled)
+	InnerPill(button, k)
 	if !d.Disabled && button.Hovered() {
-		button.Background(k.Interactive)
+		button.Background(k.LensEdge)
 	}
 	button.Children(func() {
 		ui.Row(c).Gap(4).AlignItems(ui.Center).Children(func() {
-			ui.Text(c, selectedTitle(d)).FontSize(12).FontWeight(600).TextColor(color).SingleLine()
-			ui.Icon(c, Icon("chevrons-up-down")).FontSize(10).TextColor(color)
+			ui.Text(c, selectedTitle(d)).FontSize(12).FontWeight(500).TextColor(color).SingleLine()
+			ui.Icon(c, Icon("chevrons-up-down")).FontSize(11).TextColor(k.Secondary)
 		})
 	})
 	button.Menu(func(m *ui.Menu) {

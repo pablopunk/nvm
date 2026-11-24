@@ -2,10 +2,6 @@ package design
 
 import "github.com/egoist/mygo/ui"
 
-// PaneRadius is the corner radius of the palette window. The window cut and the clip both use
-// it, so the corners agree in light, dark, with and without a material.
-const PaneRadius = 18
-
 // Pane draws the palette's window pane: a rounded, clipped, borderless column that holds body. With a system
 // material (VibrancyGlass) the pane has no fill and the material shows through; without one the pane is the
 // theme's paper or ink, slightly see-through where the compositor allows.
