@@ -1,7 +1,7 @@
 import { listAdminModelRefs } from './admin-model-options';
 import { dashboardRead } from './dashboard-read';
 import { isSelectableDecisionModel, listDecisionModels } from './decisions/decision-models';
-import { routeKindForSlot, type RouteKind } from './pricing';
+import { lookupModelPricing, routeKindForSlot, type RouteKind } from './pricing';
 import {
   DEFAULT_THINKING_LEVEL,
   getAudioModelRoute,
@@ -17,7 +17,8 @@ import {
 import { listSelectableTranscriptionModels } from './transcription-eligibility';
 
 export type AdminModelOption = { value: string; label: string; disabled?: boolean };
-export type AdminTextRoute = { slot: ModelRouteSlot; title: string; kind: RouteKind; ref: string | null; thinkingLevel: ThinkingLevel; options: AdminModelOption[] };
+export type AdminRoutePricing = { inputUsdPerMtok: number | null; outputUsdPerMtok: number | null };
+export type AdminTextRoute = { slot: ModelRouteSlot; title: string; kind: RouteKind; ref: string | null; thinkingLevel: ThinkingLevel; pricing: AdminRoutePricing | null; options: AdminModelOption[] };
 export type AdminSingleRoute = { ref: string | null; options: AdminModelOption[] };
 export type AdminModelConfig = { textRoutes: AdminTextRoute[]; dictation: AdminSingleRoute; decisions: AdminSingleRoute; thinkingLevels: readonly ThinkingLevel[] };
 
@@ -48,6 +49,11 @@ function refOptions(refs: string[]): AdminModelOption[] {
   return refs.map((ref) => ({ value: ref, label: ref }));
 }
 
+async function routePricing(route: { provider: string; modelId: string } | null): Promise<AdminRoutePricing | null> {
+  const pricing = route ? await lookupModelPricing(route.provider, route.modelId) : null;
+  return pricing ? { inputUsdPerMtok: pricing.inputUsdPerMtok, outputUsdPerMtok: pricing.outputUsdPerMtok } : null;
+}
+
 async function readTextRoutes(): Promise<AdminTextRoute[]> {
   const [smartRefs, fastRefs] = await Promise.all([listAdminModelRefs('smart'), listAdminModelRefs('fast')]);
   return Promise.all(TEXT_ROUTE_TITLES.map(async ([slot, title]) => {
@@ -60,6 +66,7 @@ async function readTextRoutes(): Promise<AdminTextRoute[]> {
       kind,
       ref,
       thinkingLevel: route?.thinkingLevel ?? DEFAULT_THINKING_LEVEL,
+      pricing: await routePricing(route),
       options: optionsKeepingCurrent(ref, refOptions(kind === 'smart' ? smartRefs : fastRefs), 'not selectable'),
     };
   }));
