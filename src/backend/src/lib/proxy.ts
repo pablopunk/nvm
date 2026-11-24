@@ -46,6 +46,7 @@ import {
   supportsBoundedImageInput,
   withoutSchemaDefinitions,
 } from './limits';
+import type { RouteReasoning } from './chat-completions-request';
 import { log } from './log';
 import {
   lookupModelDescriptor,
@@ -1053,8 +1054,6 @@ function chainExhaustedResponse(requestId: string): Response {
     requestId,
   );
 }
-
-export type RouteReasoning = 'route' | 'providerDefault';
 
 function gatewayTranslatesChatCompletions(
   wireApi: ProxyConfig['wireApi'],

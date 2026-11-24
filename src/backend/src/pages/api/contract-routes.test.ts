@@ -4532,7 +4532,7 @@ test('OpenCode receives the route thinking level as reasoning_effort', async () 
   assert.equal(forwardedBodies[0].reasoning_effort, 'high');
 });
 
-test('OpenCode keeps the model default thinking when the route turns thinking off', async () => {
+test('OpenCode is asked to skip thinking when the route turns thinking off', async () => {
   process.env.OPENCODE_API_KEY = 'upstream-key';
   process.env.OPENCODE_BASE_URL = 'https://upstream.example/v1';
   const forwardedBodies: any[] = [];
@@ -4542,7 +4542,7 @@ test('OpenCode keeps the model default thinking when the route turns thinking of
     routeContext(authorizedChatRequest({ reasoning_effort: 'high', messages: [{ role: 'user', content: 'hello' }] })),
   );
   assert.equal(response.status, 200);
-  assert.equal(forwardedBodies[0].reasoning_effort, undefined);
+  assert.equal(forwardedBodies[0].reasoning_effort, 'none');
 });
 
 test('a thinking level the model refuses is retried once with the model default thinking', async () => {
