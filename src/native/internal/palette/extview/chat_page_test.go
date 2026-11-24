@@ -70,6 +70,23 @@ func TestChatSendRunsSubmitWithTheTypedText(t *testing.T) {
 	}
 }
 
+// TestChatTierKeepsTheHandlerArgs checks a tier change adds the chosen tier to the handler's args instead of replacing
+// them, so the handler still knows which chat it changes.
+func TestChatTierKeepsTheHandlerArgs(t *testing.T) {
+	var got api.Invocation
+	deps := Deps{Invoke: func(_ string, in api.Invocation, _ func(api.Result, *api.Failure)) { got = in }}
+	view := chatFixtureView()
+	view.Chat.OnTier = &api.ActionRef{ID: "tier", Args: map[string]string{"chatID": "chat-1"}}
+	s := NewSession(deps, "acme.chat", view)
+	s.chatSpec().ChooseTier(nil, chat.TierFast)
+	if got.Ref.Args["chatID"] != "chat-1" || got.Ref.Args["tier"] != string(chat.TierFast) {
+		t.Fatalf("tier args = %+v, want the chat id and the chosen tier", got.Ref.Args)
+	}
+	if len(view.Chat.OnTier.Args) != 1 {
+		t.Fatalf("view args = %+v, want the view's handler left as it was", view.Chat.OnTier.Args)
+	}
+}
+
 // TestChatSubmitCarriesTheAttachedPictures checks the pictures a message attaches reach the submit as data URLs.
 func TestChatSubmitCarriesTheAttachedPictures(t *testing.T) {
 	var got api.Invocation

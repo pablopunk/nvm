@@ -1,6 +1,7 @@
 package extview
 
 import (
+	"maps"
 	"strings"
 	"time"
 
@@ -99,7 +100,11 @@ func (s *Session) chatSpec() aichat.ExtensionChatSpec {
 		onTier := *spec.OnTier
 		out.ChooseTier = func(h search.Host, tier chat.Tier) {
 			ref := onTier
-			ref.Args = map[string]string{"tier": string(tier)}
+			ref.Args = maps.Clone(onTier.Args)
+			if ref.Args == nil {
+				ref.Args = map[string]string{}
+			}
+			ref.Args["tier"] = string(tier)
 			s.submit(h, api.Invocation{Ref: ref}, nil)
 		}
 	}
