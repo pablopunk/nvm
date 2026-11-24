@@ -1,10 +1,10 @@
 import type { APIRoute } from 'astro';
 import {
   COOKIE_PASSWORD,
-  SESSION_COOKIE,
   WORKOS_CLIENT_ID,
   workosClient,
 } from '../../../lib/workos';
+import { sessionCookieHeader } from '../../../lib/session-refresh';
 import {
   createUserFromInviteIntent,
   DisposableEmailError,
@@ -247,7 +247,7 @@ export function createAuthCallbackRoute(
     const headers = new Headers({ Location: state.safeRelativeReturnPath });
     headers.append(
       'Set-Cookie',
-      `${SESSION_COOKIE}=${encodeURIComponent(sealedSession!)}; Path=/; HttpOnly; ${isHttps ? 'Secure; ' : ''}SameSite=Lax; Max-Age=${60 * 60 * 24 * 30}`,
+      sessionCookieHeader(sealedSession!, isHttps),
     );
     log.info('auth_callback_succeeded', {
       request_id: requestIdentifier,

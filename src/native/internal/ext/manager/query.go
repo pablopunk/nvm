@@ -153,7 +153,7 @@ func (m *Manager) targetsFor(method string) ([]runtimeTarget, supervisor.Budget)
 	var targets []runtimeTarget
 	for _, key := range m.sortedKeysLocked() {
 		e := m.entries[key]
-		if e.runtime != nil && m.isRunnable(e) && offersMethod(e.runtime, e.runtime.Status().State, method) {
+		if e.runtime != nil && m.isRunnable(e) && offersMethod(e.runtime, e.runtime.Status(), method) {
 			targets = append(targets, runtimeTarget{id: e.bundle.Manifest.ID, title: e.bundle.Manifest.Title, commandTitles: e.bundle.Manifest.CommandTitles, runtime: e.runtime, origin: snapshotIdentityLocked(e)})
 		}
 	}
@@ -162,12 +162,19 @@ func (m *Manager) targetsFor(method string) ([]runtimeTarget, supervisor.Budget)
 
 // offersMethod is true when a running child declares method, and when the runtime is not running at all: then the
 // call answers with why it is not running, which is how a failed extension shows its pointer row.
-func offersMethod(runtime runner, state supervisor.State, method string) bool {
-	return isAnswerable(state) && ((state != supervisor.StateRunning && state != supervisor.StateDormant) || runtime.Provides(method))
+func offersMethod(runtime runner, status supervisor.Status, method string) bool {
+	state := status.State
+	return isAnswerable(status) && ((state != supervisor.StateRunning && state != supervisor.StateDormant) || runtime.Provides(method))
 }
 
-func isAnswerable(state supervisor.State) bool {
-	return state != supervisor.StateIdle && state != supervisor.StateStarting
+// isAnswerable leaves out a runtime that never ran or is starting for the first time. One that is starting again
+// after a failure still answers, with that failure, so its pointer row does not vanish while it restarts.
+func isAnswerable(status supervisor.Status) bool {
+	return status.State != supervisor.StateIdle && (status.State != supervisor.StateStarting || isRestartingAfterFailure(status))
+}
+
+func isRestartingAfterFailure(status supervisor.Status) bool {
+	return status.State == supervisor.StateStarting && status.Reason != ""
 }
 
 func (m *Manager) callOne(ctx context.Context, target runtimeTarget, method, query string, budget supervisor.Budget) SearchResult {

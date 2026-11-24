@@ -27,6 +27,7 @@ func (s *Session) openMedia() {
 			Title: s.view.Title, HideInput: true, OnLeave: s.closeMedia, OnActive: s.camera.setActive,
 			Body: func(c *ui.Context, _ search.Host) { drawCamera(c, s.camera) },
 		}
+		s.attachViewMenu(s.media)
 		return
 	}
 	s.openWebview()
@@ -34,6 +35,7 @@ func (s *Session) openMedia() {
 		Title: s.view.Title, HideInput: true, OnLeave: s.closeMedia,
 		Body: func(c *ui.Context, _ search.Host) { s.drawWebview(c) },
 	}
+	s.attachViewMenu(s.media)
 }
 
 // closeMedia leaves the view: the camera stops, and the page is destroyed. It runs once.

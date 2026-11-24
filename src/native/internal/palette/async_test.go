@@ -19,6 +19,13 @@ func withClock(clock *fake.Clock) func(*Options) {
 	return func(o *Options) { o.Clock = clock }
 }
 
+// fireFirstSnapshotOfEmptyQuery moves the clock past the empty query's first-snapshot timer. Otherwise it is due at
+// the same time as the typed query's, and waiting for that one could return before the typed query has started it.
+func fireFirstSnapshotOfEmptyQuery(clock *fake.Clock) {
+	clock.AwaitTimerDueIn(search.FirstSnapshot)
+	clock.Advance(search.FirstSnapshot)
+}
+
 // TestBlockedProviderDoesNotDelayRowsOrTyping runs a root with a provider that waits two seconds of fake time.
 // The keys are taken at once, and the rows of the other provider reach the screen once the first-snapshot wait ends.
 func TestBlockedProviderDoesNotDelayRowsOrTyping(t *testing.T) {
@@ -30,6 +37,7 @@ func TestBlockedProviderDoesNotDelayRowsOrTyping(t *testing.T) {
 	quick := fixedProvider("quick", search.Item{Kind: "Test", Title: "Quick", Score: 1})
 	root := &View{Title: "Root", Providers: func() []search.Provider { return []search.Provider{blocked, quick} }}
 	h := newHarness(t, root, false, withClock(clock))
+	fireFirstSnapshotOfEmptyQuery(clock)
 
 	h.typeText("q")
 	clock.AwaitTimerDueIn(search.HardBudget)
