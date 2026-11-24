@@ -23,18 +23,25 @@ var (
 	linkPattern       = regexp.MustCompile(`\[([^\]]+)\]\([^)]+\)`)
 	decorationPattern = regexp.MustCompile("[*_~`]+")
 	whitespacePattern = regexp.MustCompile(`\s+`)
+	escapePattern     = regexp.MustCompile("\\\\([!-/:-@\\[-`{-~])")
+	bareOrderedMarker = regexp.MustCompile(`^\d+[.)]$`)
 )
 
 // noteTitle derives a note's title from its first non-blank line: list, heading, quote and checkbox markers, images and
 // links are reduced to their text, emphasis marks are dropped, and runs of spaces collapse. An empty result is
-// "Untitled note".
+// "Untitled note". Backslash escapes read as the characters they escape, and an ordered list item with no text yet
+// keeps its number, so a note started with "1." is not titled "1\." or untitled.
 func noteTitle(n api.Note) string {
-	line := firstContentLine(n.Markdown)
+	line := strings.TrimSpace(firstContentLine(n.Markdown))
+	if unescaped := escapePattern.ReplaceAllString(line, "${1}"); bareOrderedMarker.MatchString(unescaped) {
+		return unescaped
+	}
 	title := markdownPrefix.ReplaceAllString(line, "")
 	title = checkboxPrefix.ReplaceAllString(title, "")
 	title = imagePattern.ReplaceAllString(title, "${1}")
 	title = linkPattern.ReplaceAllString(title, "${1}")
 	title = decorationPattern.ReplaceAllString(title, "")
+	title = escapePattern.ReplaceAllString(title, "${1}")
 	title = whitespacePattern.ReplaceAllString(strings.TrimSpace(title), " ")
 	if title = truncateRunes(title, titleLimit); title == "" {
 		return untitledTitle
