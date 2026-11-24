@@ -15,7 +15,7 @@ export type ProbeRequest = {
 };
 
 export type ProbeReply =
-  | { ok: false; detail: string }
+  | { ok: false; detail: string; temporary: boolean }
   | {
       ok: true;
       text: string;
@@ -90,6 +90,10 @@ function errorDetail(status: number, body: string): string {
   return `HTTP ${status}: ${message}`.slice(0, PROBE_DETAIL_LIMIT);
 }
 
+function isTemporaryStatus(status: number): boolean {
+  return status === 408 || status === 429 || status >= 500;
+}
+
 export async function sendProbe(target: ProbeTarget, request: ProbeRequest): Promise<ProbeReply> {
   const { baseUrl, apiKey } = getUpstreamConfig(target.provider);
   const clientBody = JSON.stringify({
@@ -112,9 +116,14 @@ export async function sendProbe(target: ProbeTarget, request: ProbeRequest): Pro
       signal: AbortSignal.timeout(PROBE_TIMEOUT_MS),
     });
     const text = await response.text();
-    if (!response.ok) return { ok: false, detail: errorDetail(response.status, text) };
+    if (!response.ok)
+      return { ok: false, detail: errorDetail(response.status, text), temporary: isTemporaryStatus(response.status) };
     return parseServerSentEvents(text);
   } catch (error) {
-    return { ok: false, detail: (error instanceof Error ? error.message : String(error)).slice(0, PROBE_DETAIL_LIMIT) };
+    return {
+      ok: false,
+      detail: (error instanceof Error ? error.message : String(error)).slice(0, PROBE_DETAIL_LIMIT),
+      temporary: true,
+    };
   }
 }

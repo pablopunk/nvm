@@ -16,6 +16,7 @@ export type CapabilityRefreshReport = {
   probes: number;
   passed: number;
   failed: number;
+  temporaryFailures: number;
   remaining: number;
 };
 
@@ -81,15 +82,24 @@ export async function planCapabilityProbes(now = Date.now()): Promise<{ candidat
 
 export async function refreshModelCapabilities(deadline: number, now = Date.now()): Promise<CapabilityRefreshReport> {
   const { candidates, work } = await planCapabilityProbes(now);
-  const report: CapabilityRefreshReport = { candidates, probedModels: 0, probes: 0, passed: 0, failed: 0, remaining: work.length };
+  const report: CapabilityRefreshReport = {
+    candidates,
+    probedModels: 0,
+    probes: 0,
+    passed: 0,
+    failed: 0,
+    temporaryFailures: 0,
+    remaining: work.length,
+  };
   const queue = [...work];
   async function probeUntilDeadline() {
     for (let next = queue.shift(); next && Date.now() < deadline; next = queue.shift()) {
-      const verdicts = await probeAndSaveCapabilities(next, next.capabilities, now);
+      const { conclusive, temporaryFailures } = await probeAndSaveCapabilities(next, next.capabilities, now);
       report.probedModels += 1;
-      report.probes += verdicts.length;
-      report.passed += verdicts.filter((verdict) => verdict.passed).length;
-      report.failed += verdicts.filter((verdict) => !verdict.passed).length;
+      report.probes += conclusive.length + temporaryFailures.length;
+      report.passed += conclusive.filter((verdict) => verdict.passed).length;
+      report.failed += conclusive.filter((verdict) => !verdict.passed).length;
+      report.temporaryFailures += temporaryFailures.length;
       report.remaining -= 1;
     }
   }

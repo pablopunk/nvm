@@ -88,3 +88,14 @@ test('expired passes do not count toward the dropdown lists', () => {
   );
   assert.deepEqual([...(passed.get('test-model') ?? [])], ['stream_usage']);
 });
+
+test('a temporary upstream failure blocks the save but is not stored as a verdict', async () => {
+  globalThis.fetch = (async () => {
+    probeRequests += 1;
+    return Response.json({ error: { message: 'overloaded' } }, { status: 503 });
+  }) as typeof fetch;
+  const verification = await verifyModelForRouteKind(target, 'fast');
+  assert.equal(verification.fits, false);
+  assert.equal(verification.failed.length, CAPABILITIES_FOR_ROUTE_KIND.fast.length);
+  assert.deepEqual(await store.loadModel(target.provider, target.modelId), []);
+});

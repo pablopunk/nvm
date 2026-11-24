@@ -1,10 +1,10 @@
 import type { ModelCapability } from './criteria';
 import { type ProbeReply, type ProbeTarget, sendProbe } from './probe-request';
 
-export type ProbeOutcome = { passed: boolean; detail: string };
+export type ProbeOutcome = { passed: boolean; detail: string; conclusive: boolean };
 
 const RED_SQUARE_PNG =
-  'data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAABAAAAAQCAIAAACQkWg2AAAAF0lEQVR4nGP4z8BAEiJN9aiGUQ1DSgMAkPn/Afnh+ngAAAAASUVORK5CYII=';
+  'data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAEAAAABACAIAAAAlC+aJAAAAS0lEQVR42u3PQQkAAAgAsetfWiP4FgYrsKZeS0BAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEDgsqnc8OJg6Ln3AAAAAElFTkSuQmCC';
 
 const MULTIPLY_TOOL = {
   type: 'function',
@@ -23,11 +23,11 @@ const REASONING_PUZZLE =
   'A farmer has 17 sheep. All but 9 run away, then he buys 3 times as many as remain, and sells 5. How many sheep does he have now? Answer with the number only.';
 
 function failed(reply: Extract<ProbeReply, { ok: false }>): ProbeOutcome {
-  return { passed: false, detail: reply.detail };
+  return { passed: false, detail: reply.detail, conclusive: !reply.temporary };
 }
 
 function outcome(passed: boolean, detail: string): ProbeOutcome {
-  return { passed, detail };
+  return { passed, detail, conclusive: true };
 }
 
 function reasoningObserved(reply: Extract<ProbeReply, { ok: true }>): boolean {
@@ -53,7 +53,7 @@ async function probeReasoning(target: ProbeTarget): Promise<ProbeOutcome> {
     messages: [{ role: 'user', content: REASONING_PUZZLE }],
     thinkingLevel: 'medium',
     reasoning: 'route',
-    maxOutputTokens: 2048,
+    maxOutputTokens: 4096,
   });
   if (!reply.ok) return failed(reply);
   if (!reasoningObserved(reply)) return outcome(false, 'no reasoning at medium thinking');
@@ -75,7 +75,7 @@ async function probeToolCalls(target: ProbeTarget): Promise<ProbeOutcome> {
     tools: [MULTIPLY_TOOL],
     thinkingLevel: 'off',
     reasoning: 'providerDefault',
-    maxOutputTokens: 1024,
+    maxOutputTokens: 4096,
   });
   if (!reply.ok) return failed(reply);
   const call = reply.toolCalls.find((toolCall) => toolCall.name === 'multiply');
@@ -90,7 +90,7 @@ async function probeStreamUsage(target: ProbeTarget): Promise<ProbeOutcome> {
     messages: [{ role: 'user', content: 'Reply with the word ok.' }],
     thinkingLevel: 'off',
     reasoning: 'providerDefault',
-    maxOutputTokens: 512,
+    maxOutputTokens: 4096,
   });
   if (!reply.ok) return failed(reply);
   if (!reply.text.trim()) return outcome(false, 'empty streamed reply');
@@ -111,7 +111,7 @@ async function probeImageInput(target: ProbeTarget): Promise<ProbeOutcome> {
     ],
     thinkingLevel: 'off',
     reasoning: 'providerDefault',
-    maxOutputTokens: 1024,
+    maxOutputTokens: 4096,
   });
   if (!reply.ok) return failed(reply);
   if (!/red/i.test(reply.text)) return outcome(false, `did not see red: ${reply.text.trim().slice(0, 40)}`);

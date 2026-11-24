@@ -9,19 +9,23 @@ import {
   needsReprobe,
 } from './store';
 
+export type ProbedCapabilities = { conclusive: CapabilityVerdict[]; temporaryFailures: CapabilityVerdict[] };
+
 export async function probeAndSaveCapabilities(
   target: ProbeTarget,
   capabilities: readonly ModelCapability[],
   now = Date.now(),
-): Promise<CapabilityVerdict[]> {
-  const verdicts = await Promise.all(
-    capabilities.map(async (capability): Promise<CapabilityVerdict> => {
+): Promise<ProbedCapabilities> {
+  const probed = await Promise.all(
+    capabilities.map(async (capability) => {
       const outcome = await probeCapability(target, capability);
-      return { ...target, capability, passed: outcome.passed, detail: outcome.detail, probedAt: now };
+      const verdict: CapabilityVerdict = { ...target, capability, passed: outcome.passed, detail: outcome.detail, probedAt: now };
+      return { verdict, conclusive: outcome.conclusive };
     }),
   );
-  await activeModelCapabilityStore().save(verdicts);
-  return verdicts;
+  const conclusive = probed.filter((result) => result.conclusive).map((result) => result.verdict);
+  await activeModelCapabilityStore().save(conclusive);
+  return { conclusive, temporaryFailures: probed.filter((result) => !result.conclusive).map((result) => result.verdict) };
 }
 
 export type RouteKindVerification = {
@@ -42,7 +46,8 @@ export async function verifyModelForRouteKind(
     ]),
   );
   const stale = required.filter((capability) => needsReprobe(known.get(capability), now));
-  for (const verdict of await probeAndSaveCapabilities(target, stale, now)) known.set(verdict.capability, verdict);
+  const probed = await probeAndSaveCapabilities(target, stale, now);
+  for (const verdict of [...probed.conclusive, ...probed.temporaryFailures]) known.set(verdict.capability, verdict);
   const failed = required
     .map((capability) => ({ capability, verdict: known.get(capability) }))
     .filter(({ verdict }) => !verdict?.passed || !isVerdictFresh(verdict, now))

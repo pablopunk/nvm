@@ -102,3 +102,18 @@ test('image input passes when the model names the red test image', async () => {
   answerWith(() => streamOf([text('I cannot see images.'), usage(5)]));
   assert.equal((await probeCapability(target, 'image_input')).passed, false);
 });
+
+test('overloaded or unreachable upstreams give an inconclusive outcome', async () => {
+  answerWith(() => Response.json({ error: { message: 'The inference service is overloaded.' } }, { status: 429 }));
+  const overloaded = await probeCapability(target, 'stream_usage');
+  assert.equal(overloaded.passed, false);
+  assert.equal(overloaded.conclusive, false);
+
+  globalThis.fetch = (async () => {
+    throw new TypeError('fetch failed');
+  }) as typeof fetch;
+  assert.equal((await probeCapability(target, 'stream_usage')).conclusive, false);
+
+  answerWith(() => Response.json({ error: { message: 'Unsupported value' } }, { status: 400 }));
+  assert.equal((await probeCapability(target, 'stream_usage')).conclusive, true);
+});
