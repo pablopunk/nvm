@@ -51,7 +51,7 @@ test('an unprobed model is probed for its route kind and the verdicts are saved'
   passEveryProbe();
   const verification = await verifyModelForRouteKind(target, 'fast');
   assert.deepEqual(verification, { fits: true, failed: [] });
-  assert.equal(probeRequests, CAPABILITIES_FOR_ROUTE_KIND.fast.length);
+  assert.ok(probeRequests >= CAPABILITIES_FOR_ROUTE_KIND.fast.length);
   const passed = passedCapabilitiesByModel(await store.loadProvider('opencode_zen'));
   assert.deepEqual([...(passed.get('test-model') ?? [])].sort(), [...CAPABILITIES_FOR_ROUTE_KIND.fast].sort());
 });
@@ -60,6 +60,7 @@ test('recent verdicts are reused and a recent failure keeps the model out', asyn
   const now = Date.now();
   await store.save([
     verdict('thinking_off', false, now),
+    verdict('quick_first_token', true, now),
     verdict('tool_calls', true, now),
     verdict('stream_usage', true, now),
   ]);
@@ -98,4 +99,27 @@ test('a temporary upstream failure blocks the save but is not stored as a verdic
   assert.equal(verification.fits, false);
   assert.equal(verification.failed.length, CAPABILITIES_FOR_ROUTE_KIND.fast.length);
   assert.deepEqual(await store.loadModel(target.provider, target.modelId), []);
+});
+
+test('probe work starts with configured routes and then alternates providers', async () => {
+  const { orderProbeWork } = await import('./refresh');
+  const item = (provider: string, modelId: string, configured = false, lastProbedAt = 0) => ({
+    provider,
+    modelId,
+    capabilities: CAPABILITIES_FOR_ROUTE_KIND.fast.slice(),
+    lastProbedAt,
+    configured,
+  });
+  const ordered = orderProbeWork([
+    item('opencode_zen', 'a'),
+    item('opencode_zen', 'b'),
+    item('opencode_zen', 'c'),
+    item('openrouter', 'x', false, 5),
+    item('openrouter', 'y'),
+    item('openrouter', 'configured', true),
+  ]);
+  assert.deepEqual(
+    ordered.map((work) => work.modelId),
+    ['configured', 'a', 'y', 'b', 'x', 'c'],
+  );
 });

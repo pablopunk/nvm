@@ -103,3 +103,18 @@ test('the upstream API follows the SDK the catalog declares for each model', asy
   assert.equal(await selectApiForModel('openai', 'new-direct-model'), 'openai-responses');
   assert.equal(await selectApiForModel('openrouter', 'vendor/new-model'), 'openai-completions');
 });
+
+test('fast routes only offer models whose output costs at most $2 per million tokens', async () => {
+  await mockCatalog({
+    openrouter: {
+      models: {
+        'vendor/cheap': { id: 'vendor/cheap', reasoning: true, ...toolAndImageModel, cost: { input: 0.1, output: 2 } },
+        'vendor/premium': { id: 'vendor/premium', reasoning: true, ...toolAndImageModel, cost: { input: 5, output: 25 } },
+      },
+    },
+  });
+  const fast = await listModelsForRouteKind('openrouter', 'fast');
+  assert.ok(fast.includes('vendor/cheap'));
+  assert.ok(!fast.includes('vendor/premium'));
+  assert.ok((await listModelsForRouteKind('openrouter', 'smart')).includes('vendor/premium'));
+});

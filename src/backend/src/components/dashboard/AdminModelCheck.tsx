@@ -5,9 +5,18 @@ import type { CapabilityRefreshReport } from '../../lib/model-capabilities/refre
 import { Button } from '../ui/button';
 import { ADMIN_MODEL_CONFIG_URL } from './use-admin-route-save';
 
-function reportMessage(report: CapabilityRefreshReport) {
-  const checked = `Checked ${report.probedModels} models`;
-  return report.remaining > 0 ? `${checked}, ${report.remaining} left` : `${checked}, all up to date`;
+const MAX_CHECK_ROUNDS = 40;
+
+function progressMessage(checked: number, remaining: number) {
+  return remaining > 0 ? `Checked ${checked} models, ${remaining} left…` : `Checked ${checked} models, all up to date`;
+}
+
+function runCheckRound() {
+  return adminMutation<CapabilityRefreshReport>('/api/admin/model-capabilities', 'POST', {});
+}
+
+function refreshModelLists() {
+  return dashboardQueryClient().invalidateQueries({ queryKey: [ADMIN_MODEL_CONFIG_URL] });
 }
 
 export function AdminModelCheck() {
@@ -17,13 +26,19 @@ export function AdminModelCheck() {
   async function checkModels() {
     setChecking(true);
     setMessage('Checking…');
+    let checked = 0;
     try {
-      setMessage(reportMessage(await adminMutation<CapabilityRefreshReport>('/api/admin/model-capabilities', 'POST', {})));
+      for (let round = 0; round < MAX_CHECK_ROUNDS; round += 1) {
+        const report = await runCheckRound();
+        checked += report.probedModels;
+        setMessage(progressMessage(checked, report.remaining));
+        await refreshModelLists();
+        if (report.remaining === 0 || report.probedModels === 0) break;
+      }
     } catch (error) {
-      setMessage(`Check failed: ${error instanceof Error ? error.message : 'unknown error'}`);
+      setMessage(`Check stopped after ${checked} models: ${error instanceof Error ? error.message : 'unknown error'}`);
     } finally {
       setChecking(false);
-      void dashboardQueryClient().invalidateQueries({ queryKey: [ADMIN_MODEL_CONFIG_URL] });
     }
   }
 

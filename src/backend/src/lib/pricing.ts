@@ -378,13 +378,19 @@ function supportsSmartTierFeatures(model: ModelsDevModel): boolean {
   return Boolean(model.reasoning) && (model.modalities?.input ?? []).includes('image');
 }
 
+export const FAST_MAX_OUTPUT_USD_PER_MTOK = 2;
+
+function isCheapEnoughForFast(model: ModelsDevModel): boolean {
+  return (model.cost?.output ?? Number.POSITIVE_INFINITY) <= FAST_MAX_OUTPUT_USD_PER_MTOK;
+}
+
 function fitsRouteKind(
   modelId: string,
   model: ModelsDevModel,
   kind: RouteKind,
 ): boolean {
   if (model.id !== modelId || !supportsEveryTierFeature(model)) return false;
-  return kind === 'fast' || supportsSmartTierFeatures(model);
+  return kind === 'fast' ? isCheapEnoughForFast(model) : supportsSmartTierFeatures(model);
 }
 
 export async function modelFitsRouteKind(

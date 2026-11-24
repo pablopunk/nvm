@@ -24,6 +24,7 @@ export type ProbeReply =
       promptTokens: number;
       completionTokens: number;
       toolCalls: Array<{ name: string; arguments: string }>;
+      firstTokenMs: number | null;
     };
 
 type StreamedReply = Extract<ProbeReply, { ok: true }>;
@@ -37,6 +38,7 @@ function emptyStreamedReply(): StreamedReply {
     promptTokens: 0,
     completionTokens: 0,
     toolCalls: [],
+    firstTokenMs: null,
   };
 }
 
@@ -63,19 +65,35 @@ function readStreamEvent(reply: StreamedReply, event: any) {
   }
 }
 
-function parseServerSentEvents(body: string): StreamedReply {
-  const reply = emptyStreamedReply();
-  for (const line of body.split('\n')) {
-    const trimmed = line.trim();
-    if (!trimmed.startsWith('data:')) continue;
-    const payload = trimmed.slice(5).trim();
-    if (!payload || payload === '[DONE]') continue;
-    try {
-      readStreamEvent(reply, JSON.parse(payload));
-    } catch {
-      // A malformed event cannot prove a capability; the reply is judged on what parsed.
-    }
+function hasOutput(reply: StreamedReply): boolean {
+  return reply.text.length > 0 || reply.reasoningCharacters > 0 || reply.toolCalls.length > 0;
+}
+
+function readServerSentEventLine(reply: StreamedReply, line: string) {
+  const trimmed = line.trim();
+  if (!trimmed.startsWith('data:')) return;
+  const payload = trimmed.slice(5).trim();
+  if (!payload || payload === '[DONE]') return;
+  try {
+    readStreamEvent(reply, JSON.parse(payload));
+  } catch {
+    // A malformed event cannot prove a capability; the reply is judged on what parsed.
   }
+}
+
+async function readServerSentEvents(body: ReadableStream<Uint8Array>, startedAt: number): Promise<StreamedReply> {
+  const reply = emptyStreamedReply();
+  const decoder = new TextDecoder();
+  let pending = '';
+  const reader = body.getReader();
+  for (let chunk = await reader.read(); !chunk.done; chunk = await reader.read()) {
+    pending += decoder.decode(chunk.value, { stream: true });
+    const lines = pending.split('\n');
+    pending = lines.pop() ?? '';
+    for (const line of lines) readServerSentEventLine(reply, line);
+    if (reply.firstTokenMs === null && hasOutput(reply)) reply.firstTokenMs = Date.now() - startedAt;
+  }
+  readServerSentEventLine(reply, pending + decoder.decode());
   return reply;
 }
 
@@ -108,6 +126,7 @@ export async function sendProbe(target: ProbeTarget, request: ProbeRequest): Pro
     request.maxOutputTokens,
     request.reasoning,
   );
+  const startedAt = Date.now();
   try {
     const response = await fetch(`${baseUrl}/chat/completions`, {
       method: 'POST',
@@ -115,10 +134,14 @@ export async function sendProbe(target: ProbeTarget, request: ProbeRequest): Pro
       body,
       signal: AbortSignal.timeout(PROBE_TIMEOUT_MS),
     });
-    const text = await response.text();
     if (!response.ok)
-      return { ok: false, detail: errorDetail(response.status, text), temporary: isTemporaryStatus(response.status) };
-    return parseServerSentEvents(text);
+      return {
+        ok: false,
+        detail: errorDetail(response.status, await response.text()),
+        temporary: isTemporaryStatus(response.status),
+      };
+    if (!response.body) return { ok: false, detail: 'empty response body', temporary: true };
+    return await readServerSentEvents(response.body, startedAt);
   } catch (error) {
     return {
       ok: false,
