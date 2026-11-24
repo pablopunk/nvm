@@ -1,3 +1,4 @@
+import type { APIContext, MiddlewareNext } from 'astro';
 import { defineMiddleware } from 'astro:middleware';
 import { waitUntil } from '@vercel/functions';
 import { flushLogs } from './lib/log';
@@ -9,6 +10,7 @@ import {
   flushErrorTracking,
   runWithRequestContext,
 } from './lib/error-tracking';
+import { sendRefreshedSessionCookie } from './lib/session-refresh';
 
 // Axiom and PostHog batch events in memory. Keep the function alive after the
 // response so each request's logs and analytics are delivered without adding
@@ -17,7 +19,11 @@ function flushTelemetryAfterResponse() {
   waitUntil(Promise.all([flushLogs(), flushErrorTracking()]));
 }
 
-export const onRequest = defineMiddleware(async (context, next) => {
+export const onRequest = defineMiddleware(function refreshSessionThenHandle(context, next) {
+  return sendRefreshedSessionCookie(context.url.protocol === 'https:', () => handleRequest(context, next));
+});
+
+async function handleRequest(context: APIContext, next: MiddlewareNext): Promise<Response> {
   if (!context.url.pathname.startsWith('/api/')) {
     try { return await next(); } finally { flushTelemetryAfterResponse(); }
   }
@@ -52,4 +58,4 @@ export const onRequest = defineMiddleware(async (context, next) => {
       flushTelemetryAfterResponse();
     }
   });
-});
+}

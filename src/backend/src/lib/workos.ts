@@ -1,10 +1,13 @@
-import { WorkOS } from '@workos-inc/node';
+import { AuthenticateWithSessionCookieFailureReason, WorkOS } from '@workos-inc/node';
 import { SignJWT, jwtVerify } from 'jose';
 import { env } from './env';
+import { SESSION_COOKIE } from './session-cookie';
+import { refreshedSessionInThisRequest, rememberRefreshedSession } from './session-refresh';
+
+export { SESSION_COOKIE };
 
 export const WORKOS_CLIENT_ID = env('WORKOS_CLIENT_ID') as string;
 export const COOKIE_PASSWORD = env('WORKOS_COOKIE_PASSWORD') as string;
-export const SESSION_COOKIE = 'nvm_session';
 export const PREVIEW_SESSION_COOKIE = 'nvm_preview_session';
 
 export class WorkosConfigurationError extends Error {
@@ -79,17 +82,25 @@ export async function getSessionFromCookies(cookieHeader: string | null) {
     return getPreviewSession(decodeURIComponent(preview.slice(PREVIEW_SESSION_COOKIE.length + 1)));
   }
   if (preview || !production) return null;
-  const match = production;
-  if (!match) return null;
-  const sealed = decodeURIComponent(match.slice(SESSION_COOKIE.length + 1));
+  const sealed = refreshedSessionInThisRequest()
+    ?? decodeURIComponent(production.slice(SESSION_COOKIE.length + 1));
   try {
-    const session = workosClient().userManagement.loadSealedSession({
-      sessionData: sealed,
-      cookiePassword: COOKIE_PASSWORD,
-    });
-    const auth = await session.authenticate();
-    return auth.authenticated ? auth : null;
+    return await authenticateOrRefreshSealedSession(sealed);
   } catch {
     return null;
   }
+}
+
+async function authenticateOrRefreshSealedSession(sealed: string) {
+  const session = workosClient().userManagement.loadSealedSession({
+    sessionData: sealed,
+    cookiePassword: COOKIE_PASSWORD,
+  });
+  const auth = await session.authenticate();
+  if (auth.authenticated) return auth;
+  if (auth.reason !== AuthenticateWithSessionCookieFailureReason.INVALID_JWT) return null;
+  const refreshed = await session.refresh({ cookiePassword: COOKIE_PASSWORD });
+  if (!refreshed.authenticated || !refreshed.sealedSession) return null;
+  rememberRefreshedSession(refreshed.sealedSession);
+  return refreshed;
 }
