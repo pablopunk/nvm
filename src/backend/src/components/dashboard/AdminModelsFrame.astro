@@ -1,9 +1,13 @@
 ---
 import { Card } from '../ui/card';
+import { AdminModelCheck } from './AdminModelCheck';
 
 ---
 <Card className="section admin-panel admin-model-config"><section>
-  <h2>Models</h2>
-  <p class="muted">From the models.dev catalog: priced models with image input and function tools. Smart also needs reasoning; Fast runs with thinking off. Dictation uses audio transcription.</p>
+  <div class="flex items-start justify-between gap-4">
+    <h2>Models</h2>
+    <AdminModelCheck client:only="react" />
+  </div>
+  <p class="muted">Each slot lists only models that passed a live check. Fast answers with thinking off, calls tools and streams usage; Smart also reasons and reads images. Dictation uses audio transcription.</p>
   <div class="model-routes"><slot /></div>
 </section></Card>
