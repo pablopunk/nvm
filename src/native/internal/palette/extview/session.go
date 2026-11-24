@@ -130,6 +130,13 @@ func (s *Session) Palette() *palette.View {
 		page.OnDataChanged = s.refreshAfterMutation
 	}
 	page.Subtitle = s.view.Subtitle
+	s.attachViewMenu(page)
+	s.palettePage = page
+	return page
+}
+
+// attachViewMenu gives the page the view's Command-K menu and footer hints, on palette and media pages alike.
+func (s *Session) attachViewMenu(page *palette.View) {
 	// The chat renderer already merges the extension's actions with host-owned chat controls.
 	if s.hasPageActions() && s.view.Kind != api.ViewChat {
 		page.Actions = s.pageActions
@@ -141,8 +148,6 @@ func (s *Session) Palette() *palette.View {
 		page.Hint = footerHintsText(s.view.FooterHints, s.hyperKey())
 		page.HintReplacesActions = true
 	}
-	s.palettePage = page
-	return page
 }
 
 // hasPageActions is true when the view's own menu lists an action, so its shortcuts run from any page of the view.
