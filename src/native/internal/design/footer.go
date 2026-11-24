@@ -2,18 +2,8 @@ package design
 
 import "github.com/egoist/mygo/ui"
 
-// FooterClearance keeps fixed controls clear of the floating footer.
-const FooterClearance = 48
-
-// Footer geometry. Every footer bar is a pill of one height; the buttons inside sit one inset in from its edge, and
-// the key caps inside a button sit one inset in from that, so each curve is concentric with the one around it.
-const (
-	FooterPillHeight   = 30
-	footerInset        = 3
-	footerButtonHeight = FooterPillHeight - 2*footerInset
-	footerKeyInset     = 4
-	footerKeyHeight    = footerButtonHeight - 2*footerKeyInset
-)
+// FooterClearance keeps fixed controls clear of the floating footer: a control and the inset on each side of it.
+const FooterClearance = Inset + ControlHeight + Inset
 
 // KeyHint is an action named with the key that runs it, as the footer shows it.
 type KeyHint struct {
@@ -39,75 +29,90 @@ type FooterData struct {
 	Hint      string
 }
 
-// Footer draws the status bar of a view along the bottom edge of the pane.
+// Footer draws the status bar of a view along the bottom edge of the pane: the context group on the left (where the user
+// is and the view's value picker) and the actions group on the right (Actions, then the action Enter runs, last).
 func Footer(c *ui.Context, d FooterData) {
 	k := Tokens(c)
-	ui.Row(c).Absolute().Bottom(8).Left(8).Right(8).Gap(6).AlignItems(ui.Center).Children(func() {
-		if !d.HideName {
-			footerPill(c, k, 12).Gap(6).Children(func() {
-				ui.Icon(c, Icon("zap")).FontSize(13).TextColor(k.Muted)
-				ui.Text(c, d.Name).FontSize(12).TextColor(k.Muted).SingleLine()
+	ui.Row(c).Absolute().Bottom(Inset).Left(Inset).Right(Inset).Gap(Inset).AlignItems(ui.Center).Children(func() {
+		footerContext(c, k, d)
+		ui.Box(c).Grow(1)
+		footerActions(c, d)
+	})
+}
+
+// footerContext is the left group: the view's name and its control in one pill. It draws nothing when it has neither.
+func footerContext(c *ui.Context, k *TokenSet, d FooterData) {
+	showName := !d.HideName && d.Name != ""
+	if !showName && d.Control == nil {
+		return
+	}
+	footerGroup(c).Children(func() {
+		if showName {
+			ui.Row(c).Height(InnerHeight).Gap(6).Padding(0, ControlPad-InnerInset).AlignItems(ui.Center).Children(func() {
+				ui.Icon(c, Icon("zap")).FontSize(13).TextColor(k.Secondary)
+				ui.Text(c, d.Name).FontSize(12).TextColor(k.Secondary).SingleLine()
 			})
 		}
 		if d.Control != nil {
-			footerPill(c, k, footerInset).Children(func() {
-				d.Control(c)
-			})
-		}
-		ui.Box(c).Grow(1)
-		if d.Primary != nil || d.Secondary != nil {
-			footerPill(c, k, footerInset).Gap(2).Children(func() {
-				if d.Primary != nil {
-					footerButton(c, d.Primary, d.PrimaryAction)
-				}
-				if d.Secondary != nil {
-					footerButton(c, d.Secondary, d.SecondaryAction)
-				}
-			})
-		} else if d.Hint != "" {
-			footerPill(c, k, 12).Children(func() {
-				ui.Text(c, d.Hint).FontSize(12).TextColor(k.Muted).SingleLine()
-			})
+			d.Control(c)
 		}
 	})
 }
 
-// footerPill is one footer bar: a fully rounded plate with the look of the palette's active row, so the bars read as
-// part of the list and not as a plain strip. Its edge is a border that takes layout space, so the padding gives it up.
-func footerPill(c *ui.Context, k *TokenSet, horizontal float32) ui.Element {
-	e := ui.Row(c).Height(FooterPillHeight).AlignItems(ui.Center).Radius(FooterPillHeight/2).
-		Padding(0, horizontal-selectionEdgeWidth)
-	return SelectedFill(e, k, false)
+// footerActions is the right group: the secondary action, then the primary one last, where Enter's action belongs. With
+// neither, the view's hint takes the group.
+func footerActions(c *ui.Context, d FooterData) {
+	if d.Primary == nil && d.Secondary == nil {
+		if d.Hint != "" {
+			k := Tokens(c)
+			footerGroup(c).Children(func() {
+				ui.Text(c, d.Hint).FontSize(12).TextColor(k.Secondary).Padding(0, ControlPad-InnerInset).SingleLine()
+			})
+		}
+		return
+	}
+	footerGroup(c).Children(func() {
+		if d.Secondary != nil {
+			footerButton(c, d.Secondary, d.SecondaryAction)
+		}
+		if d.Primary != nil {
+			footerButton(c, d.Primary, d.PrimaryAction)
+		}
+	})
 }
 
-// footerButton draws a footer hint as a pill button, title then key cap, that lights up under the pointer and runs
-// action on a click. With no action it keeps the same shape without the hover.
+// footerGroup is one footer pill in the lens glass. Its edge is a border that takes layout space, so the padding gives
+// it up and the nested pills sit one inner inset in from the curve.
+func footerGroup(c *ui.Context) ui.Element {
+	e := ui.Row(c).Height(ControlHeight).Radius(ControlRadius).Padding(0, InnerInset-1).Gap(2).AlignItems(ui.Center)
+	return Lens(e, Tokens(c))
+}
+
+// footerButton draws a footer hint as a nested pill, title then key cap, that lights up under the pointer and runs
+// action on a click. The emphasized hint wears gold glass. With no action it keeps the same shape without the hover.
 func footerButton(c *ui.Context, hint *KeyHint, action func()) {
 	k := Tokens(c)
 	right := float32(10)
 	if hint.Key != "" {
-		right = footerKeyInset
+		right = InnerInset
 	}
-	button := ui.ButtonBase(c).Height(footerButtonHeight).Radius(footerButtonHeight/2).Padding(0, right, 0, 10)
+	button := ui.ButtonBase(c).Height(InnerHeight).Radius(InnerRadius).Padding(0, right, 0, 10)
 	hovered := action != nil && button.Hovered()
+	color := k.Strong
 	if hint.Emphasized {
-		Glossy(button, k.AccentFill, footerButtonHeight/2, 0)
-		// Glossy always draws the edge, so changing its color on hover never shifts the layout.
+		GoldGlass(button, k)
+		color = k.GoldGlassText
 		if hovered {
 			button.Border(1, k.Accent)
 		}
 	} else if hovered {
-		button.Background(k.Selected)
+		button.Background(k.Fill)
 	}
 	button.Children(func() {
-		ui.Row(c).Height(footerButtonHeight).Gap(8).AlignItems(ui.Center).Children(func() {
-			color := k.Strong
-			if hint.Emphasized {
-				color = k.AccentContrast
-			}
+		ui.Row(c).Height(InnerHeight).Gap(8).AlignItems(ui.Center).Children(func() {
 			ui.Text(c, hint.Title).FontSize(12).FontWeight(500).TextColor(color).SingleLine()
 			if hint.Key != "" {
-				footerKeycap(c, hint.Key)
+				footerKeycap(c, hint.Key, color)
 			}
 		})
 	})
