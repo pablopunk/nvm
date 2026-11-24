@@ -28,8 +28,11 @@ type EngineConfig struct {
 	Codec      platform.OpusCodec
 	Account    Account
 	Recordings *recordings.Store
-	Retry      RetryPolicy
-	Muter      *audiomute.Muter
+	// Recent keeps the audio of the last few transcribed dictations, for replaying one whose text came out wrong; nil
+	// deletes the audio once the text is in.
+	Recent *recordings.Store
+	Retry  RetryPolicy
+	Muter  *audiomute.Muter
 	// Speech and Model run dictations on the device; nil leaves only the cloud.
 	Speech     platform.SpeechRecognizer
 	Model      *devicemodel.Manager
@@ -64,6 +67,9 @@ func NewEngine(cfg EngineConfig) *Engine {
 	}
 	if cfg.Recordings != nil {
 		serviceConfig.Recorder = cfg.Recordings
+		if cfg.Recent != nil {
+			serviceConfig.Recorder = recentKeeper{Store: cfg.Recordings, recent: cfg.Recent}
+		}
 	}
 	engine.service = NewService(serviceConfig)
 	if cfg.Speech != nil && cfg.Model != nil {
