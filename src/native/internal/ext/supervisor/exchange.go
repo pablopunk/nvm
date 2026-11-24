@@ -110,6 +110,11 @@ func (r *Runtime) childForCall(ctx, lifetime context.Context, method string) (*c
 		if r.state == StateFailed && !r.cfg.Clock.Now().Before(r.retryAt) {
 			r.startLocked()
 		}
+		if r.isSearchDuringRestartAfterFailureLocked(method) {
+			reason := notRunningReason(StateFailed, r.reason)
+			r.mu.Unlock()
+			return nil, Budget{}, unavailable(reason)
+		}
 		if r.state != StateStarting || !waitStarting {
 			reason := notRunningReason(r.state, r.reason)
 			r.mu.Unlock()
@@ -354,4 +359,11 @@ func (r *Runtime) cancelViewChild(child *childProcess, err error) error {
 	r.mu.Unlock()
 	_ = child.proc.Kill()
 	return err
+}
+
+// isSearchDuringRestartAfterFailureLocked is true for a search while the child starts again after a failure. The
+// search answers at once with that failure: its budget is shorter than a start, so waiting would only time out and
+// hide the reason. A quiet restart after a cancelled search has no failure and still waits.
+func (r *Runtime) isSearchDuringRestartAfterFailureLocked(method string) bool {
+	return method == protocol.MethodSearch && r.state == StateStarting && !r.restartingSearch && r.reason != ""
 }
