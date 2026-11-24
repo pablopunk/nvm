@@ -192,3 +192,21 @@ func TestALeftoverTemporaryFileIsNotASegment(t *testing.T) {
 		t.Fatalf("Load = %q, %v; want only the complete segment", got, err)
 	}
 }
+
+func TestKeepNewestLeavesOnlyTheLatestRecordings(t *testing.T) {
+	files := fake.NewFS()
+	clock := time.Unix(1_700_000_000, 0)
+	store := New(files, "/recent", func() time.Time { clock = clock.Add(time.Minute); return clock })
+	for _, id := range []string{"dictation-a", "dictation-b", "dictation-c"} {
+		if err := store.Save(id, [][]byte{{1}}); err != nil {
+			t.Fatal(err)
+		}
+	}
+	if err := store.KeepNewest(2); err != nil {
+		t.Fatal(err)
+	}
+	saved, _ := store.List()
+	if len(saved) != 2 || saved[0].ID != "dictation-c" || saved[1].ID != "dictation-b" {
+		t.Fatalf("kept %+v; want the two newest", saved)
+	}
+}

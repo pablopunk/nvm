@@ -260,3 +260,17 @@ func validID(id string) error {
 	}
 	return nil
 }
+
+// KeepNewest removes every recording but the newest keep, so a folder of recent dictations stays small.
+func (s *Store) KeepNewest(keep int) error {
+	saved, err := s.List()
+	if err != nil {
+		return err
+	}
+	for _, recording := range saved[min(keep, len(saved)):] {
+		if err := s.Remove(recording.ID); err != nil {
+			return err
+		}
+	}
+	return nil
+}
