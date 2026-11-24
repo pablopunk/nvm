@@ -1,5 +1,5 @@
 import type { ChangeEvent, ReactNode } from 'react';
-import type { AdminModelConfig, AdminSingleRoute, AdminTextRoute } from '../../lib/admin-model-config';
+import type { AdminModelConfig, AdminRoutePricing, AdminSingleRoute, AdminTextRoute } from '../../lib/admin-model-config';
 import { modelProviderMayTrainOnPrompts, PROVIDER_TRAINS_ON_PROMPTS_LABEL } from '../../lib/model-data-use';
 import { useDashboardQuery } from '../../lib/use-dashboard-query';
 import { ConsoleCombobox } from '../ConsoleCombobox';
@@ -10,8 +10,6 @@ import { DashboardQueryError } from './DashboardQueryError';
 import { ADMIN_MODEL_CONFIG_URL, useAdminRouteSave } from './use-admin-route-save';
 
 const MODEL_CONFIG_REFRESH_MS = 300_000;
-
-type PrimaryPricing = { inputUsdPerMtok: number | null; outputUsdPerMtok: number | null };
 
 const usd = new Intl.NumberFormat('en-US', { style: 'currency', currency: 'USD', minimumFractionDigits: 2, maximumFractionDigits: 2 });
 
@@ -28,10 +26,7 @@ function tierForSlot(slot: string): AdminModelTier {
   return slot.startsWith('pro') ? 'pro' : 'free';
 }
 
-function RoutePricing({ slot, modelRef }: { slot: string; modelRef: string }) {
-  const query = useDashboardQuery<{ primaryPricing: PrimaryPricing | null }>(`/api/admin/model-providers?${new URLSearchParams({ slot, modelId: splitModelRef(modelRef).modelId })}`, { refetchInterval: MODEL_CONFIG_REFRESH_MS });
-  if (!query.data) return query.isError ? 'Pricing unknown' : null;
-  const pricing = query.data.primaryPricing;
+function RoutePricing({ pricing }: { pricing: AdminRoutePricing | null }) {
   return pricing ? `Input ${perMillion(pricing.inputUsdPerMtok)} · Output ${perMillion(pricing.outputUsdPerMtok)}` : 'Pricing unknown';
 }
 
@@ -46,13 +41,13 @@ function TextRouteCard({ route, thinkingLevels }: { route: AdminTextRoute; think
   function saveRoute(modelRef: string, thinkingLevel: string) {
     void save(
       { purpose: route.slot, modelRef, thinkingLevel: smart ? thinkingLevel : 'off' },
-      (config) => ({ ...config, textRoutes: config.textRoutes.map((item) => item.slot === route.slot ? { ...item, ref: modelRef, thinkingLevel: thinkingLevel as AdminTextRoute['thinkingLevel'] } : item) }),
+      (config) => ({ ...config, textRoutes: config.textRoutes.map((item) => item.slot === route.slot ? { ...item, ref: modelRef, thinkingLevel: thinkingLevel as AdminTextRoute['thinkingLevel'], pricing: modelRef === item.ref ? item.pricing : null } : item) }),
     );
   }
   function chooseModel(modelRef: string) { saveRoute(modelRef, route.thinkingLevel); }
   function chooseThinking(event: ChangeEvent<HTMLSelectElement>) { if (route.ref) saveRoute(route.ref, event.currentTarget.value); }
   return (
-    <AdminModelRouteCard title={route.title} tier={tierForSlot(route.slot)} status={status} details={<RouteDetails modelRef={route.ref}>{route.ref ? <RoutePricing slot={route.slot} modelRef={route.ref} /> : null}</RouteDetails>}>
+    <AdminModelRouteCard title={route.title} tier={tierForSlot(route.slot)} status={status} details={<RouteDetails modelRef={route.ref}>{route.ref ? <RoutePricing pricing={route.pricing} /> : null}</RouteDetails>}>
       <label className="field">Model<ConsoleCombobox label={`${route.title} model`} value={route.ref ?? ''} options={route.options} disabled={saving} onValueChange={chooseModel} /></label>
       <label className="field">Thinking{smart
         ? <ConsoleSelect className="thinking-select" value={route.thinkingLevel} disabled={saving || !route.ref} onChange={chooseThinking} options={thinkingLevels.map((level) => ({ value: level, label: level }))} />
