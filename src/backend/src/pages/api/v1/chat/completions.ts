@@ -3,9 +3,11 @@ import {
   completeStreamLines,
   parseStreamUsageJson,
   proxyAndBill,
+  type RouteReasoning,
   type StreamUsageAccumulator,
   type UsageTokens,
 } from '../../../../lib/proxy';
+import { chatCompletionsReasoningParameter } from '../../../../lib/upstream';
 
 export const config = { maxDuration: 300 };
 
@@ -17,6 +19,7 @@ function rewriteOpenAiModel(
     thinkingLevel: string;
   },
   maxOutputTokens: number,
+  reasoning: RouteReasoning = 'route',
 ): string {
   if (!bodyText) return bodyText;
   const parsed = JSON.parse(bodyText);
@@ -31,16 +34,13 @@ function rewriteOpenAiModel(
     delete parsed.provider;
     delete parsed.plugins;
     delete parsed.web_search_options;
-    delete parsed.reasoning_effort;
-    parsed.reasoning = {
-      effort: routing.thinkingLevel === 'off' ? 'none' : routing.thinkingLevel,
-    };
   } else if (parsed.max_completion_tokens !== undefined) {
     parsed.max_completion_tokens = maxOutputTokens;
     delete parsed.max_tokens;
   } else {
     parsed.max_tokens = maxOutputTokens;
   }
+  applyRouteThinkingLevel(parsed, routing, reasoning);
   if (parsed.stream === true) {
     parsed.stream_options = {
       ...(parsed.stream_options ?? {}),
@@ -48,6 +48,25 @@ function rewriteOpenAiModel(
     };
   }
   return JSON.stringify(parsed);
+}
+
+function applyRouteThinkingLevel(
+  parsed: Record<string, unknown>,
+  routing: { provider: string; thinkingLevel: string },
+  reasoning: RouteReasoning,
+) {
+  const parameter = chatCompletionsReasoningParameter(routing.provider);
+  if (parameter === 'none') return;
+  delete parsed.reasoning;
+  delete parsed.reasoning_effort;
+  if (reasoning === 'providerDefault') return;
+  if (parameter === 'openrouter-reasoning') {
+    parsed.reasoning = {
+      effort: routing.thinkingLevel === 'off' ? 'none' : routing.thinkingLevel,
+    };
+  } else if (routing.thinkingLevel !== 'off') {
+    parsed.reasoning_effort = routing.thinkingLevel;
+  }
 }
 
 function parseUsageFromOpenAiJson(json: any): UsageTokens | null {

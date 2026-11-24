@@ -4493,15 +4493,111 @@ test('Responses rejects hosted tools before reserving credits', async () => {
   assert.equal(db.insertedValues.length, 0);
 });
 
-test('a stale chat-completions route fails before credit reservation when the catalog routes the model to Responses', async () => {
+async function installOpenCodeChatCompletionsUpstream(forwardedBodies: any[]) {
+  globalThis.fetch = async (input: string | URL | Request, init?: RequestInit) => {
+    const url = String(input instanceof Request ? input.url : input);
+    if (url === 'https://models.dev/api.json') return Response.json(MODELS_DEV_CATALOG);
+    assert.equal(url, 'https://upstream.example/v1/chat/completions');
+    forwardedBodies.push(JSON.parse(String(init?.body)));
+    return Response.json({
+      choices: [{ message: { role: 'assistant', content: 'ok' } }],
+      usage: { prompt_tokens: 2, completion_tokens: 1 },
+    });
+  };
+  await publishPrices();
+}
+
+test('OpenCode serves a Responses-catalog model over Chat Completions', async () => {
   process.env.OPENCODE_API_KEY = 'upstream-key';
   process.env.OPENCODE_BASE_URL = 'https://upstream.example/v1';
-  await installModelsDevFetch();
-  const db = installDb(createFakeDb({ selects: proxySelects({ free: 1_000_000, model: 'gpt-6.1-sol' }) }));
+  const forwardedBodies: any[] = [];
+  await installOpenCodeChatCompletionsUpstream(forwardedBodies);
+  installDb(createFakeDb({ selects: proxySelects({ free: 1_000_000, model: 'gpt-6.1-sol' }) }));
   const response = await postChatCompletion(routeContext(authorizedChatRequest()));
-  assert.equal(response.status, 409);
-  assert.equal((await response.json() as any).error.type, 'model_route_changed');
-  assert.equal(db.insertedValues.length, 0);
+  assert.equal(response.status, 200);
+  assert.equal(forwardedBodies.length, 1);
+  assert.equal(forwardedBodies[0].model, 'gpt-6.1-sol');
+});
+
+test('OpenCode receives the route thinking level as reasoning_effort', async () => {
+  process.env.OPENCODE_API_KEY = 'upstream-key';
+  process.env.OPENCODE_BASE_URL = 'https://upstream.example/v1';
+  const forwardedBodies: any[] = [];
+  await installOpenCodeChatCompletionsUpstream(forwardedBodies);
+  installDb(createFakeDb({ selects: proxySelects({ free: 1_000_000, thinkingLevel: 'high' }) }));
+  const response = await postChatCompletion(
+    routeContext(authorizedChatRequest({ reasoning_effort: 'minimal', messages: [{ role: 'user', content: 'hello' }] })),
+  );
+  assert.equal(response.status, 200);
+  assert.equal(forwardedBodies[0].reasoning_effort, 'high');
+});
+
+test('OpenCode keeps the model default thinking when the route turns thinking off', async () => {
+  process.env.OPENCODE_API_KEY = 'upstream-key';
+  process.env.OPENCODE_BASE_URL = 'https://upstream.example/v1';
+  const forwardedBodies: any[] = [];
+  await installOpenCodeChatCompletionsUpstream(forwardedBodies);
+  installDb(createFakeDb({ selects: proxySelects({ free: 1_000_000, thinkingLevel: 'off' }) }));
+  const response = await postChatCompletion(
+    routeContext(authorizedChatRequest({ reasoning_effort: 'high', messages: [{ role: 'user', content: 'hello' }] })),
+  );
+  assert.equal(response.status, 200);
+  assert.equal(forwardedBodies[0].reasoning_effort, undefined);
+});
+
+test('a thinking level the model refuses is retried once with the model default thinking', async () => {
+  process.env.OPENROUTER_API_KEY = 'openrouter-key';
+  process.env.OPENROUTER_BASE_URL = 'https://openrouter.example/api/v1';
+  installDb(
+    createFakeDb({
+      selects: proxySelects({
+        free: 1_000,
+        model: 'google/gemini-2.5-flash',
+        routeProvider: 'openrouter',
+        thinkingLevel: 'off',
+        providerChainDepth: 3,
+      }),
+    }),
+  );
+  const forwardedBodies: any[] = [];
+  globalThis.fetch = async (input: string | URL | Request, init?: RequestInit) => {
+    const url = String(input instanceof Request ? input.url : input);
+    if (url === 'https://models.dev/api.json')
+      return Response.json(MODELS_DEV_CATALOG);
+    if (openRouterEndpointsModelId(url))
+      return Response.json(openRouterEndpointsBodyFromCost('google/gemini-2.5-flash', { input: 0.3, output: 2.5 }));
+    assert.equal(url, 'https://openrouter.example/api/v1/chat/completions');
+    const body = JSON.parse(String(init?.body));
+    forwardedBodies.push(body);
+    if (body.reasoning)
+      return Response.json(
+        { error: { message: 'Reasoning is mandatory for this endpoint and cannot be disabled.', code: 400 } },
+        { status: 400 },
+      );
+    return Response.json({
+      choices: [{ message: { role: 'assistant', content: 'ok' } }],
+      usage: { prompt_tokens: 2, completion_tokens: 1, cost: 1 },
+    });
+  };
+  await publishPrices(['google/gemini-2.5-flash']);
+  const response = await postChatCompletion(routeContext(authorizedChatRequest()));
+  assert.equal(response.status, 200);
+  assert.equal(forwardedBodies.length, 2);
+  assert.deepEqual(forwardedBodies[0].reasoning, { effort: 'none' });
+  assert.equal(forwardedBodies[1].reasoning, undefined);
+});
+
+test('active model tells the Go desktop to use Chat Completions for any OpenCode model', async () => {
+  await installModelsDevFetch();
+  installDb(createFakeDb({ selects: proxySelects({ model: 'gpt-6.1-sol', routeProvider: 'opencode_zen' }) }));
+  const request = new Request('https://api.nvm.fyi/api/v1/active-model', {
+    headers: { authorization: 'Bearer nvm_pat_test', 'x-nevermind-client': 'desktop', 'x-nevermind-client-version': '2.0.0-go', 'x-nevermind-api-version': '1' },
+  });
+  const response = await getActiveModel(routeContext(request));
+  const body = await response.json() as any;
+  assert.equal(response.status, 200);
+  assert.equal(body.api, 'openai-completions');
+  assert.match(body.baseUrl, /\/api\/v1$/);
 });
 
 test('Responses failed stream without output releases its reservation', async () => {

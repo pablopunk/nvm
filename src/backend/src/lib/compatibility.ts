@@ -87,6 +87,13 @@ export function desktopClientFromRequest(request: Request): DesktopClient {
   };
 }
 
+const FIRST_CHAT_COMPLETIONS_ONLY_DESKTOP_MAJOR = 2;
+
+export function clientSpeaksOnlyChatCompletions(client: DesktopClient): boolean {
+  const major = Number.parseInt(client.version?.split('.')[0] ?? '', 10);
+  return client.name === 'desktop' && major >= FIRST_CHAT_COMPLETIONS_ONLY_DESKTOP_MAJOR;
+}
+
 export function compatibilityManifestForRequest(request: Request, context: CompatibilityContext = {}): CompatibilityManifest {
   const client = desktopClientFromRequest(request);
   const unsupportedReason = unsupportedClientReason(client);
