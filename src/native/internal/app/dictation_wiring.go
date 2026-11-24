@@ -91,6 +91,7 @@ func (p *App) newDictationEngine() *dict.Engine {
 		Recordings: p.dictationRecordingStore(),
 		Recent:     p.dictationRecentStore(),
 		Muter:      p.dictationMuter(),
+		Clock:      p.ports.Clock,
 		Speech:     p.ports.Speech,
 		Model:      p.dictationDeviceModel(),
 		Background: supervisedDictation,

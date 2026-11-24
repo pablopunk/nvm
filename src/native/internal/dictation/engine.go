@@ -33,6 +33,8 @@ type EngineConfig struct {
 	Recent *recordings.Store
 	Retry  RetryPolicy
 	Muter  *audiomute.Muter
+	// Clock times each capture against its audio; nil skips that check.
+	Clock platform.Clock
 	// Speech and Model run dictations on the device; nil leaves only the cloud.
 	Speech     platform.SpeechRecognizer
 	Model      *devicemodel.Manager
@@ -61,6 +63,7 @@ func NewEngine(cfg EngineConfig) *Engine {
 		Background: cfg.Background,
 		Warn:       cfg.Warn,
 		Retry:      cfg.Retry,
+		Clock:      cfg.Clock,
 	}
 	if cfg.Account != nil {
 		serviceConfig.Transcriber = cfg.Account.Transcriber()

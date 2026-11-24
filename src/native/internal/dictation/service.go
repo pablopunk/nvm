@@ -56,6 +56,8 @@ type Config struct {
 	// Retry bounds the automatic retries of every step that fails for a passing reason: opening the microphone, the
 	// readiness wait, reopening a stream that failed mid-recording and each transcription. The zero value is the default.
 	Retry RetryPolicy
+	// Clock times the capture, to log a dictation whose audio is shorter than the time it was held; nil skips the check.
+	Clock platform.Clock
 	// ReadyTimeout bounds the readiness wait; zero means defaultReadyTimeout.
 	ReadyTimeout time.Duration
 }
@@ -172,7 +174,9 @@ func (s *Service) StartOn(transcriber Transcriber, deviceID string, sink func(fl
 		op.live = newLiveTranscription(s, op)
 	}
 	s.cur = op
-	op.capturing = time.Now()
+	if s.cfg.Clock != nil {
+		op.capturing = s.cfg.Clock.Now()
+	}
 	safego.Go("dictation.capture", func(context.Context) { op.capture() })
 	s.mu.Unlock()
 	return s.awaitReady(op)
@@ -367,7 +371,10 @@ const captureGapLimit = time.Second
 // checkCaptureCovered logs a dictation whose audio is shorter than the time between its start and Stop, which means
 // the microphone stopped delivering partway and the words after that were never heard.
 func (s *Service) checkCaptureCovered(op *operation) {
-	held := time.Since(op.capturing)
+	if s.cfg.Clock == nil {
+		return
+	}
+	held := s.cfg.Clock.Now().Sub(op.capturing)
 	audio := time.Duration(op.frames*FrameMillis) * time.Millisecond
 	if held-audio > captureGapLimit && s.cfg.Warn != nil {
 		s.cfg.Warn("dictation.capture-gap", map[string]any{"heldMs": held.Milliseconds(), "audioMs": audio.Milliseconds(), "id": op.id})
