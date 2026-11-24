@@ -56,6 +56,8 @@ type Config struct {
 	// Retry bounds the automatic retries of every step that fails for a passing reason: opening the microphone, the
 	// readiness wait, reopening a stream that failed mid-recording and each transcription. The zero value is the default.
 	Retry RetryPolicy
+	// Clock times the capture, to log a dictation whose audio is shorter than the time it was held; nil skips the check.
+	Clock platform.Clock
 	// ReadyTimeout bounds the readiness wait; zero means defaultReadyTimeout.
 	ReadyTimeout time.Duration
 }
@@ -172,6 +174,9 @@ func (s *Service) StartOn(transcriber Transcriber, deviceID string, sink func(fl
 		op.live = newLiveTranscription(s, op)
 	}
 	s.cur = op
+	if s.cfg.Clock != nil {
+		op.capturing = s.cfg.Clock.Now()
+	}
 	safego.Go("dictation.capture", func(context.Context) { op.capture() })
 	s.mu.Unlock()
 	return s.awaitReady(op)
@@ -231,6 +236,7 @@ func (s *Service) Stop() (string, error) {
 
 	op.endCapture()
 	<-op.done
+	s.checkCaptureCovered(op)
 	text, err := s.finish(op)
 	if err != nil && !errors.Is(err, ErrCancelled) || !op.hasSpeechAudio() {
 		s.releasePreparation(op, false)
@@ -357,4 +363,20 @@ func (s *Service) transcribe(op *operation) (string, error) {
 	}
 	passes := wholeRecordingPasses(op.track(), op.segments)
 	return transcribePasses(op.ctx, op.transcriber, s.cfg.Retry, op.id, op.preparedOK, passes, s.retryWarning("dictation.transcribe-retry"))
+}
+
+// captureGapLimit is how much shorter than the time the user held a dictation its audio may be before the gap is logged.
+const captureGapLimit = time.Second
+
+// checkCaptureCovered logs a dictation whose audio is shorter than the time between its start and Stop, which means
+// the microphone stopped delivering partway and the words after that were never heard.
+func (s *Service) checkCaptureCovered(op *operation) {
+	if s.cfg.Clock == nil {
+		return
+	}
+	held := s.cfg.Clock.Now().Sub(op.capturing)
+	audio := time.Duration(op.frames*FrameMillis) * time.Millisecond
+	if held-audio > captureGapLimit && s.cfg.Warn != nil {
+		s.cfg.Warn("dictation.capture-gap", map[string]any{"heldMs": held.Milliseconds(), "audioMs": audio.Milliseconds(), "id": op.id})
+	}
 }

@@ -120,3 +120,18 @@ func voice(seconds float64) []int16 {
 	}
 	return samples
 }
+
+func TestALivePieceWithoutAPauseIsCutAtHalfAMinute(t *testing.T) {
+	h := newHarness(t)
+	h.transcriber.bySegment = map[int]string{}
+	h.mic.Queue(voice(40)...)
+	if err := h.service.Start("default"); err != nil {
+		t.Fatalf("Start: %v", err)
+	}
+	if _, err := h.service.Stop(); err != nil {
+		t.Fatalf("Stop: %v", err)
+	}
+	if sent := h.transcriber.ids(); len(sent) != 2 {
+		t.Fatalf("sent %d pieces; want 40 s of unbroken speech cut at 30 s", len(sent))
+	}
+}

@@ -89,7 +89,9 @@ func (p *App) newDictationEngine() *dict.Engine {
 		Codec:      p.ports.Opus,
 		Account:    appDictationAccount{app: p},
 		Recordings: p.dictationRecordingStore(),
+		Recent:     p.dictationRecentStore(),
 		Muter:      p.dictationMuter(),
+		Clock:      p.ports.Clock,
 		Speech:     p.ports.Speech,
 		Model:      p.dictationDeviceModel(),
 		Background: supervisedDictation,
@@ -173,6 +175,14 @@ func (p *App) dictationDeviceModel() *devicemodel.Manager {
 		return nil
 	}
 	return devicemodel.New(p.ports.FS, p.ports.Downloads, filepath.Join(dataDir(), "models"), devicemodel.Parakeet())
+}
+
+// dictationRecentStore keeps the audio of the last transcribed dictations, or nil when the data folder is read only.
+func (p *App) dictationRecentStore() *recordings.Store {
+	if p.userReadOnly {
+		return nil
+	}
+	return recordings.New(p.ports.FS, filepath.Join(dataDir(), "dictation-recent"), p.ports.Clock.Now)
 }
 
 // dictationRecordingStore returns the store of unfinished dictations, or nil when the data folder is read only.

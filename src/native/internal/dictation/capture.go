@@ -7,6 +7,7 @@ import (
 	"io"
 	"math"
 	"sync"
+	"time"
 
 	"github.com/pablopunk/nvm/native/internal/dictation/webm"
 	"github.com/pablopunk/nvm/native/internal/platform"
@@ -34,6 +35,8 @@ type operation struct {
 	onRetry func(attempt int, err error)
 	journal *journal
 	encoder platform.OpusEncoder
+	// capturing is when the capture started, to check at Stop that the audio covers the time the user held it.
+	capturing time.Time
 	// transcriber is where this dictation's segments go; nil keeps the audio for later.
 	transcriber Transcriber
 	// live transcribes each finished segment while the user goes on speaking; nil sends nothing until Stop.
@@ -179,7 +182,7 @@ func (op *operation) addFrame(frame []int16) bool {
 			op.levelPeak = 0
 		}
 	}
-	if len(op.current) == framesPerSegment || op.live != nil && op.pauses.cut(frame, len(op.current)) {
+	if len(op.current) == framesPerSegment || op.live != nil && op.liveCut(frame) {
 		op.closeSegment()
 		op.sendLive()
 	} else if op.frames == 1 || op.frames%journalEveryFrames == 0 {
@@ -287,4 +290,10 @@ func (op *operation) swapStream(stream platform.MicrophoneStream) bool {
 	}
 	op.stream = stream
 	return true
+}
+
+// liveCut reports whether the live piece being captured ends after frame: at a pause, or at the longest piece the
+// model reads without skipping words, even without a pause, since the next piece repeats its end.
+func (op *operation) liveCut(frame []int16) bool {
+	return op.pauses.cut(frame, len(op.current)) || len(op.current) >= maxPassFrames
 }

@@ -164,9 +164,9 @@ func TestStopTranscribesTheCapturedSpeechAsOneWebMFile(t *testing.T) {
 	}
 }
 
-func TestLongDictationsAreSentAsOneMinuteSegmentsInOrder(t *testing.T) {
+func TestLongDictationsAreSentAsHalfMinutePiecesInOrder(t *testing.T) {
 	h := newHarness(t)
-	h.transcriber.bySegment = map[int]string{0: "alpha beta", 1: "gamma delta"}
+	h.transcriber.bySegment = map[int]string{0: "alpha beta", 1: "gamma delta", 2: "epsilon zeta"}
 	h.mic.Queue(voice(61)...)
 	if err := h.service.Start("default"); err != nil {
 		t.Fatalf("Start: %v", err)
@@ -175,16 +175,16 @@ func TestLongDictationsAreSentAsOneMinuteSegmentsInOrder(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Stop: %v", err)
 	}
-	if text != "alpha beta gamma delta" {
-		t.Fatalf("text = %q, want both segments joined by a space", text)
+	if text != "alpha beta gamma delta epsilon zeta" {
+		t.Fatalf("text = %q, want the pieces joined in order", text)
 	}
 	ids := h.transcriber.ids()
-	if len(ids) != 2 {
-		t.Fatalf("got %d requests, want 2 segments", len(ids))
+	if len(ids) != 3 {
+		t.Fatalf("got %d requests, want 61 s of unbroken speech in three pieces", len(ids))
 	}
 	slices.Sort(ids)
-	if ids[1] != ids[0]+"-1" {
-		t.Fatalf("second segment id = %q, want the first id with a -1 suffix", ids[1])
+	if ids[1] != ids[0]+"-1" || ids[2] != ids[0]+"-2" {
+		t.Fatalf("piece ids = %v, want the first id with -1 and -2 suffixes", ids)
 	}
 }
 
