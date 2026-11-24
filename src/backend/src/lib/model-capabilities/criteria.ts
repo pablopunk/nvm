@@ -6,12 +6,13 @@ export const MODEL_CAPABILITIES = [
   'tool_calls',
   'stream_usage',
   'image_input',
+  'quick_first_token',
 ] as const;
 
 export type ModelCapability = (typeof MODEL_CAPABILITIES)[number];
 
 export const CAPABILITIES_FOR_ROUTE_KIND: Record<RouteKind, readonly ModelCapability[]> = {
-  fast: ['thinking_off', 'tool_calls', 'stream_usage'],
+  fast: ['thinking_off', 'quick_first_token', 'tool_calls', 'stream_usage'],
   smart: ['reasoning', 'image_input', 'tool_calls', 'stream_usage'],
 };
 
@@ -21,6 +22,7 @@ export const CAPABILITY_LABELS: Record<ModelCapability, string> = {
   tool_calls: 'calls a function tool',
   stream_usage: 'streams a reply that ends with token usage',
   image_input: 'reads an inline image',
+  quick_first_token: 'starts answering within 2 seconds',
 };
 
 export function isModelCapability(value: unknown): value is ModelCapability {

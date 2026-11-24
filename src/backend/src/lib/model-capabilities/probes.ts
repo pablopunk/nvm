@@ -118,12 +118,36 @@ async function probeImageInput(target: ProbeTarget): Promise<ProbeOutcome> {
   return outcome(true, 'saw the red image');
 }
 
+export const QUICK_FIRST_TOKEN_MS = 2000;
+const QUICK_FIRST_TOKEN_ATTEMPTS = 2;
+
+async function firstTokenMs(target: ProbeTarget): Promise<ProbeReply> {
+  return sendProbe(target, {
+    messages: [{ role: 'user', content: 'Reply with the word ok.' }],
+    thinkingLevel: 'off',
+    reasoning: 'route',
+    maxOutputTokens: 64,
+  });
+}
+
+async function probeQuickFirstToken(target: ProbeTarget): Promise<ProbeOutcome> {
+  let fastest: number | null = null;
+  for (let attempt = 0; attempt < QUICK_FIRST_TOKEN_ATTEMPTS; attempt += 1) {
+    const reply = await firstTokenMs(target);
+    if (!reply.ok) return failed(reply);
+    if (reply.firstTokenMs !== null) fastest = Math.min(fastest ?? reply.firstTokenMs, reply.firstTokenMs);
+  }
+  if (fastest === null) return outcome(false, 'no streamed token');
+  return outcome(fastest < QUICK_FIRST_TOKEN_MS, `first token in ${fastest} ms`);
+}
+
 const PROBES: Record<ModelCapability, (target: ProbeTarget) => Promise<ProbeOutcome>> = {
   thinking_off: probeThinkingOff,
   reasoning: probeReasoning,
   tool_calls: probeToolCalls,
   stream_usage: probeStreamUsage,
   image_input: probeImageInput,
+  quick_first_token: probeQuickFirstToken,
 };
 
 export function probeCapability(target: ProbeTarget, capability: ModelCapability): Promise<ProbeOutcome> {

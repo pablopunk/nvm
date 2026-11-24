@@ -8,7 +8,7 @@ import { probeAndSaveCapabilities } from './verify';
 const ROUTE_KINDS: RouteKind[] = ['fast', 'smart'];
 const PROBE_CONCURRENCY = 4;
 
-type ProbeWork = { provider: string; modelId: string; capabilities: ModelCapability[]; lastProbedAt: number; configured: boolean };
+export type ProbeWork = { provider: string; modelId: string; capabilities: ModelCapability[]; lastProbedAt: number; configured: boolean };
 
 export type CapabilityRefreshReport = {
   candidates: number;
@@ -60,9 +60,27 @@ async function verdictsByRoute(providers: Iterable<string>): Promise<Map<string,
   return byRoute;
 }
 
-function compareProbeWork(left: ProbeWork, right: ProbeWork): number {
-  if (left.configured !== right.configured) return left.configured ? -1 : 1;
+function oldestFirst(left: ProbeWork, right: ProbeWork): number {
   return left.lastProbedAt - right.lastProbedAt;
+}
+
+function alternateProviders(work: ProbeWork[]): ProbeWork[] {
+  const queues = new Map<string, ProbeWork[]>();
+  for (const item of [...work].sort(oldestFirst)) queues.set(item.provider, [...(queues.get(item.provider) ?? []), item]);
+  const alternated: ProbeWork[] = [];
+  while ([...queues.values()].some((queue) => queue.length > 0))
+    for (const queue of queues.values()) {
+      const next = queue.shift();
+      if (next) alternated.push(next);
+    }
+  return alternated;
+}
+
+export function orderProbeWork(work: ProbeWork[]): ProbeWork[] {
+  return [
+    ...alternateProviders(work.filter((item) => item.configured)),
+    ...alternateProviders(work.filter((item) => !item.configured)),
+  ];
 }
 
 export async function planCapabilityProbes(now = Date.now()): Promise<{ candidates: number; work: ProbeWork[] }> {
@@ -77,7 +95,7 @@ export async function planCapabilityProbes(now = Date.now()): Promise<{ candidat
     const lastProbedAt = Math.min(...capabilities.map((capability) => known?.get(capability)?.probedAt ?? 0));
     work.push({ ...route, capabilities, lastProbedAt, configured: configured.has(key) });
   }
-  return { candidates: candidates.size, work: work.sort(compareProbeWork) };
+  return { candidates: candidates.size, work: orderProbeWork(work) };
 }
 
 export async function refreshModelCapabilities(deadline: number, now = Date.now()): Promise<CapabilityRefreshReport> {

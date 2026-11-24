@@ -2,27 +2,43 @@ import { useState } from 'react';
 import { adminMutation } from '../../lib/admin-mutation-request';
 import { dashboardQueryClient } from '../../lib/dashboard-query-client';
 import type { CapabilityRefreshReport } from '../../lib/model-capabilities/refresh';
+import { Button } from '../ui/button';
 import { ADMIN_MODEL_CONFIG_URL } from './use-admin-route-save';
 
-function reportMessage(report: CapabilityRefreshReport) {
-  const progress = `Checked ${report.probedModels} models (${report.passed} passed, ${report.failed} failed checks).`;
-  return report.remaining > 0 ? `${progress} ${report.remaining} left; check again to continue.` : `${progress} Every model is up to date.`;
+const MAX_CHECK_ROUNDS = 40;
+
+function progressMessage(checked: number, remaining: number) {
+  return remaining > 0 ? `Checked ${checked} models, ${remaining} left…` : `Checked ${checked} models, all up to date`;
+}
+
+function runCheckRound() {
+  return adminMutation<CapabilityRefreshReport>('/api/admin/model-capabilities', 'POST', {});
+}
+
+function refreshModelLists() {
+  return dashboardQueryClient().invalidateQueries({ queryKey: [ADMIN_MODEL_CONFIG_URL] });
 }
 
 export function AdminModelCheck() {
   const [checking, setChecking] = useState(false);
-  const [message, setMessage] = useState('Model lists show only models that passed a live check for their slot.');
+  const [message, setMessage] = useState('');
 
   async function checkModels() {
     setChecking(true);
-    setMessage('Checking models…');
+    setMessage('Checking…');
+    let checked = 0;
     try {
-      setMessage(reportMessage(await adminMutation<CapabilityRefreshReport>('/api/admin/model-capabilities', 'POST', {})));
+      for (let round = 0; round < MAX_CHECK_ROUNDS; round += 1) {
+        const report = await runCheckRound();
+        checked += report.probedModels;
+        setMessage(progressMessage(checked, report.remaining));
+        await refreshModelLists();
+        if (report.remaining === 0 || report.probedModels === 0) break;
+      }
     } catch (error) {
-      setMessage(`Could not check models: ${error instanceof Error ? error.message : 'unknown error'}`);
+      setMessage(`Check stopped after ${checked} models: ${error instanceof Error ? error.message : 'unknown error'}`);
     } finally {
       setChecking(false);
-      void dashboardQueryClient().invalidateQueries({ queryKey: [ADMIN_MODEL_CONFIG_URL] });
     }
   }
 
@@ -31,12 +47,9 @@ export function AdminModelCheck() {
   }
 
   return (
-    <section className="model-route-row">
-      <header className="model-route-row__header">
-        <strong>Model checks</strong>
-        <button type="button" className="button" disabled={checking} onClick={startCheck}>Check models now</button>
-      </header>
-      <p className="model-route-row__details muted" role="status" aria-live="polite">{message}</p>
-    </section>
+    <div className="flex items-center gap-3">
+      <span className="muted text-xs" role="status" aria-live="polite">{message}</span>
+      <Button variant="outline" size="sm" disabled={checking} onClick={startCheck}>Check models</Button>
+    </div>
   );
 }

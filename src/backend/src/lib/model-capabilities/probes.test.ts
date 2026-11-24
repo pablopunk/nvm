@@ -117,3 +117,14 @@ test('overloaded or unreachable upstreams give an inconclusive outcome', async (
   answerWith(() => Response.json({ error: { message: 'Unsupported value' } }, { status: 400 }));
   assert.equal((await probeCapability(target, 'stream_usage')).conclusive, true);
 });
+
+test('quick first token passes when a streamed token arrives promptly', async () => {
+  answerWith(() => streamOf([text('ok'), usage(1)]));
+  const quick = await probeCapability(target, 'quick_first_token');
+  assert.equal(quick.passed, true);
+  assert.match(quick.detail, /first token in \d+ ms/);
+  assert.equal(sentBodies.length, 2);
+
+  answerWith(() => streamOf([usage(0)]));
+  assert.equal((await probeCapability(target, 'quick_first_token')).passed, false);
+});
