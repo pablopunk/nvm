@@ -81,11 +81,11 @@ func footerActions(c *ui.Context, d FooterData) {
 	})
 }
 
-// footerGroup is one footer pill in the lens glass. Its edge is a border that takes layout space, so the padding gives
-// it up and the nested pills sit one inner inset in from the curve.
+// footerGroup is one footer pill in the floating lens, which blurs the rows that scroll under it. Its edge is a border
+// that takes layout space, so the padding gives it up and the nested pills sit one inner inset in from the curve.
 func footerGroup(c *ui.Context) ui.Element {
 	e := ui.Row(c).Height(ControlHeight).Radius(ControlRadius).Padding(0, InnerInset-1).Gap(2).AlignItems(ui.Center)
-	return Lens(e, Tokens(c))
+	return FloatingLens(e, Tokens(c))
 }
 
 // footerButton draws a footer hint as a nested pill, title then key cap, that lights up under the pointer and runs
