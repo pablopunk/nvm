@@ -4580,7 +4580,9 @@ test('a thinking level the model refuses is retried once with the model default 
     });
   };
   await publishPrices(['google/gemini-2.5-flash']);
-  const response = await postChatCompletion(routeContext(authorizedChatRequest()));
+  const response = await postChatCompletion(
+    routeContext(authorizedChatRequest(undefined, { 'x-nevermind-ai-model': 'fast' })),
+  );
   assert.equal(response.status, 200);
   assert.equal(forwardedBodies.length, 2);
   assert.deepEqual(forwardedBodies[0].reasoning, { effort: 'none' });
