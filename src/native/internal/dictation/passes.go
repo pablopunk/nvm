@@ -7,10 +7,12 @@ import (
 	"github.com/pablopunk/nvm/native/internal/dictation/webm"
 )
 
-// maxPassMillis is the most audio a transcriber that reads the whole recording gets in one request. The on-device
-// model's memory grows with the audio it reads (about 2.6 GB for a minute and a half), so a longer dictation is read in
-// passes of this length, each opening with the end of the one before, and stitched like live pieces.
-const maxPassMillis = 120_000
+// maxPassMillis is the most audio a transcriber that reads the whole recording gets in one request. Past about half a
+// minute of real speech the on-device model silently skips sentences, the end or the middle (a 75 s dictation lost its
+// last two sentences read whole, and a 60 s piece of it lost four in the middle; 30 s pieces kept every word), so Hex
+// reads it in pieces of this length too. A longer dictation is read in passes cut in a pause, each opening with the end
+// of the one before, and stitched like live pieces.
+const maxPassMillis = 30_000
 
 const maxPassFrames = maxPassMillis / FrameMillis
 

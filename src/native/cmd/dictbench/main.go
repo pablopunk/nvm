@@ -38,6 +38,7 @@ type options struct {
 	version   string
 	parakeet  string
 	models    string
+	recording string
 	ortLib    string
 	runs      int
 	gap       time.Duration
@@ -54,6 +55,7 @@ func parseOptions(args []string, stderr io.Writer) (options, error) {
 	flags.StringVar(&opts.version, "client-version", "2026.1121.1", "desktop version the backend sees; it refuses versions it no longer supports")
 	flags.StringVar(&opts.parakeet, "parakeet", "", "folder of the on-device model; with -ort, transcribe on the device instead of the backend")
 	flags.StringVar(&opts.models, "device", "", "folder holding the model folder; with -ort, dictate through the service on the device")
+	flags.StringVar(&opts.recording, "recording", "", "with -device and -ort, replay the saved dictation with this id from the folder given as the clip")
 	flags.StringVar(&opts.ortLib, "ort", "", "ONNX Runtime library for -parakeet and -device")
 	flags.IntVar(&opts.runs, "runs", 1, "dictations to measure")
 	flags.DurationVar(&opts.gap, "gap", 800*time.Millisecond, "silence between clips")
@@ -73,6 +75,13 @@ func run(args []string, stdout, stderr io.Writer) int {
 	if err != nil {
 		fmt.Fprintln(stderr, err)
 		return 2
+	}
+	if opts.recording != "" {
+		if err := replayRecording(opts.ortLib, opts.models, opts.clips[0], opts.recording, stdout); err != nil {
+			fmt.Fprintln(stderr, err)
+			return 1
+		}
+		return 0
 	}
 	speech, err := loadSpeech(opts.clips, opts.gap)
 	if err != nil {

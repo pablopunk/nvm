@@ -182,7 +182,7 @@ func (op *operation) addFrame(frame []int16) bool {
 			op.levelPeak = 0
 		}
 	}
-	if len(op.current) == framesPerSegment || op.live != nil && op.pauses.cut(frame, len(op.current)) {
+	if len(op.current) == framesPerSegment || op.live != nil && op.liveCut(frame) {
 		op.closeSegment()
 		op.sendLive()
 	} else if op.frames == 1 || op.frames%journalEveryFrames == 0 {
@@ -290,4 +290,10 @@ func (op *operation) swapStream(stream platform.MicrophoneStream) bool {
 	}
 	op.stream = stream
 	return true
+}
+
+// liveCut reports whether the live piece being captured ends after frame: at a pause, or at the longest piece the
+// model reads without skipping words, even without a pause, since the next piece repeats its end.
+func (op *operation) liveCut(frame []int16) bool {
+	return op.pauses.cut(frame, len(op.current)) || len(op.current) >= maxPassFrames
 }
