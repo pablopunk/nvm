@@ -9,6 +9,7 @@ import (
 	"errors"
 	"fmt"
 	"strings"
+	"time"
 
 	"github.com/pablopunk/nvm/native/internal/ext/api"
 	"github.com/pablopunk/nvm/native/internal/search"
@@ -74,12 +75,24 @@ func (Extension) Commands(ctx api.Context) ([]api.Command, error) {
 	return []api.Command{aiChatsCommand(chatCount(ctx)), cleanupCommand()}, nil
 }
 
-// RootItems lists the four most recent conversations and builder chats as Continue rows, unless the setting hides them.
+// RootItems lists, as Continue rows, up to four conversations and builder chats used in the last hour, unless the
+// setting hides them. Older chats are still found by search and listed by AI Chats.
 func (Extension) RootItems(ctx api.Context) ([]api.Item, error) {
 	if !showsInRoot(ctx) {
 		return nil, nil
 	}
-	return continueRows(ctx.AI().Chats().List(), "", rootChatLimit), nil
+	return continueRows(chatsUsedSince(ctx.AI().Chats().List(), ctx.Clock().Now().Add(-rootChatWindow)), "", rootChatLimit), nil
+}
+
+// chatsUsedSince keeps the chats last used at or after since.
+func chatsUsedSince(chats []api.ChatSummary, since time.Time) []api.ChatSummary {
+	var recent []api.ChatSummary
+	for _, chat := range chats {
+		if lastChangeMs(chat) >= since.UnixMilli() {
+			recent = append(recent, chat)
+		}
+	}
+	return recent
 }
 
 // showsInRoot reports whether the root lists recent chats. A setting that cannot be read keeps the default, shown.
