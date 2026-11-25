@@ -228,6 +228,44 @@
         ]
       },
       {
+        "kind": "Conversations",
+        "title": "Continue conversation: Release notes",
+        "subtitle": "AI conversation",
+        "section": "",
+        "id": "chat:c-release",
+        "icon": "message-circle",
+        "tone": "yellow",
+        "accessory": "",
+        "prominent": false,
+        "tintTitle": true,
+        "iconPath": "",
+        "actions": [
+          {
+            "title": "Open",
+            "label": ""
+          }
+        ]
+      },
+      {
+        "kind": "Conversations",
+        "title": "Continue conversation: Time zones",
+        "subtitle": "AI conversation",
+        "section": "",
+        "id": "chat:c-tokyo",
+        "icon": "message-circle",
+        "tone": "yellow",
+        "accessory": "",
+        "prominent": false,
+        "tintTitle": true,
+        "iconPath": "",
+        "actions": [
+          {
+            "title": "Open",
+            "label": ""
+          }
+        ]
+      },
+      {
         "kind": "Clipboard",
         "title": "https://nevermind.app/docs/palette",
         "subtitle": "Copied Nov 2, 8:00 AM",
@@ -704,44 +742,6 @@
           },
           {
             "title": "Set alias",
-            "label": ""
-          }
-        ]
-      },
-      {
-        "kind": "Conversations",
-        "title": "Continue conversation: Release notes",
-        "subtitle": "AI conversation",
-        "section": "",
-        "id": "chat:c-release",
-        "icon": "message-circle",
-        "tone": "yellow",
-        "accessory": "",
-        "prominent": false,
-        "tintTitle": true,
-        "iconPath": "",
-        "actions": [
-          {
-            "title": "Open",
-            "label": ""
-          }
-        ]
-      },
-      {
-        "kind": "Conversations",
-        "title": "Continue conversation: Time zones",
-        "subtitle": "AI conversation",
-        "section": "",
-        "id": "chat:c-tokyo",
-        "icon": "message-circle",
-        "tone": "yellow",
-        "accessory": "",
-        "prominent": false,
-        "tintTitle": true,
-        "iconPath": "",
-        "actions": [
-          {
-            "title": "Open",
             "label": ""
           }
         ]
