@@ -72,10 +72,27 @@ func (fakeNavigation) Push(view *api.View) api.Result { return api.Result{View: 
 
 type fakeContext struct {
 	api.Context
-	chats   fakeChats
-	builder *fakeBuilder
-	now     time.Time
+	chats      fakeChats
+	builder    *fakeBuilder
+	now        time.Time
+	rootHidden bool
 }
+
+// fakeSettings serves the show-in-root setting.
+type fakeSettings struct {
+	api.Settings
+	rootHidden bool
+}
+
+func (s fakeSettings) Get(id string, into any) error {
+	if id != SettingShowInRoot {
+		return api.ErrNotFound
+	}
+	*into.(*bool) = !s.rootHidden
+	return nil
+}
+
+func (c fakeContext) Settings() api.Settings { return fakeSettings{rootHidden: c.rootHidden} }
 
 func (c fakeContext) AI() api.AI               { return fakeAI{chats: c.chats} }
 func (c fakeContext) AIBuilder() api.AIBuilder { return c.builder }
@@ -367,4 +384,16 @@ func user(text string) api.ChatMessage {
 
 func assistant(text string) api.ChatMessage {
 	return api.ChatMessage{Role: "assistant", Content: text}
+}
+
+func TestRootListsNoChatsWhenTheSettingHidesThem(t *testing.T) {
+	ctx := contextWith(chat("1", "conversation", "Alpha"))
+	ctx.rootHidden = true
+	items, err := Extension{}.RootItems(ctx)
+	if err != nil || len(items) != 0 {
+		t.Fatalf("RootItems = %v, %v; want no rows", items, err)
+	}
+	if items, _ := (Extension{}).SearchItems(ctx, "Alpha"); len(items) == 0 {
+		t.Fatal("search lost the chat; the setting hides root rows only")
+	}
 }

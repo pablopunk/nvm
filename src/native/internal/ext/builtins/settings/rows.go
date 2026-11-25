@@ -53,6 +53,8 @@ func pageRows(launchAtLoginSupported bool) []api.SettingRow {
 			Subtitle: "Show copied items inline in the root list", Icon: "clipboard", ActionTitle: "Toggle"},
 		{ID: SettingClipboardRootSearch, Kind: api.SettingRowToggle, Setting: SettingClipboardRootSearch, Title: "Show Clipboard Items in Root Search",
 			Subtitle: "Show copied items when searching from the root list", Icon: "clipboard", ActionTitle: "Toggle"},
+		{ID: SettingAIChatsRootList, Kind: api.SettingRowToggle, Setting: SettingAIChatsRootList, Title: "Show AI Chats in Root List",
+			Subtitle: "Show recent AI chats in the root list", Icon: "sparkles", ActionTitle: "Toggle"},
 		{ID: RowDictation, Kind: api.SettingRowAction, Title: "Dictation", Icon: "mic", Action: hostAction(opDictationSettings, "Open"),
 			Shows: sharedDictationDevice()},
 	}

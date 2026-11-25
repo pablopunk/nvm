@@ -7,6 +7,7 @@ import (
 	"log"
 	"strconv"
 
+	"github.com/pablopunk/nvm/native/internal/ext/builtins/aichats"
 	"github.com/pablopunk/nvm/native/internal/ext/builtins/settings"
 	"github.com/pablopunk/nvm/native/internal/ext/builtins/websearch"
 	"github.com/pablopunk/nvm/native/internal/ext/services"
@@ -64,6 +65,8 @@ func (s *settingsStore) value(key string) (any, error) {
 		return !p.S.ClipRootOff, nil
 	case settings.SettingClipboardRootSearch:
 		return !p.S.ClipRootSearchOff, nil
+	case settings.SettingAIChatsRootList:
+		return p.aiChatsInRoot(), nil
 	case settings.SettingDiagnostics:
 		return !p.diagnosticsOff(), nil
 	case settings.SettingUpdateChannel:
@@ -99,6 +102,8 @@ func (s *settingsStore) write(key string, raw json.RawMessage) error {
 		return s.saveFlag(raw, func(on bool) { p.S.ClipRootSearchOff = !on; p.S.save() })
 	case settings.SettingClipboardLimit:
 		return s.saveClipboardLimit(raw)
+	case settings.SettingAIChatsRootList:
+		return s.saveAIChatsInRoot(raw)
 	case settings.SettingDiagnostics:
 		return s.saveDiagnostics(raw)
 	case settings.SettingUpdateChannel:
@@ -134,6 +139,34 @@ func (s *settingsStore) saveClipboardLimit(raw json.RawMessage) error {
 	s.p.S.save()
 	s.p.clip.setLimit(limit)
 	return nil
+}
+
+// saveAIChatsInRoot writes the AI Chats built-in's own setting and asks it for its root rows again.
+func (s *settingsStore) saveAIChatsInRoot(raw json.RawMessage) error {
+	var on bool
+	if err := json.Unmarshal(raw, &on); err != nil {
+		return err
+	}
+	m := s.p.extensionManager()
+	if m == nil {
+		return errNoSharedConfig
+	}
+	if err := m.WriteSetting(aichats.ID, aichats.SettingShowInRoot, on); err != nil {
+		return err
+	}
+	s.p.refreshRootRows(aichats.ID)
+	return nil
+}
+
+// aiChatsInRoot reads the AI Chats built-in's setting. A setting that cannot be read shows its default, on.
+func (p *App) aiChatsInRoot() bool {
+	on := true
+	if m := p.extensionManager(); m != nil {
+		if err := m.ReadSetting(aichats.ID, aichats.SettingShowInRoot, &on); err != nil {
+			return true
+		}
+	}
+	return on
 }
 
 func (s *settingsStore) saveDiagnostics(raw json.RawMessage) error {

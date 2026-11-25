@@ -39,6 +39,10 @@ const (
 	argExtensionID   = "extensionId"
 )
 
+// SettingShowInRoot is the declared setting that says whether the root lists the most recent chats. The Settings page
+// toggles it.
+const SettingShowInRoot = "showInRoot"
+
 // errChatGone answers an open of a chat the host no longer keeps.
 var errChatGone = errors.New("this AI chat no longer exists")
 
@@ -56,7 +60,12 @@ func New() Extension {
 func (Extension) Manifest() api.Manifest {
 	return api.Manifest{
 		APIVersion: "1.0", Identity: api.Identity{ID: ID, Title: "AI Builder"},
-		Capabilities: []api.Capability{api.CapabilityAI, api.CapabilityExtensionsOwnership, api.CapabilityDesktopFiles},
+		Capabilities: []api.Capability{
+			api.CapabilityAI, api.CapabilityExtensionsOwnership, api.CapabilityDesktopFiles, api.CapabilitySettingsWrite,
+		},
+		Settings: []api.SettingDefinition{{
+			ID: SettingShowInRoot, Title: "Show AI Chats in Root List", Type: api.SettingBoolean, Value: []byte(`true`),
+		}},
 	}
 }
 
@@ -65,9 +74,21 @@ func (Extension) Commands(ctx api.Context) ([]api.Command, error) {
 	return []api.Command{aiChatsCommand(chatCount(ctx)), cleanupCommand()}, nil
 }
 
-// RootItems lists the four most recent conversations and builder chats as Continue rows.
+// RootItems lists the four most recent conversations and builder chats as Continue rows, unless the setting hides them.
 func (Extension) RootItems(ctx api.Context) ([]api.Item, error) {
+	if !showsInRoot(ctx) {
+		return nil, nil
+	}
 	return continueRows(ctx.AI().Chats().List(), "", rootChatLimit), nil
+}
+
+// showsInRoot reports whether the root lists recent chats. A setting that cannot be read keeps the default, shown.
+func showsInRoot(ctx api.Context) bool {
+	show := true
+	if err := ctx.Settings().Get(SettingShowInRoot, &show); err != nil {
+		return true
+	}
+	return show
 }
 
 // SearchItems lists the Continue rows whose title holds the query, then Automate for a query that names no website.
