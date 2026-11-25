@@ -258,10 +258,10 @@ func TestRowActionsAddTweakWithAIToAnExtensionRow(t *testing.T) {
 	}
 }
 
-func TestBuilderChatRowsFollowConversationsAtEqualScore(t *testing.T) {
-	builder := chat("1", "builder", "Clock")
+func TestSearchedBuilderChatRowsFollowConversationsAtEqualScore(t *testing.T) {
+	builder := chat("1", "builder", "Clock notes")
 	builder.UpdatedAtMs = testNow.UnixMilli()
-	items, err := Extension{}.RootItems(contextWith(builder, chat("2", "conversation", "Notes")))
+	items, err := Extension{}.SearchItems(contextWith(builder, chat("2", "conversation", "Notes")), "notes")
 	if err != nil {
 		t.Fatal(err)
 	}

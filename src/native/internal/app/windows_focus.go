@@ -50,6 +50,7 @@ func (p *App) onPaletteShown() {
 	if p.files != nil {
 		p.files.refreshIconLook()
 	}
+	p.rootRows.askEveryExtensionNext()
 	p.showApps()
 	p.warmAIOnShow()
 	p.reconcileExtensionEnablement()

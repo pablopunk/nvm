@@ -36,6 +36,18 @@ func TestRootRowCacheResetAsksEveryExtension(t *testing.T) {
 	}
 }
 
+// TestOpeningThePaletteAsksEveryExtensionEvenWithOnePending checks that a pending refresh of one extension, such as
+// the apps' running state on open, does not narrow the next root pass, so recent chats are asked again on every open.
+func TestOpeningThePaletteAsksEveryExtensionEvenWithOnePending(t *testing.T) {
+	var c rootRowCache
+	fillRootCache(&c, "apps", "chats")
+	c.markPending("apps")
+	c.askEveryExtensionNext()
+	if scope, _ := c.takeScope(); scope != nil {
+		t.Fatalf("an open asked only %v; it must ask every extension", scope)
+	}
+}
+
 // TestRootRowCacheForgetDropsRowsAnInFlightPassCannotRestore checks that a forgotten extension's rows are gone at once,
 // that a pass started before the forget cannot put them back, and that the next root asks every extension.
 func TestRootRowCacheForgetDropsRowsAnInFlightPassCannotRestore(t *testing.T) {
