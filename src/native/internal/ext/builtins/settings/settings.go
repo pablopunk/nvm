@@ -25,6 +25,7 @@ const (
 	SettingClipboardLimit        = "clipboardLimit"
 	SettingClipboardRootList     = "clipboardRootList"
 	SettingClipboardRootSearch   = "clipboardRootSearch"
+	SettingAIChatsRootList       = "aiChatsRootList"
 	SettingDiagnostics           = "diagnostics"
 	SettingUpdateChannel         = "updateChannel"
 	SettingLaunchAtLogin         = "launchAtLogin"
@@ -63,6 +64,7 @@ func declaredSettings() []api.SettingDefinition {
 		{ID: SettingClipboardLimit, Title: "Clipboard History Size", Type: api.SettingString, Value: []byte(`"300"`)},
 		{ID: SettingClipboardRootList, Title: "Show Clipboard Items in Root List", Type: api.SettingBoolean, Value: []byte(`true`)},
 		{ID: SettingClipboardRootSearch, Title: "Show Clipboard Items in Root Search", Type: api.SettingBoolean, Value: []byte(`true`)},
+		{ID: SettingAIChatsRootList, Title: "Show AI Chats in Root List", Type: api.SettingBoolean, Value: []byte(`true`)},
 		{ID: SettingDiagnostics, Title: "Send Technical Diagnostics", Type: api.SettingBoolean, Value: []byte(`true`)},
 		{ID: SettingUpdateChannel, Title: "Update Channel", Type: api.SettingString, Value: []byte(`"stable"`)},
 		{ID: SettingLaunchAtLogin, Title: "Launch at Login", Type: api.SettingBoolean, Value: []byte(`false`)},

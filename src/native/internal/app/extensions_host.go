@@ -258,6 +258,19 @@ func (p *App) refreshRootRows(extensionID string) {
 	p.RefreshTop(isRootView)
 }
 
+// forgetRootRowsOf drops the root rows extension id showed and every remembered root snapshot, then refreshes the root.
+// A setting that hides an extension's rows uses it, so neither going back to the root nor reopening the palette shows
+// the hidden rows first.
+func (p *App) forgetRootRowsOf(extensionID string) {
+	p.rootRows.forget(extensionID)
+	p.onUI(func() {
+		if p.Palette != nil {
+			p.ForgetCachedResults(isRootView)
+		}
+		p.RefreshTop(isRootView)
+	})
+}
+
 // isRootView is true for the palette's first level.
 func isRootView(v *palette.View) bool {
 	return v.Title == rootViewTitle

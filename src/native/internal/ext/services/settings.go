@@ -150,12 +150,10 @@ func (h *Handler) saveSetting(id string, value json.RawMessage) error {
 	if err != nil {
 		return err
 	}
-	if err := docs.settings.Update(func(doc *settingValuesDoc) {
+	if err := docs.settings.Commit(func(doc *settingValuesDoc) error {
 		doc.Values[id] = value
+		return nil
 	}); err != nil {
-		return unavailable("the setting cannot be saved: %v", err)
-	}
-	if err := docs.settings.Save(); err != nil {
 		return unavailable("the setting cannot be saved: %v", err)
 	}
 	return nil

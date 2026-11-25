@@ -38,6 +38,16 @@ func (c *rootRowCache) reset() {
 	c.epoch++
 }
 
+// forget drops the rows of extension id and makes the next root ask every extension again. A pass already running
+// cannot put the dropped rows back.
+func (c *rootRowCache) forget(id string) {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	delete(c.rows, id)
+	c.filled, c.pending = false, nil
+	c.epoch++
+}
+
 // stream stages a complete refresh before publishing it to subsequent queries. An interrupted pass leaves the
 // previous catalog intact; observers never capture a mixture based on extension completion order.
 func (c *rootRowCache) stream(ctx context.Context, m *manager.Manager, emit func(manager.SearchResult)) {
