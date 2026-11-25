@@ -84,6 +84,7 @@ func TestTurningAJobOffAsksWithItsTitleAndRunsWhenAllowed(t *testing.T) {
 	if result.Failed || jobs.isEnabled() {
 		t.Fatalf("result = %+v, enabled %v", result, jobs.isEnabled())
 	}
+	t.Logf("question: %s\nmodel reads: %s", lastRow(t, f, "Changing a background job").detail, result.Text)
 	if row := lastRow(t, f, "Changing a background job"); !row.asked || row.detail != "Turn off the background job “Index files”" {
 		t.Fatalf("row = %+v", row)
 	}
@@ -97,6 +98,7 @@ func TestADeclinedJobChangeChangesNothing(t *testing.T) {
 	if !result.Failed || !jobs.isEnabled() {
 		t.Fatalf("result = %+v, enabled %v", result, jobs.isEnabled())
 	}
+	t.Logf("model reads: %s", result.Text)
 	contains(t, result.Text, "turn off the background job “Index files”: the user declined")
 }
 

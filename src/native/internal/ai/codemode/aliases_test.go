@@ -99,6 +99,7 @@ func TestAddingAnAliasAsksWithTheCommandTitleAndRunsWhenAllowed(t *testing.T) {
 		t.Fatalf("clip belongs to %q", got)
 	}
 	row := lastRow(t, f, "Adding an alias")
+	t.Logf("question: %s\nmodel reads: %s", row.detail, result.Text)
 	if !row.asked || row.detail != "Add alias “clip” for “Clipboard History”" {
 		t.Fatalf("row = %+v", row)
 	}
@@ -131,6 +132,7 @@ func TestARefusedAliasFailsWithoutAsking(t *testing.T) {
 			f, aliases := aliasFixture(t)
 			f.steps.decide = allow
 			result := f.run(c.body)
+			t.Logf("model reads: %s", result.Text)
 			if !result.Failed || !strings.Contains(result.Text, c.reason) {
 				t.Fatalf("result = %+v", result)
 			}
