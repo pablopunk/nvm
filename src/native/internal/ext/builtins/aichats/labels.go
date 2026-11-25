@@ -1,8 +1,11 @@
 package aichats
 
+import "time"
+
 // Scores, limits and timings. The scores order the rows as the desktop app's root does.
 const (
 	rootChatLimit         = 4
+	rootChatWindow        = time.Hour
 	scoreRootConversation = 60 // the clipboard's recent copies score 60 too, so recent chats and copies mix by recency
 	scoreAutomate         = 40
 	scoreAIChatsCommand   = 16
