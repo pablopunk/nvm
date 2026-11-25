@@ -108,3 +108,32 @@ func TestStopWhileAToolRunsCancelsItsRow(t *testing.T) {
 		t.Fatalf("rows = %+v", rows)
 	}
 }
+
+// TestAnAnswerForOneCallDoesNotAnswerAnother checks that an answer names its call: an answer meant for another call is
+// refused and the waiting call still waits, and the answer that names it runs it.
+func TestAnAnswerForOneCallDoesNotAnswerAnother(t *testing.T) {
+	var runs atomic.Int32
+	backend := fixtures.NewScriptedBackend(
+		fixtures.ToolCallReply("", fixtures.ToolCall{ID: "d1", Name: "delete", Arguments: []string{`{"text":"old"}`}}),
+		fixtures.TextReply("Deleted."),
+	)
+	f := newScriptedFixture(t, toolsOf(t, deleteTool(&runs)), backend)
+	chat := f.newChat()
+	if err := f.svc.Send(chat.ID, "delete old"); err != nil {
+		t.Fatal(err)
+	}
+	f.awaitState(func(messages []Message) bool { return hasToolWith(messages, StatusAwaiting) })
+	if err := f.svc.DecideCall(chat.ID, "another-call", true); err != ErrNothingToDecide {
+		t.Fatalf("DecideCall for another call = %v, want ErrNothingToDecide", err)
+	}
+	if !f.svc.Awaiting(chat.ID) || runs.Load() != 0 {
+		t.Fatal("an answer for another call answered the waiting one")
+	}
+	if err := f.svc.DecideCall(chat.ID, "d1", true); err != nil {
+		t.Fatalf("DecideCall: %v", err)
+	}
+	f.awaitTurn(chat.ID)
+	if runs.Load() != 1 {
+		t.Fatalf("runs = %d after the named allow", runs.Load())
+	}
+}

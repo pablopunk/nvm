@@ -163,11 +163,11 @@ func (c extensionChatPages) Regenerate(chatID string) error {
 }
 
 // Decide answers the tool call the chat with id waits on: allowed or refused.
-func (c extensionChatPages) Decide(chatID string, allow bool) error {
+func (c extensionChatPages) Decide(chatID, callID string, allow bool) error {
 	if c.p.chats == nil {
 		return errChatsUnavailable
 	}
-	return c.p.chats.Decide(chatID, allow)
+	return c.p.chats.DecideCall(chatID, callID, allow)
 }
 
 // Remove deletes the chat with id.
@@ -201,7 +201,7 @@ func apiChatMessage(message chat.Message) api.ChatMessage {
 	case chat.AuthorUser:
 		return api.ChatMessage{Role: "user", Content: message.Text, Images: apiChatImages(message.Images)}
 	case chat.AuthorTool:
-		return api.ChatMessage{Role: "assistant", Tool: &api.ChatTool{Name: toolName(message), Status: toolStatusWord(message.Status), Result: toolOutcome(message)}}
+		return api.ChatMessage{Role: "assistant", Tool: apiChatTool(message)}
 	case chat.AuthorNotice:
 		if message.Notice == nil {
 			return api.ChatMessage{Role: "system"}
@@ -220,20 +220,13 @@ func apiChatImages(images []chat.Image) []api.ChatImage {
 	return out
 }
 
-// toolName is the name of a tool row's tool, or empty for a row without one.
-func toolName(message chat.Message) string {
-	if message.Tool == nil {
-		return ""
+// apiChatTool is a tool row as an extension reads it, with the host's label and detail of the call.
+func apiChatTool(message chat.Message) *api.ChatTool {
+	tool := &api.ChatTool{Status: toolStatusWord(message.Status)}
+	if run := message.Tool; run != nil {
+		tool.Name, tool.Result, tool.CallID, tool.Label, tool.Detail = run.Name, run.Outcome, run.CallID, run.Label, run.Input
 	}
-	return message.Tool.Name
-}
-
-// toolOutcome is the result text of a tool row, or empty for a row without one.
-func toolOutcome(message chat.Message) string {
-	if message.Tool == nil {
-		return ""
-	}
-	return message.Tool.Outcome
+	return tool
 }
 
 // toolStatusWord is the status word a tool row carries in the API: running, waiting, failed or done.

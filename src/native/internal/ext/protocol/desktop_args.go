@@ -185,10 +185,25 @@ type PrefixArgs struct {
 }
 
 // ShortcutArgs names the action whose global shortcut a set or remove changes. Accelerator is the canonical form a set
-// binds; a remove leaves it empty.
+// binds; a remove leaves it empty. Expect, when set, is the table revision the change was prepared on: the host refuses
+// the change when the table moved since.
 type ShortcutArgs struct {
 	ActionID    string `json:"actionId"`
 	Accelerator string `json:"accelerator,omitempty"`
+	Expect      string `json:"expect,omitempty"`
+}
+
+// ShortcutChange is a shortcut change the host prepared before anyone approves it: the command, the canonical
+// accelerator (empty for a removal) with its label, the shortcut it replaces, the commands whose default shortcut it
+// takes, and the revision of the table it was prepared on. Host-only; extensions never read it.
+type ShortcutChange struct {
+	ActionID    string
+	Title       string
+	Accelerator string
+	Label       string
+	Current     string
+	Displaced   []string
+	Revision    string
 }
 
 // UninstallTrashArgs names a reviewed uninstall by its token and the items of it to move to the Trash.

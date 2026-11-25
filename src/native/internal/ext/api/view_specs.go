@@ -191,6 +191,10 @@ type ChatTool struct {
 	Name   string `json:"name"`
 	Status string `json:"status"`
 	Result string `json:"result,omitempty"`
+	// CallID is what an Allow or Refuse names; Label and Detail say what the call does.
+	CallID string `json:"callId,omitempty"`
+	Label  string `json:"label,omitempty"`
+	Detail string `json:"detail,omitempty"`
 }
 
 // NewChatView is the transcript of a chat that has no record yet: a draft with no messages and no tier picker. Submit

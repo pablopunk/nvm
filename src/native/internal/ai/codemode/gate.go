@@ -48,6 +48,8 @@ type gate struct {
 	// titles are the note titles the gate read from the store to describe a call, kept so the journal can name a note
 	// the call then removed.
 	titles map[string]string
+	// change is the shortcut change the host prepared for the call being asked about or run.
+	change protocol.ShortcutChange
 }
 
 type gateConfig struct {
@@ -83,7 +85,11 @@ func (g *gate) Serve(ctx context.Context, call protocol.ServiceCall) protocol.Se
 	if over {
 		return g.refuseOverLimit(r, call)
 	}
+	call, unprepared := r.prepared(g, call)
 	step := g.begin(r.label, r.describe(g, call))
+	if unprepared != nil {
+		return g.finishRan(r, call, step, protocol.ServiceReply{Failure: &api.Failure{Code: api.CodeInvalid, Message: unprepared.Error()}})
+	}
 	if verdict := g.verdict(r, k, step); verdict != outcomeRan {
 		return g.finishWithoutRunning(r, call, step, verdict)
 	}

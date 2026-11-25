@@ -35,8 +35,8 @@ func (t ExtensionTable) Aliases(prefix string) map[string][]string {
 // List returns every shortcut the user has bound to a command or to the palette.
 func (t ExtensionTable) List() []api.ShortcutRecord {
 	var records []api.ShortcutRecord
-	for _, entry := range t.manager.Entries() {
-		if entry.Accelerator != "" {
+	for _, entry := range t.manager.Snapshot().Entries {
+		if entry.Accelerator != "" && entry.ActionID != PaletteID {
 			records = append(records, t.labeled(recordOf(entry)))
 		}
 	}
@@ -45,7 +45,11 @@ func (t ExtensionTable) List() []api.ShortcutRecord {
 
 // Palette returns the shortcut that opens Nevermind.
 func (t ExtensionTable) Palette() api.ShortcutRecord {
-	return t.labeled(api.ShortcutRecord{ActionID: PaletteID, Title: PaletteTitle, Accelerator: t.manager.load().Palette, Scope: "global", Source: extensionSourceName(SourceUser)})
+	return t.labeled(paletteRecord(t.manager.Snapshot().Palette))
+}
+
+func paletteRecord(accelerator string) api.ShortcutRecord {
+	return api.ShortcutRecord{ActionID: PaletteID, Title: PaletteTitle, Accelerator: accelerator, Scope: "global", Source: extensionSourceName(SourceUser)}
 }
 
 // labeled adds the record's label as this platform spells its accelerator.

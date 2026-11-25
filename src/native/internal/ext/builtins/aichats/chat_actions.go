@@ -19,8 +19,8 @@ const (
 func chatActions(detail api.ChatDetail) []api.Action {
 	id := detail.ID
 	var out []api.Action
-	if awaitingAnswer(detail.Messages) {
-		out = append(out, chatOpAction(api.ChatAllow, id, "Allow", ""), chatOpAction(api.ChatRefuse, id, "Refuse", shortcutRefuse))
+	if callID, waiting := waitingCall(detail.Messages); waiting {
+		out = append(out, answerAction(api.ChatAllow, id, callID, "Allow", ""), answerAction(api.ChatRefuse, id, callID, "Refuse", shortcutRefuse))
 	}
 	busy := replyStreams(detail.Messages)
 	if !busy && lastText(detail.Messages, "user") != "" {
@@ -81,14 +81,21 @@ func withShortcut(action api.Action, accelerator string) api.Action {
 	return action
 }
 
-// awaitingAnswer reports whether a tool call in the transcript waits for the user.
-func awaitingAnswer(messages []api.ChatMessage) bool {
+// waitingCall returns the id of the tool call in the transcript that waits for the user, and whether one waits.
+func waitingCall(messages []api.ChatMessage) (string, bool) {
 	for _, message := range messages {
 		if message.Tool != nil && message.Tool.Status == toolStatusWaiting {
-			return true
+			return message.Tool.CallID, true
 		}
 	}
-	return false
+	return "", false
+}
+
+// answerAction allows or refuses the waiting call callID and no other.
+func answerAction(op, chatID, callID, title, shortcut string) api.Action {
+	action := chatOpAction(op, chatID, title, shortcut)
+	action.Chat.CallID = callID
+	return action
 }
 
 // lastText is the text of the newest message with role, or empty when there is none.

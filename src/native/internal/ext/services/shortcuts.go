@@ -42,6 +42,9 @@ func (h *Handler) editShortcuts(ctx context.Context, call protocol.ServiceCall) 
 	if err := h.require(api.CapabilityShortcutsWrite); err != nil {
 		return nil, err
 	}
+	if err := requireRun(protocol.RequestMethodOf(ctx), "changing a shortcut"); err != nil {
+		return nil, err
+	}
 	var args protocol.ShortcutArgs
 	if err := decodeArgs(call.Args, &args); err != nil {
 		return nil, err
@@ -50,12 +53,12 @@ func (h *Handler) editShortcuts(ctx context.Context, call protocol.ServiceCall) 
 		return nil, invalid("a shortcut change needs an action id")
 	}
 	if call.Op == protocol.OpRemove {
-		return nil, h.deps.ShortcutEditor.Remove(ctx, args.ActionID)
+		return nil, h.deps.ShortcutEditor.Remove(ctx, args.ActionID, args.Expect)
 	}
 	if args.Accelerator == "" {
 		return nil, invalid("setting a shortcut needs an accelerator, such as Command+Alt+K")
 	}
-	return h.deps.ShortcutEditor.Set(ctx, args.ActionID, args.Accelerator)
+	return h.deps.ShortcutEditor.Set(ctx, args.ActionID, args.Accelerator, args.Expect)
 }
 
 // shortcutAliases reads the aliases of the actions under a prefix. The prefix is required, so a read never lists every

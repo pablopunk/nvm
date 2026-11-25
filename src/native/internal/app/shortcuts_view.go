@@ -2,6 +2,7 @@ package app
 
 import (
 	"runtime"
+	"slices"
 
 	"github.com/pablopunk/nvm/native/internal/ext/api"
 	shortcutsbuiltin "github.com/pablopunk/nvm/native/internal/ext/builtins/shortcuts"
@@ -20,6 +21,29 @@ func (p *App) keyboardShortcutsPage() *palette.View {
 // paletteRecorderView changes the palette hotkey, as the Settings row does.
 func (p *App) paletteRecorderView() *palette.View {
 	return p.shortcutRecorderView(shortcuts.Entry{ActionID: shortcuts.PaletteID, Title: shortcuts.PaletteTitle})
+}
+
+// shortcutsNotDeclaredMessage refuses a shortcut change from an extension that did not declare the shortcuts capability.
+const shortcutsNotDeclaredMessage = "This extension did not declare the shortcuts capability, so it cannot change shortcuts"
+
+// runExtensionShortcutAction performs a shortcut action of extension extID. Recording or removing a shortcut needs the
+// shortcuts capability, as the shortcuts service does; copying the command line changes nothing and needs none.
+func (p *App) runExtensionShortcutAction(h search.Host, extID, op, target string) {
+	if op != api.ShortcutOpCopyCommand && !p.extensionDeclares(extID, api.CapabilityShortcuts) {
+		h.Toast(shortcutsNotDeclaredMessage)
+		return
+	}
+	p.runShortcutAction(h, op, target)
+}
+
+// extensionDeclares reports whether the installed or built-in extension extID declares capability.
+func (p *App) extensionDeclares(extID string, capability api.Capability) bool {
+	m := p.extensionManager()
+	if m == nil {
+		return false
+	}
+	manifest, _, err := m.Definition(extID)
+	return err == nil && slices.Contains(manifest.Capabilities, capability)
 }
 
 // runShortcutAction performs a shortcut operation an action of the Keyboard Shortcuts built-in names. Record pushes the

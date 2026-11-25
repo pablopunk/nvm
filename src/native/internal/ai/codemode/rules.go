@@ -27,6 +27,9 @@ type rule struct {
 	describe func(g *gate, call protocol.ServiceCall) string
 	// journal is what happened, from the host's reply.
 	journal func(g *gate, call protocol.ServiceCall, reply protocol.ServiceReply) string
+	// prepare, when set, has the host prepare the call before it is described or asked about, and returns the call to
+	// run: the one the user approves. An error fails the call without asking.
+	prepare func(g *gate, call protocol.ServiceCall) (protocol.ServiceCall, error)
 }
 
 // programRules are every operation a program may use, the allowlist of the gate.
@@ -50,6 +53,14 @@ func notesRules() map[key]rule {
 		op(protocol.OpUpdate):     {class: ClassWrite, label: "Editing a note", describe: describeNoteByID, journal: journalUpdated},
 		op(protocol.OpDelete):     {class: ClassDestructive, label: "Deleting a note", describe: describeDelete, journal: journalDeleted},
 	}
+}
+
+// prepared is the call as the host prepared it, or the call unchanged when the rule prepares nothing.
+func (r rule) prepared(g *gate, call protocol.ServiceCall) (protocol.ServiceCall, error) {
+	if r.prepare == nil {
+		return call, nil
+	}
+	return r.prepare(g, call)
 }
 
 func describeNothing(*gate, protocol.ServiceCall) string { return "" }

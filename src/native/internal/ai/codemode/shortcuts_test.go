@@ -55,24 +55,53 @@ func (f *fakeShortcutTable) Palette() api.ShortcutRecord {
 
 func (f *fakeShortcutTable) Aliases(string) map[string][]string { return nil }
 
-func (f *fakeShortcutTable) Set(_ context.Context, actionID, accelerator string) (api.ShortcutRecord, error) {
-	f.mu.Lock()
-	for id, taken := range f.bound {
-		if taken == accelerator && id != actionID {
-			f.mu.Unlock()
-			return api.ShortcutRecord{}, fmt.Errorf("%s is already used: %w", accelerator, api.ErrInvalidInput)
+// Plan prepares a change the way the host does: the command's title and current shortcut, and a refusal of a key
+// another command took.
+func (f *fakeShortcutTable) Plan(actionID, accelerator string) (protocol.ShortcutChange, error) {
+	record := f.record(actionID)
+	if record.ActionID == "" {
+		return protocol.ShortcutChange{}, fmt.Errorf("no command %q: %w", actionID, api.ErrInvalidInput)
+	}
+	change := protocol.ShortcutChange{ActionID: actionID, Title: record.Title, Accelerator: accelerator, Current: record.Accelerator, Revision: f.revision()}
+	for _, other := range f.Bindable() {
+		if accelerator != "" && other.ActionID != actionID && other.Accelerator == accelerator {
+			return change, fmt.Errorf("%s is already used by %s: %w", accelerator, other.Title, api.ErrInvalidInput)
 		}
 	}
+	return change, nil
+}
+
+func (f *fakeShortcutTable) revision() string {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	return fmt.Sprint(f.bound)
+}
+
+func (f *fakeShortcutTable) Set(_ context.Context, actionID, accelerator, expect string) (api.ShortcutRecord, error) {
+	if expect != "" && expect != f.revision() {
+		return api.ShortcutRecord{}, fmt.Errorf("the shortcuts changed: %w", api.ErrInvalidInput)
+	}
+	f.mu.Lock()
 	f.bound[actionID] = accelerator
 	f.mu.Unlock()
 	return f.record(actionID), nil
 }
 
-func (f *fakeShortcutTable) Remove(_ context.Context, actionID string) error {
+func (f *fakeShortcutTable) Remove(_ context.Context, actionID, expect string) error {
+	if expect != "" && expect != f.revision() {
+		return fmt.Errorf("the shortcuts changed: %w", api.ErrInvalidInput)
+	}
 	f.mu.Lock()
 	defer f.mu.Unlock()
 	delete(f.bound, actionID)
 	return nil
+}
+
+// bind changes a shortcut behind the program's back, as the user does in Settings while a question waits.
+func (f *fakeShortcutTable) bind(actionID, accelerator string) {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	f.bound[actionID] = accelerator
 }
 
 func (f *fakeShortcutTable) record(actionID string) api.ShortcutRecord {
@@ -150,8 +179,8 @@ func TestADeclinedShortcutChangeSavesNothing(t *testing.T) {
 	contains(t, result.Text, "remove Command+Alt+V from “Clipboard History”: the user declined")
 }
 
-// A refused accelerator reaches the program as the host's reason, and the journal says it failed.
-func TestATakenAcceleratorFailsWithTheHostReason(t *testing.T) {
+// A change the host refuses while preparing it fails with the host's reason, and the user is never asked.
+func TestATakenAcceleratorFailsWithoutAsking(t *testing.T) {
 	table := newFakeShortcutTable()
 	f := newFixture(t, withShortcuts(table))
 	f.steps.decide = allow
@@ -162,6 +191,28 @@ return nil, err`)
 	}
 	if got := table.accelerator("notes"); got != "" {
 		t.Fatalf("notes shortcut = %q", got)
+	}
+	if row := lastRow(t, f, "Changing a shortcut"); row.asked {
+		t.Fatalf("a change the host refused was put to the user: %+v", row)
+	}
+}
+
+// The approval covers the table the user saw: a shortcut the user changed while the question waited is not
+// overwritten by the approved change.
+func TestAnApprovalDoesNotOverwriteAChangeMadeWhileItWaited(t *testing.T) {
+	table := newFakeShortcutTable()
+	f := newFixture(t, withShortcuts(table))
+	f.steps.decide = func(*fakeRow, context.Context) (bool, error) {
+		table.bind("clipboard", "Control+Alt+V")
+		return true, nil
+	}
+	result := f.run(`_, err := ctx.Shortcuts().Set("clipboard", "Command+Shift+V")
+return nil, err`)
+	if !result.Failed || !strings.Contains(result.Text, "shortcuts changed") {
+		t.Fatalf("result = %+v", result)
+	}
+	if got := table.accelerator("clipboard"); got != "Control+Alt+V" {
+		t.Fatalf("clipboard shortcut = %q; the user's newer choice was overwritten", got)
 	}
 }
 

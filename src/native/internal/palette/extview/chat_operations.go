@@ -27,9 +27,9 @@ func (s *Session) chatOperation(action api.Action, title string) search.Action {
 	case api.ChatAgain:
 		return s.chatStep(title, payload.ChatID, func() error { return s.deps.Chats.Regenerate(payload.ChatID) })
 	case api.ChatAllow:
-		return s.chatStep(title, payload.ChatID, func() error { return s.deps.Chats.Decide(payload.ChatID, true) })
+		return s.chatStep(title, payload.ChatID, func() error { return s.deps.Chats.Decide(payload.ChatID, payload.CallID, true) })
 	case api.ChatRefuse:
-		return s.chatStep(title, payload.ChatID, func() error { return s.deps.Chats.Decide(payload.ChatID, false) })
+		return s.chatStep(title, payload.ChatID, func() error { return s.deps.Chats.Decide(payload.ChatID, payload.CallID, false) })
 	case api.ChatStop:
 		return s.chatStep(title, payload.ChatID, func() error {
 			s.deps.Chats.Stop(payload.ChatID)

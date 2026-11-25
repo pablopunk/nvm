@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"maps"
 	"slices"
+	"sync/atomic"
 
 	"github.com/pablopunk/nvm/native/internal/platform"
 )
@@ -23,6 +24,9 @@ type Setup struct {
 	Run       func(actionID string)
 	OnPalette func()
 	OnSummon  func(Status)
+	// Bindable lists commands outside Commands that can take a shortcut, such as every extension command. It is read
+	// on the UI thread; nil adds none.
+	Bindable func() []Action
 	// System lists the shortcuts the OS has turned on, or is nil where it has no live source. A recorded shortcut the
 	// OS uses is refused; one the user turned off in the system settings is allowed.
 	System platform.SystemShortcuts
@@ -39,6 +43,7 @@ type Manager struct {
 	inactive  map[string]string
 	suspended bool
 	system    *systemOwners
+	snapshot  atomic.Pointer[Snapshot]
 }
 
 // PaletteChange reports a palette shortcut change that was saved. SystemOwner names a system feature that already owns
@@ -205,6 +210,7 @@ func (m *Manager) SetPalette(accelerator string) (PaletteChange, error) {
 		m.keepSuspendedIfSuspended()
 		return PaletteChange{}, err
 	}
+	m.publish()
 	return change, nil
 }
 
@@ -216,6 +222,7 @@ func (m *Manager) keepSuspendedIfSuspended() {
 }
 
 func (m *Manager) applyActions() {
+	defer m.publish()
 	if m.suspended {
 		return
 	}

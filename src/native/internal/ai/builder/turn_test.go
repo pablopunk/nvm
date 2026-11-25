@@ -178,8 +178,8 @@ func toolCallReply(writer io.Writer, id, name string, args any) {
 // Raised by 100 bytes for SavedDictation.Failure, and by 300 for Notes.Search and Notes.CreateWith,
 // and by 150 for the platform-limited operations the terse reference lists, and by 400 for on-device dictation
 // (DictationEngine, DeviceModel, InstallDeviceModel, RetryOn), and by 300 for the camera list, and by 250 for
-// Shortcuts.Bindable, Set and Remove.
-const turnRequestBudgetBytes = 48327
+// Shortcuts.Bindable, Set and Remove, and by 60 for the call a chat tool row names.
+const turnRequestBudgetBytes = 48387
 
 // TestBuilderTurnWritesWithThePreloadedReferenceAndBindsTheChat runs one builder turn end to end on the fake backend:
 // the model writes the extension through write_extension from the terse reference it was given, and then answers in a
