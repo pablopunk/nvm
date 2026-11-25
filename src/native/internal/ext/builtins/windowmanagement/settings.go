@@ -67,7 +67,7 @@ type binding struct {
 	kind     fieldKind
 	unit     string
 	min, max float64
-	options  []string
+	choices  []api.SettingChoice
 
 	number *float64
 	flag   *bool
@@ -100,32 +100,52 @@ func bindings(s *Settings) []binding {
 		{id: "centerHalfWidthPercent", title: "Center Half Width", section: sectionSizes, kind: kindNumber, unit: "%", min: 20, max: 90, number: &s.CenterHalfWidthPercent},
 		{id: "resizeStepPercent", title: "Resize Step", section: sectionSizes, kind: kindNumber, unit: "%", min: 1, max: 25, number: &s.ResizeStepPercent},
 		{id: "cycle", title: "Cycle Half Commands", section: sectionBehavior, kind: kindFlag, flag: &s.Cycle},
-		{id: "cycleOrder", title: "Cycle Order", section: sectionBehavior, kind: kindChoice, options: []string{cycleHalfTwoThirdsThird, cycleHalfThirdTwoThirds}, text: &s.CycleOrder},
-		{id: "displayOrder", title: "Display Order", section: sectionDisplays, kind: kindChoice, options: []string{"left-to-right", displayTopToBottom}, text: &s.DisplayOrder},
-		{id: "displayMoveSizing", title: "Display Move Sizing", section: sectionDisplays, kind: kindChoice, options: []string{"proportional", moveKeepSize}, text: &s.DisplayMoveSizing},
+		{id: "cycleOrder", title: "Cycle Order", section: sectionBehavior, kind: kindChoice, choices: sameTitles(cycleHalfTwoThirdsThird, cycleHalfThirdTwoThirds), text: &s.CycleOrder},
+		{id: "displayOrder", title: "Display Order", section: sectionDisplays, kind: kindChoice, choices: sameTitles("left-to-right", displayTopToBottom), text: &s.DisplayOrder},
+		{id: "displayMoveSizing", title: "Display Move Sizing", section: sectionDisplays, kind: kindChoice, choices: sameTitles("proportional", moveKeepSize), text: &s.DisplayMoveSizing},
 	}
 }
 
+// sameTitles makes choices titled with their own values, as the settings view shows them.
+func sameTitles(values ...string) []api.SettingChoice {
+	choices := make([]api.SettingChoice, 0, len(values))
+	for _, value := range values {
+		choices = append(choices, api.SettingChoice{Value: value, Title: value})
+	}
+	return choices
+}
+
 // SettingDefinitions declares the settings with the values the built-in starts from: the defaults, or the values the
-// settings file held before the built-in kept its own.
+// settings file held before the built-in kept its own. A start value the definition does not accept declares the default.
 func SettingDefinitions(start Settings) []api.SettingDefinition {
+	defaults := DefaultSettings()
+	fallbacks := bindings(&defaults)
 	fields := bindings(&start)
 	definitions := make([]api.SettingDefinition, 0, len(fields))
-	for _, field := range fields {
-		definitions = append(definitions, definitionOf(field))
+	for i, field := range fields {
+		definition := definitionOf(field)
+		if definition.CheckValue(definition.Value) != nil {
+			definition.Value = valueJSON(fallbacks[i])
+		}
+		definitions = append(definitions, definition)
 	}
 	return definitions
 }
 
+// definitionOf declares a field with its type and the values it accepts: a range for a number or gap, choices for text.
 func definitionOf(field binding) api.SettingDefinition {
 	definition := api.SettingDefinition{ID: field.id, Title: field.title, Value: valueJSON(field)}
 	switch field.kind {
 	case kindNumber:
 		definition.Type = api.SettingNumber
+		definition.Min, definition.Max = &field.min, &field.max
+	case kindOptionalGap:
+		definition.Min, definition.Max = &field.min, &field.max
 	case kindFlag:
 		definition.Type = api.SettingBoolean
 	case kindChoice:
 		definition.Type = api.SettingString
+		definition.Choices = field.choices
 	}
 	return definition
 }

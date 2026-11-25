@@ -48,6 +48,15 @@ func Engines() []Engine {
 	return append([]Engine(nil), engines...)
 }
 
+// EngineChoices are the engines as the choices of the engine setting: each key titled with its name.
+func EngineChoices() []api.SettingChoice {
+	choices := make([]api.SettingChoice, 0, len(engines))
+	for _, engine := range engines {
+		choices = append(choices, api.SettingChoice{Value: engine.Key, Title: engine.Name})
+	}
+	return choices
+}
+
 // NextEngine is the key of the engine after key in the order the settings row cycles them. An unknown key starts at the
 // first engine.
 func NextEngine(key string) string {
@@ -94,6 +103,7 @@ func (e Extension) Manifest() api.Manifest {
 		Capabilities: []api.Capability{api.CapabilitySettingsWrite},
 		Settings: []api.SettingDefinition{{
 			ID: EngineSettingID, Title: "Default Search Engine", Type: api.SettingString, Value: engineValue(e.legacyEngine),
+			Choices: EngineChoices(),
 		}},
 	}
 }

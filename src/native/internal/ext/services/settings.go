@@ -65,7 +65,7 @@ func (h *Handler) settingGet(args json.RawMessage) (protocol.GetResult, error) {
 	return protocol.GetResult{Found: true, Value: value}, nil
 }
 
-// settingSet stores a value after the capability check and the type check. It is saved before it returns, so
+// settingSet stores a value after the capability check; saveSetting checks the value. It is saved before it returns, so
 // the caller sees the value persisted.
 func (h *Handler) settingSet(args json.RawMessage) (json.RawMessage, error) {
 	h.settingsMu.Lock()
@@ -81,10 +81,7 @@ func (h *Handler) settingSet(args json.RawMessage) (json.RawMessage, error) {
 	if !found {
 		return nil, notFound("the extension declares no setting %q", request.Key)
 	}
-	if err := checkSettingType(definition, request.Value); err != nil {
-		return nil, err
-	}
-	return request.Value, h.saveSetting(request.Key, request.Value)
+	return request.Value, h.saveSetting(definition, request.Value)
 }
 
 // settingToggle flips a boolean setting and returns the new value.
@@ -114,7 +111,7 @@ func (h *Handler) settingToggle(args json.RawMessage) (json.RawMessage, error) {
 		return nil, invalid("setting %q does not hold a boolean", request.Key)
 	}
 	next, _ := json.Marshal(!current)
-	return next, h.saveSetting(request.Key, next)
+	return next, h.saveSetting(definition, next)
 }
 
 // currentSetting is the stored value of a declared setting, or its default. A built-in whose settings the host keeps
@@ -137,9 +134,13 @@ func (h *Handler) currentSetting(definition api.SettingDefinition) (json.RawMess
 	return currentValue(values, definition), nil
 }
 
-// saveSetting stores a value where the extension's settings live: in the host's store for a built-in that has one,
-// else in the extension's settings file.
-func (h *Handler) saveSetting(id string, value json.RawMessage) error {
+// saveSetting checks a value against its definition and stores it where the extension's settings live: in the host's
+// store for a built-in that has one, else in the extension's settings file.
+func (h *Handler) saveSetting(definition api.SettingDefinition, value json.RawMessage) error {
+	if err := checkSettingValue(definition, value); err != nil {
+		return err
+	}
+	id := definition.ID
 	if h.hostSettings != nil {
 		if err := h.hostSettings.Save(id, value); err != nil {
 			return unavailable("the setting cannot be saved: %v", err)
@@ -184,26 +185,11 @@ func defaultValue(definition api.SettingDefinition) json.RawMessage {
 	return definition.Value
 }
 
-// checkSettingType refuses a value that does not match the declared type. An untyped setting accepts any JSON.
-func checkSettingType(definition api.SettingDefinition, value json.RawMessage) error {
-	if !json.Valid(value) {
-		return invalid("the value of setting %q is not valid JSON", definition.ID)
-	}
-	var decoded any
-	if err := json.Unmarshal(value, &decoded); err != nil {
-		return invalid("the value of setting %q is not valid JSON", definition.ID)
-	}
-	ok := true
-	switch definition.Type {
-	case api.SettingBoolean:
-		_, ok = decoded.(bool)
-	case api.SettingString:
-		_, ok = decoded.(string)
-	case api.SettingNumber:
-		_, ok = decoded.(float64)
-	}
-	if !ok {
-		return invalid("setting %q expects a %s", definition.ID, definition.Type)
+// checkSettingValue refuses a value the definition does not accept, as api.SettingDefinition.CheckValue says. Every
+// write passes it, whether the extension's settings file or the host's store keeps the setting.
+func checkSettingValue(definition api.SettingDefinition, value json.RawMessage) error {
+	if err := definition.CheckValue(value); err != nil {
+		return invalid("%v", err)
 	}
 	return nil
 }

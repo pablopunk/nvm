@@ -1,6 +1,7 @@
 package windowmanagement
 
 import (
+	"encoding/json"
 	"fmt"
 	"strconv"
 	"strings"
@@ -149,16 +150,21 @@ func formatNumber(value float64) string {
 	return strconv.FormatFloat(value, 'f', -1, 64)
 }
 
-// parseSettingText reads a typed value for field: a number inside its range, or nil for a blank optional gap. A message
-// says why the text does not fit.
+// parseSettingText reads a typed value for field: a number its definition accepts, or nil for a blank optional gap. A
+// message says why the text does not fit.
 func parseSettingText(field binding, text string) (any, string) {
 	trimmed := strings.TrimSpace(text)
 	if field.kind == kindOptionalGap && trimmed == "" {
 		return nil, ""
 	}
 	value, err := strconv.ParseFloat(trimmed, 64)
-	if err != nil || !(value >= field.min && value <= field.max) {
+	if err != nil || definitionOf(field).CheckValue(valueJSONOf(value)) != nil {
 		return nil, fmt.Sprintf("Enter a number from %s to %s.", formatNumber(field.min), formatNumber(field.max))
 	}
 	return value, ""
+}
+
+func valueJSONOf(value float64) []byte {
+	raw, _ := json.Marshal(value)
+	return raw
 }

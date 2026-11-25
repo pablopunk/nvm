@@ -47,13 +47,18 @@ type Cache interface {
 	Invalidate(key string)
 }
 
-// SettingDefinition describes one user-visible setting that the extension exposes.
+// SettingDefinition describes one user-visible setting that the extension exposes. Value is the default. The host
+// refuses every write that CheckValue refuses: Choices (type string) lists the only values a setting takes, and Min and
+// Max (type number, or no type for a number that may be null) bound a number. A choice row draws Choices.
 type SettingDefinition struct {
 	ID          string          `json:"id"`
 	Title       string          `json:"title,omitempty"`
 	Description string          `json:"description,omitempty"`
 	Type        string          `json:"type,omitempty"`
 	Value       json.RawMessage `json:"value,omitempty"`
+	Choices     []SettingChoice `json:"choices,omitempty"`
+	Min         *float64        `json:"min,omitempty"`
+	Max         *float64        `json:"max,omitempty"`
 }
 
 // Settings reads and writes the settings the manifest declares. Writes need the settings.write capability, which
