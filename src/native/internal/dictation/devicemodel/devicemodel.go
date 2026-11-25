@@ -31,6 +31,8 @@ type Manifest struct {
 	Credit  string `json:"credit"`
 	BaseURL string `json:"baseURL"`
 	Files   []File `json:"files"`
+	// Replaces names the folders of earlier versions of the model, removed once this one is on disk.
+	Replaces []string `json:"replaces,omitempty"`
 }
 
 // Size is the bytes the model takes on disk.
@@ -148,6 +150,9 @@ func (m *Manager) Install(background func(name string, fn func())) {
 	m.mu.Unlock()
 	background("dictation.download-model", func() {
 		err := m.download(context.Background())
+		if err == nil {
+			m.removeReplaced()
+		}
 		m.mu.Lock()
 		defer m.mu.Unlock()
 		m.running = false
@@ -179,4 +184,30 @@ func (m *Manager) download(ctx context.Context) error {
 		finished += file.Size
 	}
 	return nil
+}
+
+// removeReplaced deletes the folders of earlier versions of the model, which nothing reads any more. A folder that
+// cannot be removed is left; it only takes disk space.
+func (m *Manager) removeReplaced() {
+	root := filepath.Dir(m.dir)
+	for _, name := range m.manifest.Replaces {
+		removeTree(m.files, filepath.Join(root, name))
+	}
+}
+
+// removeTree deletes a folder and everything in it through the file port, which removes one entry at a time.
+func removeTree(files platform.FS, dir string) {
+	entries, err := files.ReadDir(dir)
+	if err != nil {
+		return
+	}
+	for _, entry := range entries {
+		path := filepath.Join(dir, entry.Name())
+		if entry.IsDir() {
+			removeTree(files, path)
+			continue
+		}
+		_ = files.Remove(path)
+	}
+	_ = files.Remove(dir)
 }

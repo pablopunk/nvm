@@ -7,7 +7,7 @@ OPUS_VERSION=1.5.2
 OPUS_SHA256=65c1d2f78b9f2fb20082c38cbe47c951ad5839345876e46941612ee87f9a7ce1
 OPUS_URL="https://downloads.xiph.org/releases/opus/opus-${OPUS_VERSION}.tar.gz"
 OPUS_RELEASE_URL="https://github.com/xiph/opus/releases/download/v${OPUS_VERSION}/opus-${OPUS_VERSION}.tar.gz"
-REQUIRED_SYMBOLS="opus_encoder_create opus_encode opus_encoder_ctl opus_encoder_destroy"
+REQUIRED_SYMBOLS="opus_encoder_create opus_encode opus_encoder_ctl opus_encoder_destroy opus_decoder_create opus_decode opus_decoder_destroy"
 
 root="$(cd "$(dirname "$0")/../.." && pwd)"
 goos="$(uname -s | tr '[:upper:]' '[:lower:]')"

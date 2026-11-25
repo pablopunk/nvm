@@ -135,6 +135,7 @@ func (s *Service) StartOn(transcriber Transcriber, deviceID string, sink func(fl
 	s.level.Store(0)
 	op := newOperation()
 	op.transcriber = transcriber
+	op.keepPCM = readsWholeRecording(transcriber)
 	op.levelSink = sink
 	op.onLevel = func(level float64) { s.publishOperationLevel(op, level) }
 	op.retry = s.cfg.Retry
@@ -361,8 +362,7 @@ func (s *Service) transcribe(op *operation) (string, error) {
 	case <-op.ctx.Done():
 		return "", op.ctx.Err()
 	}
-	passes := wholeRecordingPasses(op.track(), op.segments)
-	return transcribePasses(op.ctx, op.transcriber, s.cfg.Retry, op.id, op.preparedOK, passes, s.retryWarning("dictation.transcribe-retry"))
+	return readWhole(op.ctx, op.transcriber.(pcmReader), s.cfg.Retry, op.pcm, s.retryWarning("dictation.transcribe-retry"))
 }
 
 // captureGapLimit is how much shorter than the time the user held a dictation its audio may be before the gap is logged.

@@ -5,13 +5,14 @@ import "math"
 // Live segmenting. A segment ends at a natural pause once it holds enough speech to be worth a request, so it can be
 // transcribed while the user goes on speaking and only the words after the last pause are left when they stop. The
 // minimum keeps a minute of speech near a dozen requests, well inside the backend's per-minute limit; past the long
-// mark a shorter pause is enough, so fast talkers still get cut. Half a minute without any pause is cut anyway, as the
-// model skips words in longer pieces (see maxPassMillis).
+// mark a shorter pause is enough, so fast talkers still get cut. A piece without any pause is cut at maxLivePieceMillis
+// anyway: Parakeet read with full attention, as the hosted route runs it, skips sentences in longer audio.
 const (
 	minLiveSegmentMillis  = 5_000
 	longLiveSegmentMillis = 12_000
 	pauseMillis           = 500
 	longPauseMillis       = 250
+	maxLivePieceMillis    = 30_000
 )
 
 // A frame is quiet when it sits within floorMarginDB of the noise floor or voiceDropDB below the recent voice. The floor

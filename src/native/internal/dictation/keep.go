@@ -57,9 +57,9 @@ func (s *Service) retryFiles(ctx context.Context, transcriber Transcriber, files
 	if !readsWholeRecording(transcriber) {
 		return transcribeFiles(ctx, transcriber, s.cfg.Retry, newRetryOperationID(), false, files, onRetry)
 	}
-	passes, err := savedPasses(files)
+	pcm, err := s.decodeFiles(files)
 	if err != nil {
 		return "", err
 	}
-	return transcribePasses(ctx, transcriber, s.cfg.Retry, newRetryOperationID(), false, passes, onRetry)
+	return readWhole(ctx, transcriber.(pcmReader), s.cfg.Retry, pcm, onRetry)
 }

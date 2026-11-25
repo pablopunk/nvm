@@ -37,6 +37,9 @@ type operation struct {
 	encoder platform.OpusEncoder
 	// capturing is when the capture started, to check at Stop that the audio covers the time the user held it.
 	capturing time.Time
+	// keepPCM keeps the raw samples in pcm, for a transcriber that reads the recording whole from them.
+	keepPCM bool
+	pcm     []int16
 	// transcriber is where this dictation's segments go; nil keeps the audio for later.
 	transcriber Transcriber
 	// live transcribes each finished segment while the user goes on speaking; nil sends nothing until Stop.
@@ -171,6 +174,9 @@ func (op *operation) addFrame(frame []int16) bool {
 		return false
 	}
 	op.current = append(op.current, packet)
+	if op.keepPCM {
+		op.pcm = append(op.pcm, frame...)
+	}
 	op.frames++
 	op.heard = op.heard || hasSound(frame)
 	op.noteFrame(frame)
@@ -295,5 +301,5 @@ func (op *operation) swapStream(stream platform.MicrophoneStream) bool {
 // liveCut reports whether the live piece being captured ends after frame: at a pause, or at the longest piece the
 // model reads without skipping words, even without a pause, since the next piece repeats its end.
 func (op *operation) liveCut(frame []int16) bool {
-	return op.pauses.cut(frame, len(op.current)) || len(op.current) >= maxPassFrames
+	return op.pauses.cut(frame, len(op.current)) || len(op.current) >= maxLivePieceMillis/FrameMillis
 }

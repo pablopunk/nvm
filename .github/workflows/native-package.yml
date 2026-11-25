@@ -103,6 +103,7 @@ jobs:
         working-directory: src/native
         run: |
           bash scripts/natives/build-libopus.sh
+          bash scripts/natives/build-transcribe.sh
           bash scripts/natives/build-macos-helper.sh
           bash scripts/natives/fetch-ocr.sh darwin "${{ matrix.arch }}"
           bash scripts/natives/build-pi-host.sh
@@ -222,6 +223,15 @@ jobs:
           symbols="$(nm -gU "$opus")"
           grep -q 'opus_encoder_create$' <<<"$symbols" || { echo "libopus lacks opus_encoder_create." >&2; exit 1; }
 
+      - name: Check transcribe.cpp is bundled for on-device dictation
+        working-directory: src/native
+        run: |
+          set -euo pipefail
+          lib="dist/darwin-${{ matrix.arch }}/Nevermind.app/Contents/Resources/lib/libtranscribe.dylib"
+          test -f "$lib" || { echo "transcribe.cpp is missing from the app bundle, so on-device dictation cannot run: $lib" >&2; exit 1; }
+          lipo -archs "$lib" | grep -qx arm64 || { echo "transcribe.cpp is not an arm64 binary." >&2; exit 1; }
+          nm -gU "$lib" | grep -q 'transcribe_run$' || { echo "transcribe.cpp lacks transcribe_run." >&2; exit 1; }
+
       - name: Note the update feed
         env:
           HAS_UPDATE_SIGNING: ${{ secrets.NATIVE_UPDATE_PRIVATE_KEY != '' }}
@@ -302,6 +312,7 @@ jobs:
         working-directory: src/native
         run: |
           bash scripts/natives/build-libopus.sh
+          bash scripts/natives/build-transcribe.sh
           bash scripts/natives/fetch-ocr.sh linux "${{ matrix.arch }}"
           bash scripts/natives/build-pi-host.sh
 
