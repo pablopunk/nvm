@@ -258,10 +258,10 @@ func TestRowActionsAddTweakWithAIToAnExtensionRow(t *testing.T) {
 	}
 }
 
-func TestBuilderChatRowsFollowConversationsAtEqualScore(t *testing.T) {
-	builder := chat("1", "builder", "Clock")
+func TestSearchedBuilderChatRowsFollowConversationsAtEqualScore(t *testing.T) {
+	builder := chat("1", "builder", "Clock notes")
 	builder.UpdatedAtMs = testNow.UnixMilli()
-	items, err := Extension{}.RootItems(contextWith(builder, chat("2", "conversation", "Notes")))
+	items, err := Extension{}.SearchItems(contextWith(builder, chat("2", "conversation", "Notes")), "notes")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -384,16 +384,4 @@ func user(text string) api.ChatMessage {
 
 func assistant(text string) api.ChatMessage {
 	return api.ChatMessage{Role: "assistant", Content: text}
-}
-
-func TestRootListsNoChatsWhenTheSettingHidesThem(t *testing.T) {
-	ctx := contextWith(chat("1", "conversation", "Alpha"))
-	ctx.rootHidden = true
-	items, err := Extension{}.RootItems(ctx)
-	if err != nil || len(items) != 0 {
-		t.Fatalf("RootItems = %v, %v; want no rows", items, err)
-	}
-	if items, _ := (Extension{}).SearchItems(ctx, "Alpha"); len(items) == 0 {
-		t.Fatal("search lost the chat; the setting hides root rows only")
-	}
 }

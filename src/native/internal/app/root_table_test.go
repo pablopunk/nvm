@@ -104,7 +104,7 @@ func rootTableFixtureWithApps(t *testing.T, extra []appfeat.App) *App {
 			break
 		}
 	}
-	p.exts.mgr.Store(newManagerWithFakes(t, surfaces, builtins, nil, nil, p.appsvc))
+	p.exts.mgr.Store(newManagerWithFakes(t, surfaces, builtins, surfaces.extras.clock, nil, p.appsvc))
 	p.files = newTestFiles(t, home, []string{
 		filepath.Join(home, "Documents", "meeting-notes.md"),
 		filepath.Join(home, "Documents", "release-plan.txt"),

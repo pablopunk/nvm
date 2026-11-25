@@ -158,6 +158,25 @@
         ]
       },
       {
+        "kind": "Conversations",
+        "title": "Continue conversation: Release notes",
+        "subtitle": "AI conversation",
+        "section": "",
+        "id": "chat:c-release",
+        "icon": "message-circle",
+        "tone": "yellow",
+        "accessory": "",
+        "prominent": false,
+        "tintTitle": true,
+        "iconPath": "",
+        "actions": [
+          {
+            "title": "Open",
+            "label": ""
+          }
+        ]
+      },
+      {
         "kind": "Clipboard",
         "title": "Clipboard image",
         "subtitle": "Image copied Nov 3, 9:20 AM",
@@ -709,44 +728,6 @@
         ]
       },
       {
-        "kind": "Conversations",
-        "title": "Continue conversation: Release notes",
-        "subtitle": "AI conversation",
-        "section": "",
-        "id": "chat:c-release",
-        "icon": "message-circle",
-        "tone": "yellow",
-        "accessory": "",
-        "prominent": false,
-        "tintTitle": true,
-        "iconPath": "",
-        "actions": [
-          {
-            "title": "Open",
-            "label": ""
-          }
-        ]
-      },
-      {
-        "kind": "Conversations",
-        "title": "Continue conversation: Time zones",
-        "subtitle": "AI conversation",
-        "section": "",
-        "id": "chat:c-tokyo",
-        "icon": "message-circle",
-        "tone": "yellow",
-        "accessory": "",
-        "prominent": false,
-        "tintTitle": true,
-        "iconPath": "",
-        "actions": [
-          {
-            "title": "Open",
-            "label": ""
-          }
-        ]
-      },
-      {
         "kind": "Commands",
         "title": "AI Learnings",
         "subtitle": "Rules the AI builder learned from you",
@@ -788,6 +769,37 @@
         "actions": [
           {
             "title": "Background Tasks",
+            "label": ""
+          },
+          {
+            "title": "Set keyboard shortcut",
+            "label": ""
+          },
+          {
+            "title": "Set alias",
+            "label": ""
+          }
+        ]
+      },
+      {
+        "kind": "Commands",
+        "title": "Dictate",
+        "subtitle": "Start or stop cloud voice dictation",
+        "section": "",
+        "id": "ext:nevermind.dictation:command:dictate",
+        "icon": "mic",
+        "tone": "",
+        "accessory": "",
+        "prominent": false,
+        "tintTitle": false,
+        "iconPath": "",
+        "actions": [
+          {
+            "title": "Dictate",
+            "label": ""
+          },
+          {
+            "title": "Settings",
             "label": ""
           },
           {

@@ -38,6 +38,15 @@ func (c *rootRowCache) reset() {
 	c.epoch++
 }
 
+// askEveryExtensionNext makes the next root pass ask every extension, not only the pending ones. Opening the palette
+// calls it, so rows that depend on time or on state no extension announced, such as recent chats, are fresh on every
+// open. A pass already running is left to finish.
+func (c *rootRowCache) askEveryExtensionNext() {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	c.filled = false
+}
+
 // forget drops the rows of extension id and makes the next root ask every extension again. A pass already running
 // cannot put the dropped rows back.
 func (c *rootRowCache) forget(id string) {

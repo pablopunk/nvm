@@ -234,7 +234,7 @@ func goldenSnippetRecords() []map[string]any {
 func goldenChatService(t *testing.T, set *fake.Set) *chat.Service {
 	t.Helper()
 	set.FS.Seed(goldenData+"/chats.json", goldenEnvelope(t, map[string]any{"chats": []map[string]any{
-		{"id": "c-release", "kind": "conversation", "title": "Release notes", "tier": "fast", "messages": goldenMessages("Write the release notes."), "createdAt": goldenNow.Add(-5 * time.Hour), "updatedAt": goldenNow.Add(-5 * time.Hour)},
+		{"id": "c-release", "kind": "conversation", "title": "Release notes", "tier": "fast", "messages": goldenMessages("Write the release notes."), "createdAt": goldenNow.Add(-5 * time.Hour), "updatedAt": goldenNow.Add(-30 * time.Minute)},
 		{"id": "c-tokyo", "kind": "conversation", "title": "Time zones", "tier": "fast", "messages": goldenMessages("What time zone is Tokyo in?"), "createdAt": goldenNow.Add(-26 * time.Hour), "updatedAt": goldenNow.Add(-26 * time.Hour)},
 	}}))
 	st, err := store.Open(set.FS, set.Clock, goldenData)

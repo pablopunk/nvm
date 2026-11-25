@@ -124,24 +124,27 @@ func continueRows(chats []api.ChatSummary, query string, limit int) []api.Item {
 		if !listed(chat) || chat.Title == "" {
 			continue
 		}
-		score := float64(scoreRootConversation)
+		row := continueRow(chat, scoreRootConversation)
 		if lq != "" {
-			if score = float64(search.Score(chat.Title, lq)); score == 0 {
+			score := search.Score(chat.Title, lq)
+			if score == 0 {
 				continue
 			}
+			row.Score, row.TiePriority = float64(score), chatTiePriority(chat.Kind)
 		}
-		out = append(out, continueRow(chat, score))
+		out = append(out, row)
 	}
 	return out
 }
 
-// continueRow is the root row that opens one chat.
+// continueRow is the root row that opens one chat. At the empty root every chat ranks by recency with the recent
+// copies; a typed query sets the match score and puts builder chats after the other rows of an equal match.
 func continueRow(chat api.ChatSummary, score float64) api.Item {
 	title, subtitle := continueLabels(chat.Kind, oneLine(chat.Title))
 	open := openAction(chat.ID, opOpenChat, "Open")
 	return api.Item{
 		ID: "chat:" + chat.ID, Title: title, Subtitle: subtitle, Icon: chatIcon(chat.Kind), Section: search.KindConversations,
-		Score: score, LastUsedMs: lastChangeMs(chat), TiePriority: chatTiePriority(chat.Kind), TintTitle: true,
+		Score: score, LastUsedMs: lastChangeMs(chat), TintTitle: true,
 		Appearance: &api.Appearance{Foreground: "yellow"}, Primary: &open,
 	}
 }
