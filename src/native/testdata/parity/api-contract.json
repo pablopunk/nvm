@@ -578,8 +578,11 @@
     "implementation": "remoteShortcuts",
     "methods": [
       "Aliases",
+      "Bindable",
       "List",
-      "Palette"
+      "Palette",
+      "Remove",
+      "Set"
     ]
   },
   {

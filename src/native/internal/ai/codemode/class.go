@@ -18,11 +18,14 @@ const (
 	ClassDestructive Class = "destructive"
 	// ClassExternal runs something outside Nevermind's own data, such as a command. The user is asked every time.
 	ClassExternal Class = "external"
+	// ClassSetting changes how Nevermind behaves everywhere, such as a global shortcut. The user is asked every time,
+	// with the change described from host data.
+	ClassSetting Class = "setting"
 )
 
 // asksEachTime reports whether every call of the class waits for the user's answer.
 func (c Class) asksEachTime() bool {
-	return c == ClassDestructive || c == ClassExternal
+	return c == ClassDestructive || c == ClassExternal || c == ClassSetting
 }
 
 // asksOncePerService reports whether the first call of the class on a service waits for the user's answer.
@@ -32,5 +35,5 @@ func (c Class) asksOncePerService() bool {
 
 // changesData reports whether a call of the class can change something, which the model is told about.
 func (c Class) changesData() bool {
-	return c == ClassWrite || c == ClassDestructive || c == ClassExternal
+	return c == ClassWrite || c == ClassDestructive || c == ClassExternal || c == ClassSetting
 }

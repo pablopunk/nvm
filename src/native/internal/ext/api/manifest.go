@@ -66,6 +66,7 @@ const (
 	CapabilityAI                  Capability = "ai"
 	CapabilityExtensionsOwnership Capability = "extensions.ownership"
 	CapabilityShortcuts           Capability = "shortcuts"
+	CapabilityShortcutsWrite      Capability = "shortcuts.write"
 	CapabilitySystem              Capability = "system"
 	CapabilityPlaces              Capability = "places"
 	CapabilityUpdates             Capability = "updates"
@@ -85,7 +86,7 @@ func KnownCapabilities() []Capability {
 		CapabilityDesktopApps, CapabilityDesktopMenus, CapabilityDesktopFiles, CapabilityDesktopClipboard, CapabilityWindowManagement,
 		CapabilityDesktopSelection, CapabilityDesktopKeyboard,
 		CapabilityClipboardHistory, CapabilityAI, CapabilityExtensionsOwnership,
-		CapabilityShortcuts, CapabilitySystem, CapabilityPlaces, CapabilityUpdates,
+		CapabilityShortcuts, CapabilityShortcutsWrite, CapabilitySystem, CapabilityPlaces, CapabilityUpdates,
 		CapabilitySettingsWrite, CapabilityDictation, CapabilityCamera, CapabilityOCR,
 		CapabilityNetwork, CapabilitySecrets, CapabilityJobs, CapabilityNotes,
 	}

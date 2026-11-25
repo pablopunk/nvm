@@ -285,11 +285,17 @@ func (s *Service) Awaiting(id string) bool {
 // Decide answers the tool call the chat is waiting on: allow runs it, refuse tells the model the user said no. It
 // refuses with ErrNothingToDecide when no call waits.
 func (s *Service) Decide(id string, allow bool) error {
+	return s.DecideCall(id, "", allow)
+}
+
+// DecideCall answers the waiting call named callID, so an answer the user gave to one question never answers the next
+// one. An empty callID answers whichever call waits.
+func (s *Service) DecideCall(id, callID string, allow bool) error {
 	r, ok := s.runs[id]
-	if !ok || r.pending == "" {
+	if !ok || r.pending == "" || (callID != "" && callID != r.pending) {
 		return ErrNothingToDecide
 	}
-	callID := r.pending
+	callID = r.pending
 	if !r.turn.Decide(callID, allow) {
 		return ErrNothingToDecide
 	}

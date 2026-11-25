@@ -4,6 +4,7 @@ import (
 	"context"
 
 	"github.com/pablopunk/nvm/native/internal/ext/api"
+	"github.com/pablopunk/nvm/native/internal/ext/protocol"
 	"github.com/pablopunk/nvm/native/internal/platform"
 )
 
@@ -34,4 +35,15 @@ type ShortcutTable interface {
 	List() []api.ShortcutRecord
 	Palette() api.ShortcutRecord
 	Aliases(prefix string) map[string][]string
+}
+
+// ShortcutEditor changes the user's global shortcuts. Bindable and Plan read a snapshot and never wait. Set and Remove
+// run on the UI thread and wait for it; when ctx ends before the change starts, nothing is saved. A refused change, or
+// one whose expect revision is stale, fails with api.ErrInvalidInput and saves nothing.
+type ShortcutEditor interface {
+	Bindable() []api.ShortcutRecord
+	// Plan prepares setting accelerator for actionID, or removing its shortcut when accelerator is empty.
+	Plan(actionID, accelerator string) (protocol.ShortcutChange, error)
+	Set(ctx context.Context, actionID, accelerator, expect string) (api.ShortcutRecord, error)
+	Remove(ctx context.Context, actionID, expect string) error
 }

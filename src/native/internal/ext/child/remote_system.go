@@ -87,6 +87,25 @@ func (s remoteShortcuts) Aliases(prefix string) map[string][]string {
 	return aliases
 }
 
+// Bindable lists every command that can take a shortcut. A failed exchange reads as none.
+func (s remoteShortcuts) Bindable() []api.ShortcutRecord {
+	var records []api.ShortcutRecord
+	_ = s.link.Call(protocol.ServiceShortcuts, protocol.OpBindable, nil, &records)
+	return records
+}
+
+// Set asks the host to bind accelerator as actionID's shortcut and returns the record it bound.
+func (s remoteShortcuts) Set(actionID, accelerator string) (api.ShortcutRecord, error) {
+	var record api.ShortcutRecord
+	err := s.link.Call(protocol.ServiceShortcuts, protocol.OpSet, protocol.ShortcutArgs{ActionID: actionID, Accelerator: accelerator}, &record)
+	return record, err
+}
+
+// Remove asks the host to drop the user's shortcut of actionID.
+func (s remoteShortcuts) Remove(actionID string) error {
+	return s.link.Call(protocol.ServiceShortcuts, protocol.OpRemove, protocol.ShortcutArgs{ActionID: actionID}, nil)
+}
+
 // remoteAccount reads whether the palette is signed in. A failed exchange reads as signed out.
 type remoteAccount struct {
 	link *hostLink

@@ -68,12 +68,14 @@ type Ports struct {
 	// Jobs lists the background jobs and changes them for the jobs service. Nil lists none.
 	Jobs      services.JobsSurface
 	Shortcuts services.ShortcutTable
-	Account   services.AccountState
-	Chats     services.ChatReader
-	Builder   services.BuilderPort
-	Learnings services.LearningsPort
-	OCR       *ocr.Service
-	History   func() *clipboard.History
+	// ShortcutEditor changes the user's shortcuts for extensions that declare shortcuts.write.
+	ShortcutEditor services.ShortcutEditor
+	Account        services.AccountState
+	Chats          services.ChatReader
+	Builder        services.BuilderPort
+	Learnings      services.LearningsPort
+	OCR            *ocr.Service
+	History        func() *clipboard.History
 	// ClipboardImages makes the files and thumbnails of clipboard pictures for the desktop.clipboard and history services.
 	ClipboardImages services.ClipboardImages
 	Confirm         services.ConfirmFunc
@@ -240,6 +242,7 @@ func New(ports Ports, root string, enabled *enablement.Set, opts Options) (*Mana
 			Diagnostics:     ports.Diagnostics,
 			Jobs:            ports.Jobs,
 			Shortcuts:       ports.Shortcuts,
+			ShortcutEditor:  ports.ShortcutEditor,
 			Account:         ports.Account,
 			OCR:             ports.OCR,
 			Indicators:      ports.Indicators,

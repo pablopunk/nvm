@@ -162,6 +162,7 @@ type AI interface {
 // the answer a Retry runs again, which needs a request before it, so it is at least 1.
 type ChatAction struct {
 	ChatID  string      `json:"chatId,omitempty"`
+	CallID  string      `json:"callId,omitempty"` // the call an Allow or Refuse answers
 	Message string      `json:"message,omitempty"`
 	Images  []ChatImage `json:"images,omitempty"`
 	Prompt  string      `json:"prompt,omitempty"`

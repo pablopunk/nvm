@@ -75,6 +75,16 @@ func runsWithoutPalette(command api.Command) bool {
 	return command.Mode == api.ModeNoView || command.Mode == api.ModeBackground
 }
 
+// extensionShortcutActions is every command the running extensions list, bound or not, as the shortcut manager offers
+// them to whoever changes shortcuts. It reads the table the UI thread keeps.
+func (p *App) extensionShortcutActions() []shortcuts.Action {
+	actions := make([]shortcuts.Action, 0, len(p.globalShortcuts.commands))
+	for key, entry := range p.globalShortcuts.commands {
+		actions = append(actions, shortcuts.Action{ID: key, Title: entry.command.Title})
+	}
+	return actions
+}
+
 func (p *App) declaredGlobalShortcuts() []shortcuts.Declared {
 	return p.globalShortcuts.declared
 }

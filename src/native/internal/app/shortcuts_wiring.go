@@ -25,6 +25,7 @@ func (p *App) shortcutsSetup() shortcuts.Setup {
 		Commands:  p.shortcutCommands(),
 		Resolve:   p.resolveShortcutTitle,
 		Declared:  p.declaredGlobalShortcuts,
+		Bindable:  p.extensionShortcutActions,
 		Run:       p.runShortcutCommand,
 		OnPalette: func() { p.Toggle() },
 		OnSummon:  p.notifySummon,

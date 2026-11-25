@@ -40,6 +40,8 @@ var rules = []Rule{
 	{Path: []string{"Secrets"}, Capability: api.CapabilitySecrets},
 	{Path: []string{"Settings", "Set"}, Capability: api.CapabilitySettingsWrite},
 	{Path: []string{"Settings", "Toggle"}, Capability: api.CapabilitySettingsWrite},
+	{Path: []string{"Shortcuts", "Set"}, Capability: api.CapabilityShortcutsWrite},
+	{Path: []string{"Shortcuts", "Remove"}, Capability: api.CapabilityShortcutsWrite},
 	{Path: []string{"Shortcuts"}, Capability: api.CapabilityShortcuts},
 }
 

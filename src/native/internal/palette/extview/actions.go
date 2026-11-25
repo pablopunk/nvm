@@ -176,7 +176,7 @@ func (s *Session) actionBody(action api.Action, key string) search.Action {
 			break
 		}
 		op, target := action.Op, action.Target
-		return search.Action{Title: title, Dismiss: search.DismissNever, Run: func(h search.Host) { s.deps.ShortcutAction(h, op, target) }}
+		return search.Action{Title: title, Dismiss: search.DismissNever, Run: func(h search.Host) { s.deps.ShortcutAction(h, s.extID, op, target) }}
 	case api.ActionChat:
 		if action.Chat == nil || s.deps.Chats == nil {
 			break

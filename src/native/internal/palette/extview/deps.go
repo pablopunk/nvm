@@ -92,9 +92,9 @@ type Deps struct {
 	SystemCommand func(extID, op, pane string, identity any, done func(failure string))
 	// ShellAction runs a confirmed descriptor for its originating installation.
 	ShellAction func(context.Context, string, api.ShellCommand, any, func(api.ShellResult, error))
-	// ShortcutAction performs a shortcut operation on the action target names: record pushes the recorder onto h, and
-	// remove drops the user's shortcut. Nil makes the action report unavailable.
-	ShortcutAction func(h search.Host, op, target string)
+	// ShortcutAction performs a shortcut operation of extension extID on the action target names: record pushes the
+	// recorder onto h, and remove drops the user's shortcut. Nil makes the action report unavailable.
+	ShortcutAction func(h search.Host, extID, op, target string)
 	// RunUpdate performs an update operation of the app's updater (check, download, install or channel) and returns the
 	// reason it refused, if it did. Target is the channel a channel operation chooses, or empty for the next channel.
 	// Nil makes update actions report unavailable.
@@ -144,7 +144,7 @@ type ChatPages interface {
 	Start(kind, prompt, extension string) (chatID string, err error)
 	Send(chatID, text string, images []chat.Image) error
 	Regenerate(chatID string) error
-	Decide(chatID string, allow bool) error
+	Decide(chatID, callID string, allow bool) error
 	Stop(chatID string)
 	SetTier(chatID string, tier chat.Tier) error
 	Remove(chatID string) error

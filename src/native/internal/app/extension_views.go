@@ -132,7 +132,7 @@ func (p *App) extensionViewDeps(m *manager.Manager) extview.Deps {
 			return m.WriteSetting(extID, key, value)
 		},
 		RunUpdate:           p.runUpdateOp,
-		ShortcutAction:      p.runShortcutAction,
+		ShortcutAction:      p.runExtensionShortcutAction,
 		SignIn:              p.signInFromRoot,
 		OpenPath:            func(path string) { _ = ports.Shell.OpenPath(path) },
 		RevealPath:          func(path string) { _ = ports.Shell.Reveal(path) },

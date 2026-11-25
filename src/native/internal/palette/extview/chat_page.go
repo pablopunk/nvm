@@ -1,6 +1,7 @@
 package extview
 
 import (
+	"cmp"
 	"maps"
 	"strings"
 	"time"
@@ -158,7 +159,7 @@ func chatMessage(m api.ChatMessage, now time.Time) chat.Message {
 	switch {
 	case m.Tool != nil:
 		return chat.Message{Author: chat.AuthorTool, Status: toolStatus(m.Tool.Status), At: now, Tool: &chat.ToolRun{
-			Name: m.Tool.Name, Label: m.Tool.Name, Outcome: m.Tool.Result,
+			CallID: m.Tool.CallID, Name: m.Tool.Name, Label: cmp.Or(m.Tool.Label, m.Tool.Name), Input: m.Tool.Detail, Outcome: m.Tool.Result,
 		}}
 	case m.Role == "user":
 		return chat.Message{Author: chat.AuthorUser, Text: m.Content, Images: chatImages(m.Images), At: now, Status: chat.StatusComplete}
