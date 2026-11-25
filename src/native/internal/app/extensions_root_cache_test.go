@@ -36,6 +36,27 @@ func TestRootRowCacheResetAsksEveryExtension(t *testing.T) {
 	}
 }
 
+// TestRootRowCacheForgetDropsRowsAnInFlightPassCannotRestore checks that a forgotten extension's rows are gone at once,
+// that a pass started before the forget cannot put them back, and that the next root asks every extension.
+func TestRootRowCacheForgetDropsRowsAnInFlightPassCannotRestore(t *testing.T) {
+	var c rootRowCache
+	fillRootCache(&c, "a", "b")
+	_, epoch := c.takeScope()
+	c.forget("a")
+	for _, result := range c.cachedOutside(nil) {
+		if result.ExtensionID == "a" {
+			t.Fatal("forgotten rows are still cached")
+		}
+	}
+	stale := map[string]manager.SearchResult{"a": {ExtensionID: "a"}}
+	if changed := c.commitPass(context.Background(), epoch, nil, stale); changed != nil {
+		t.Fatalf("a pass from before the forget committed %v", changed)
+	}
+	if scope, _ := c.takeScope(); scope != nil {
+		t.Fatalf("after forget the root asked the scope %v; it must ask every extension", scope)
+	}
+}
+
 // TestInvalidateRootRefreshesTheCallersRootRowsOnly runs the acme.fallback fixture, whose root row counts its RootItems
 // calls, next to acme.good. A refresh asked by acme.fallback runs its root again and shows the new count.
 func TestInvalidateRootRefreshesTheCallersRootRowsOnly(t *testing.T) {

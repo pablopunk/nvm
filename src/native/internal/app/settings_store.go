@@ -154,7 +154,7 @@ func (s *settingsStore) saveAIChatsInRoot(raw json.RawMessage) error {
 	if err := m.WriteSetting(aichats.ID, aichats.SettingShowInRoot, on); err != nil {
 		return err
 	}
-	s.p.refreshRootRows(aichats.ID)
+	s.p.forgetRootRowsOf(aichats.ID)
 	return nil
 }
 
