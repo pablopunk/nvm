@@ -106,6 +106,16 @@ func (s remoteShortcuts) Remove(actionID string) error {
 	return s.link.Call(protocol.ServiceShortcuts, protocol.OpRemove, protocol.ShortcutArgs{ActionID: actionID}, nil)
 }
 
+// AddAlias asks the host to make alias find actionID in the root search.
+func (s remoteShortcuts) AddAlias(actionID, alias string) error {
+	return s.link.Call(protocol.ServiceShortcuts, protocol.OpAddAlias, protocol.AliasArgs{ActionID: actionID, Alias: alias}, nil)
+}
+
+// RemoveAlias asks the host to delete alias from the action that has it.
+func (s remoteShortcuts) RemoveAlias(alias string) error {
+	return s.link.Call(protocol.ServiceShortcuts, protocol.OpRemoveAlias, protocol.AliasArgs{Alias: alias}, nil)
+}
+
 // remoteAccount reads whether the palette is signed in. A failed exchange reads as signed out.
 type remoteAccount struct {
 	link *hostLink

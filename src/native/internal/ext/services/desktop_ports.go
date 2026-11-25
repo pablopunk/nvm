@@ -47,3 +47,12 @@ type ShortcutEditor interface {
 	Set(ctx context.Context, actionID, accelerator, expect string) (api.ShortcutRecord, error)
 	Remove(ctx context.Context, actionID, expect string) error
 }
+
+// AliasEditor changes the user's aliases: the phrases that find an action in the root search. An alias belongs to one
+// action at a time. A refused change fails with api.ErrInvalidInput and saves nothing.
+type AliasEditor interface {
+	// PlanAlias prepares adding alias to actionID, or removing alias when actionID is empty, without saving anything.
+	PlanAlias(actionID, alias string) (protocol.AliasChange, error)
+	AddAlias(actionID, alias string) error
+	RemoveAlias(alias string) error
+}

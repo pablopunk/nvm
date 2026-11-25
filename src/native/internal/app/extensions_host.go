@@ -115,6 +115,7 @@ func (p *App) newExtensionManager() (*manager.Manager, error) {
 		Notifier:        ports.Notifier,
 		Shortcuts:       p.extensionShortcuts(),
 		ShortcutEditor:  p.extensionShortcutEditor(),
+		AliasEditor:     p.extensionAliasEditor(),
 		Permissions:     permissionSurface{p: p},
 		Updates:         updatesSurface{p: p},
 		Diagnostics:     diagnosticsSurface{p: p},
