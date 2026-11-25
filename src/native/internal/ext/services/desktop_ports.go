@@ -35,3 +35,11 @@ type ShortcutTable interface {
 	Palette() api.ShortcutRecord
 	Aliases(prefix string) map[string][]string
 }
+
+// ShortcutEditor changes the user's global shortcuts. The shortcuts manager implements it on the UI thread, so each call
+// waits for that thread and gives up when ctx ends. A refused change fails with api.ErrInvalidInput and saves nothing.
+type ShortcutEditor interface {
+	Bindable() []api.ShortcutRecord
+	Set(ctx context.Context, actionID, accelerator string) (api.ShortcutRecord, error)
+	Remove(ctx context.Context, actionID string) error
+}

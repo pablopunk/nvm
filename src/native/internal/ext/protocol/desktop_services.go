@@ -86,6 +86,7 @@ const (
 	OpUninstallReview    = "uninstall-review"
 	OpUninstallTrash     = "uninstall-trash"
 	OpAliases            = "aliases"
+	OpBindable           = "bindable"
 	OpTypeText           = "type-text"
 	OpPerform            = "perform"
 	OpState              = "state"

@@ -184,6 +184,13 @@ type PrefixArgs struct {
 	Prefix string `json:"prefix"`
 }
 
+// ShortcutArgs names the action whose global shortcut a set or remove changes. Accelerator is the canonical form a set
+// binds; a remove leaves it empty.
+type ShortcutArgs struct {
+	ActionID    string `json:"actionId"`
+	Accelerator string `json:"accelerator,omitempty"`
+}
+
 // UninstallTrashArgs names a reviewed uninstall by its token and the items of it to move to the Trash.
 type UninstallTrashArgs struct {
 	Token string   `json:"token"`

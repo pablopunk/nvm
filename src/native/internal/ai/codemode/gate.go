@@ -32,6 +32,7 @@ type serviceHandler interface {
 type gate struct {
 	rules        map[key]rule
 	notes        func() *notes.Store
+	shortcuts    services.ShortcutEditor
 	clock        platform.Clock
 	runCtx       context.Context
 	steps        agent.SubCalls
@@ -52,6 +53,7 @@ type gate struct {
 type gateConfig struct {
 	rules        map[key]rule
 	notes        func() *notes.Store
+	shortcuts    services.ShortcutEditor
 	clock        platform.Clock
 	runCtx       context.Context
 	steps        agent.SubCalls
@@ -66,7 +68,7 @@ func newGate(cfg gateConfig) *gate {
 	if cfg.approvalWait <= 0 {
 		cfg.approvalWait = DefaultApprovalWait
 	}
-	return &gate{rules: cfg.rules, notes: cfg.notes, clock: cfg.clock, runCtx: cfg.runCtx, steps: cfg.steps,
+	return &gate{rules: cfg.rules, notes: cfg.notes, shortcuts: cfg.shortcuts, clock: cfg.clock, runCtx: cfg.runCtx, steps: cfg.steps,
 		maxCalls: cfg.maxCalls, approvalWait: cfg.approvalWait, asked: map[string]bool{}, titles: map[string]string{}}
 }
 

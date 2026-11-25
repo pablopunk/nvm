@@ -3,6 +3,7 @@ package codemode
 import (
 	"encoding/json"
 	"fmt"
+	"maps"
 	"time"
 
 	"github.com/pablopunk/nvm/native/internal/ext/api"
@@ -26,6 +27,13 @@ type rule struct {
 	describe func(g *gate, call protocol.ServiceCall) string
 	// journal is what happened, from the host's reply.
 	journal func(g *gate, call protocol.ServiceCall, reply protocol.ServiceReply) string
+}
+
+// programRules are every operation a program may use, the allowlist of the gate.
+func programRules() map[key]rule {
+	rules := notesRules()
+	maps.Copy(rules, shortcutRules())
+	return rules
 }
 
 // notesRules are the operations of the notes service a program may use. Nothing outside this table runs: the table is the

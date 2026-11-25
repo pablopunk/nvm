@@ -114,6 +114,7 @@ func (p *App) newExtensionManager() (*manager.Manager, error) {
 		Menus:           p.menuPort(),
 		Notifier:        ports.Notifier,
 		Shortcuts:       p.extensionShortcuts(),
+		ShortcutEditor:  p.extensionShortcutEditor(),
 		Permissions:     permissionSurface{p: p},
 		Updates:         updatesSurface{p: p},
 		Diagnostics:     diagnosticsSurface{p: p},
@@ -197,6 +198,13 @@ func (p *App) extensionWindows() services.WindowEngine {
 // extensionShortcuts is the shortcut table as extensions read it; the manager exists before extensions start.
 func (p *App) extensionShortcuts() services.ShortcutTable {
 	return shortcuts.NewExtensionTable(p.shortcutsManager(), p.labeler, p.aliasStore())
+}
+
+// extensionShortcutEditor changes the user's shortcuts on the UI thread, for extensions and conversation programs that
+// may write them. The menubar shows the palette shortcut, so it is redrawn after a change.
+func (p *App) extensionShortcutEditor() services.ShortcutEditor {
+	table := shortcuts.NewExtensionTable(p.shortcutsManager(), p.labeler, p.aliasStore())
+	return shortcuts.NewExtensionEditor(table, p.onUI, p.refreshMenubarMenu)
 }
 
 // extensionHistory returns the clipboard history, or nil while the clipboard engine is not open.

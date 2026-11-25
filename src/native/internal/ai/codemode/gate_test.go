@@ -34,7 +34,7 @@ func TestNotesOperationsAreClassifiedByEffect(t *testing.T) {
 func TestOnlyDestructiveAndExternalAskEachTimeAndSensitiveReadsAskOnce(t *testing.T) {
 	cases := map[Class][3]bool{ // asksEachTime, asksOncePerService, changesData
 		ClassRead: {false, false, false}, ClassWrite: {false, false, true}, ClassSensitiveRead: {false, true, false},
-		ClassDestructive: {true, false, true}, ClassExternal: {true, false, true},
+		ClassDestructive: {true, false, true}, ClassExternal: {true, false, true}, ClassSetting: {true, false, true},
 	}
 	for class, want := range cases {
 		if got := [3]bool{class.asksEachTime(), class.asksOncePerService(), class.changesData()}; got != want {

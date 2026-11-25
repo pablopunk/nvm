@@ -212,13 +212,18 @@ type ShortcutRecord struct {
 	Source string `json:"source"` // user or extension
 }
 
-// Shortcuts reads the active shortcut table. Registering shortcuts happens through Commands.
+// Shortcuts reads the shortcut table and changes the user's global shortcuts. Set and Remove need shortcuts.write.
 type Shortcuts interface {
 	List() []ShortcutRecord
 	// Palette returns the app-wide shortcut that opens Nevermind.
 	Palette() ShortcutRecord
 	// Aliases returns the user's aliases for the action IDs that start with prefix.
 	Aliases(prefix string) map[string][]string
+	// Bindable lists every command that can take a shortcut, bound or not.
+	Bindable() []ShortcutRecord
+	// Set binds a canonical accelerator to actionID, or fails with the reason.
+	Set(actionID, accelerator string) (ShortcutRecord, error)
+	Remove(actionID string) error
 }
 
 // Account reports whether the palette is signed in. Credentials never reach an extension.
