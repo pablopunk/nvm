@@ -44,9 +44,23 @@ func NewDeviceTranscriber(speech platform.SpeechRecognizer, codec platform.OpusC
 	return &DeviceTranscriber{speech: speech, codec: codec, model: model, linger: deviceLinger, held: map[string]bool{}}
 }
 
-// ReadsWholeRecording is true: the model transcribes a dictation in one pass when it stops, as Hex runs this model, so
-// a pause never ends a sentence. The model loads while the user speaks, so the pass is all the wait.
-func (d *DeviceTranscriber) ReadsWholeRecording() bool { return true }
+// TranscribePCM reads a whole dictation from its raw samples, as Hex hands this model the microphone's audio. The model
+// loads while the user speaks, so the reading is all the wait.
+func (d *DeviceTranscriber) TranscribePCM(ctx context.Context, pcm []int16) (string, error) {
+	d.mu.Lock()
+	session, err := d.acquireLocked()
+	d.mu.Unlock()
+	if err != nil {
+		return "", err
+	}
+	defer d.release()
+	text, err := session.Transcribe(ctx, pcm)
+	if err != nil && ctx.Err() == nil {
+		d.discard(session)
+		return "", fmt.Errorf("%w: %w", ErrDeviceFailed, err)
+	}
+	return text, err
+}
 
 // Prepare loads the model for dictation operationID, which holds it until Finished.
 func (d *DeviceTranscriber) Prepare(_ context.Context, operationID string) error {

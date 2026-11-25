@@ -48,18 +48,6 @@ func (e *SavedError) Error() string { return e.Err.Error() }
 // Unwrap returns the transcription's own error.
 func (e *SavedError) Unwrap() error { return e.Err }
 
-// wholeRecordingReader is a transcriber that reads a dictation in one pass at Stop instead of piece by piece while the
-// user speaks, as the on-device model does: it is fast enough that the wait stays short, and seeing the whole
-// recording keeps it from ending a sentence at every pause.
-type wholeRecordingReader interface {
-	ReadsWholeRecording() bool
-}
-
-func readsWholeRecording(t Transcriber) bool {
-	reader, ok := t.(wholeRecordingReader)
-	return ok && reader.ReadsWholeRecording()
-}
-
 // transcribeFiles sends every segment file in order and joins the texts with spaces, as the desktop app does. The
 // first segment is the one a preparation covers when prepared is set. A segment that fails for a transient reason is retried
 // under policy; any other failure fails the dictation.

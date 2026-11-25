@@ -39,6 +39,7 @@ type options struct {
 	parakeet  string
 	models    string
 	recording string
+	dumpWAV   string
 	ortLib    string
 	runs      int
 	gap       time.Duration
@@ -53,10 +54,11 @@ func parseOptions(args []string, stderr io.Writer) (options, error) {
 	flags.StringVar(&opts.tokenFile, "token-file", "", "file holding a Nevermind API token (required)")
 	flags.StringVar(&opts.baseURL, "base-url", "", "backend origin; empty is production")
 	flags.StringVar(&opts.version, "client-version", "2026.1121.1", "desktop version the backend sees; it refuses versions it no longer supports")
-	flags.StringVar(&opts.parakeet, "parakeet", "", "folder of the on-device model; with -ort, transcribe on the device instead of the backend")
-	flags.StringVar(&opts.models, "device", "", "folder holding the model folder; with -ort, dictate through the service on the device")
-	flags.StringVar(&opts.recording, "recording", "", "with -device and -ort, replay the saved dictation with this id from the folder given as the clip")
-	flags.StringVar(&opts.ortLib, "ort", "", "ONNX Runtime library for -parakeet and -device")
+	flags.StringVar(&opts.parakeet, "parakeet", "", "folder of the on-device model; with -lib, transcribe on the device instead of the backend")
+	flags.StringVar(&opts.models, "device", "", "folder holding the model folder; with -lib, dictate through the service on the device")
+	flags.StringVar(&opts.recording, "recording", "", "with -device and -lib, replay the saved dictation with this id from the folder given as the clip")
+	flags.StringVar(&opts.dumpWAV, "dump-wav", "", "with -recording, write the saved dictation's audio to this WAV file instead")
+	flags.StringVar(&opts.ortLib, "lib", "", "transcribe.cpp library (libtranscribe) for -parakeet and -device")
 	flags.IntVar(&opts.runs, "runs", 1, "dictations to measure")
 	flags.DurationVar(&opts.gap, "gap", 800*time.Millisecond, "silence between clips")
 	flags.DurationVar(&opts.release, "release", 300*time.Millisecond, "silence after the speech before the release")
@@ -64,8 +66,8 @@ func parseOptions(args []string, stderr io.Writer) (options, error) {
 		return opts, err
 	}
 	opts.clips = flags.Args()
-	if opts.tokenFile == "" && opts.parakeet == "" && opts.models == "" || len(opts.clips) == 0 {
-		return opts, errors.New("usage: dictbench (-token-file FILE | -parakeet DIR -ort LIB | -device ROOT -ort LIB) [-runs N] CLIP.wav [CLIP.wav]")
+	if opts.tokenFile == "" && opts.parakeet == "" && opts.models == "" && opts.dumpWAV == "" || len(opts.clips) == 0 {
+		return opts, errors.New("usage: dictbench (-token-file FILE | -parakeet DIR -lib LIB | -device ROOT -lib LIB) [-runs N] CLIP.wav [CLIP.wav]")
 	}
 	return opts, nil
 }
@@ -75,6 +77,13 @@ func run(args []string, stdout, stderr io.Writer) int {
 	if err != nil {
 		fmt.Fprintln(stderr, err)
 		return 2
+	}
+	if opts.recording != "" && opts.dumpWAV != "" {
+		if err := dumpRecording(opts.clips[0], opts.recording, opts.dumpWAV, stdout); err != nil {
+			fmt.Fprintln(stderr, err)
+			return 1
+		}
+		return 0
 	}
 	if opts.recording != "" {
 		if err := replayRecording(opts.ortLib, opts.models, opts.clips[0], opts.recording, stdout); err != nil {

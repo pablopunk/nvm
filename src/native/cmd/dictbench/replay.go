@@ -160,3 +160,24 @@ func resample(mono []float64, rate int) []int16 {
 func seconds(samples int) float64 {
 	return float64(samples) / dictation.SampleRate
 }
+
+// writeWAV writes 16 kHz mono 16-bit PCM.
+func writeWAV(path string, pcm []int16) error {
+	data := make([]byte, 44+2*len(pcm))
+	copy(data, "RIFF")
+	binary.LittleEndian.PutUint32(data[4:], uint32(36+2*len(pcm)))
+	copy(data[8:], "WAVEfmt ")
+	binary.LittleEndian.PutUint32(data[16:], 16)
+	binary.LittleEndian.PutUint16(data[20:], 1)
+	binary.LittleEndian.PutUint16(data[22:], 1)
+	binary.LittleEndian.PutUint32(data[24:], dictation.SampleRate)
+	binary.LittleEndian.PutUint32(data[28:], dictation.SampleRate*2)
+	binary.LittleEndian.PutUint16(data[32:], 2)
+	binary.LittleEndian.PutUint16(data[34:], 16)
+	copy(data[36:], "data")
+	binary.LittleEndian.PutUint32(data[40:], uint32(2*len(pcm)))
+	for i, sample := range pcm {
+		binary.LittleEndian.PutUint16(data[44+2*i:], uint16(sample))
+	}
+	return os.WriteFile(path, data, 0o644)
+}

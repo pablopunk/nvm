@@ -21,13 +21,13 @@ import (
 // errSpeechSessionClosed is a request to a session that was closed or whose child ended.
 var errSpeechSessionClosed = errors.New("the on-device speech model stopped")
 
-// speechRecognizer runs the on-device model in a child process of the app, on the ONNX Runtime the app ships, or on
-// library when it is set.
+// speechRecognizer runs the on-device model in a child process of the app, on the transcribe.cpp library the app
+// ships (Hex's engine), or on library when it is set.
 type speechRecognizer struct {
 	library string
 }
 
-// NewSpeechRecognizer runs the on-device model on the ONNX Runtime at library, for tools that run outside the
+// NewSpeechRecognizer runs the on-device model on the transcribe.cpp library at library, for tools that run outside the
 // packaged app. The binary that calls it must serve parakeet.Main, since the child is the same binary.
 func NewSpeechRecognizer(library string) platform.SpeechRecognizer {
 	return speechRecognizer{library: library}
@@ -37,7 +37,7 @@ func NewSpeechRecognizer(library string) platform.SpeechRecognizer {
 func (r speechRecognizer) Open(dir string) (platform.SpeechSession, error) {
 	library := r.library
 	if library == "" {
-		library = existingBundledResource("lib", onnxLibraryName(runtime.GOOS))
+		library = existingBundledResource("lib", transcribeLibraryName(runtime.GOOS))
 	}
 	if library == "" {
 		return nil, fmt.Errorf("%w: this build does not ship the speech runtime", platform.ErrUnsupported)
@@ -192,4 +192,15 @@ func (b *boundedBuffer) String() string {
 	b.mu.Lock()
 	defer b.mu.Unlock()
 	return b.buf.String()
+}
+
+// transcribeLibraryName is the file name of the transcribe.cpp library scripts/natives/build-transcribe.sh ships.
+func transcribeLibraryName(goos string) string {
+	switch goos {
+	case "darwin":
+		return "libtranscribe.dylib"
+	case "windows":
+		return "transcribe.dll"
+	}
+	return "libtranscribe.so"
 }

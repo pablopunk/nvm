@@ -29,7 +29,7 @@ func TestTheEmbeddedManifestPinsEveryFileTheModelNeeds(t *testing.T) {
 		}
 		names[file.Name] = true
 	}
-	for _, need := range []string{"vocab.txt", "nemo128.onnx", "encoder-model.int8.onnx", "decoder_joint-model.int8.onnx"} {
+	for _, need := range []string{"parakeet-tdt-0.6b-v3-Q8_0.gguf"} {
 		if !names[need] {
 			t.Fatalf("the manifest lacks %s", need)
 		}

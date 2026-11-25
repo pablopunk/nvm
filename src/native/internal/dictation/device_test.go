@@ -108,8 +108,8 @@ func TestADictationOnTheDeviceIsTranscribedWholeWhenItStops(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Stop: %v", err)
 	}
-	if heard := rig.speech.Heard(); len(heard) != 1 || len(heard[0]) < len(audio)-SampleRate/10 || strings.Count(text, "heard") != 1 {
-		t.Fatalf("text = %q after %d requests; want the whole recording in one pass", text, len(heard))
+	if heard := rig.speech.Heard(); len(heard) != 1 || len(heard[0]) < len(audio) || strings.Count(text, "heard") != 1 {
+		t.Fatalf("text = %q after %d requests; want the whole recording read once from its raw samples", text, len(heard))
 	}
 	if len(h.transcriber.ids()) != 0 {
 		t.Fatal("an on-device dictation reached the cloud transcriber")
@@ -167,7 +167,7 @@ func waitFor(t *testing.T, done func() bool, what string) {
 	}
 }
 
-func TestAnOnDeviceDictationIsReadInPassesOfAtMostHalfAMinute(t *testing.T) {
+func TestALongOnDeviceDictationIsReadWholeThenItsEndIsChecked(t *testing.T) {
 	rig := newDeviceRig(t, true)
 	h := newHarness(t)
 	h.mic.Queue(voice(61)...)
@@ -178,13 +178,11 @@ func TestAnOnDeviceDictationIsReadInPassesOfAtMostHalfAMinute(t *testing.T) {
 		t.Fatalf("Stop: %v", err)
 	}
 	heard := rig.speech.Heard()
-	if len(heard) != 3 {
-		t.Fatalf("heard %v samples; want 61 s read in three passes of at most 30 s", lengths(heard))
+	if len(heard) != 2 || len(heard[0]) < 61*SampleRate {
+		t.Fatalf("heard %v samples; want all 61 s read whole, then the end read again", lengths(heard))
 	}
-	for index, pcm := range heard {
-		if len(pcm) > (maxPassMillis+overlapMillis)*SampleRate/1000 {
-			t.Fatalf("pass %d holds %d samples; want at most 30 s and the overlap", index, len(pcm))
-		}
+	if tail := len(heard[1]); tail < tailCheckMillis*SampleRate/1000 || tail > (tailCheckMillis+tailSearchMillis)*SampleRate/1000 {
+		t.Fatalf("end check read %d samples; want 15 to 20 s", tail)
 	}
 }
 
@@ -205,7 +203,7 @@ func TestARetryOnTheDeviceReadsTheSavedSegmentsAcrossTheirCut(t *testing.T) {
 	if err != nil {
 		t.Fatalf("retry: %v", err)
 	}
-	if heard := rig.speech.Heard(); len(heard) != 3 || len(heard[0]) > maxPassFrames*samplesPerFrame || text == "" {
-		t.Fatalf("heard %v samples, text %q; want the 70 s of both saved segments read in half-minute passes", lengths(heard), text)
+	if heard := rig.speech.Heard(); len(heard) != 2 || len(heard[0]) != 3500*samplesPerFrame || text == "" {
+		t.Fatalf("heard %v samples, text %q; want the 70 s of both saved segments read whole, then the end checked", lengths(heard), text)
 	}
 }
