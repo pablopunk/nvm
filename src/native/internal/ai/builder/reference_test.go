@@ -45,8 +45,9 @@ func TestReferenceNamesTheEntryPointsAndTheirContext(t *testing.T) {
 // remaining 1.x API gaps (Self, Selection.Read) took it past that, and on-device dictation (DictationEngine,
 // DeviceModel, InstallDeviceModel, RetryOn) past 62 KB. The camera list (Cameras, CameraDevice) grew it again, and the
 // shortcut writes (Shortcuts.Bindable, Set, Remove and shortcuts.write) and the call a chat tool row names took it
-// past 63 KB. The alias writes (Shortcuts.AddAlias, RemoveAlias) added about 60 bytes.
-const maxReferenceBytes = 63<<10 + 448
+// past 63 KB. The alias writes (Shortcuts.AddAlias, RemoveAlias) added about 60 bytes, and a setting's declared
+// Choices, Min and Max 64 more.
+const maxReferenceBytes = 63<<10 + 512
 
 func TestReferenceStaysWithinItsSizeBudget(t *testing.T) {
 	if len(apiReference) > maxReferenceBytes {

@@ -20,7 +20,7 @@ const (
 // settingRowLimit bounds the rows of one settings view, counting the extra actions of each row.
 const settingRowLimit = 200
 
-// SettingChoice is one value a setting declares or a choice row offers.
+// SettingChoice is one value of a choice row.
 type SettingChoice struct {
 	Value string `json:"value"`
 	Title string `json:"title"`
