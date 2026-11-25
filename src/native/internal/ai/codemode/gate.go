@@ -33,6 +33,8 @@ type gate struct {
 	rules        map[key]rule
 	notes        func() *notes.Store
 	shortcuts    services.ShortcutEditor
+	aliases      services.AliasEditor
+	jobs         services.JobsSurface
 	clock        platform.Clock
 	runCtx       context.Context
 	steps        agent.SubCalls
@@ -48,14 +50,16 @@ type gate struct {
 	// titles are the note titles the gate read from the store to describe a call, kept so the journal can name a note
 	// the call then removed.
 	titles map[string]string
-	// change is the shortcut change the host prepared for the call being asked about or run.
-	change protocol.ShortcutChange
+	// plan is what the rule's prepare step learned from the host for the call being asked about or run; see keepPlan.
+	plan any
 }
 
 type gateConfig struct {
 	rules        map[key]rule
 	notes        func() *notes.Store
 	shortcuts    services.ShortcutEditor
+	aliases      services.AliasEditor
+	jobs         services.JobsSurface
 	clock        platform.Clock
 	runCtx       context.Context
 	steps        agent.SubCalls
@@ -70,7 +74,7 @@ func newGate(cfg gateConfig) *gate {
 	if cfg.approvalWait <= 0 {
 		cfg.approvalWait = DefaultApprovalWait
 	}
-	return &gate{rules: cfg.rules, notes: cfg.notes, shortcuts: cfg.shortcuts, clock: cfg.clock, runCtx: cfg.runCtx, steps: cfg.steps,
+	return &gate{rules: cfg.rules, notes: cfg.notes, shortcuts: cfg.shortcuts, aliases: cfg.aliases, jobs: cfg.jobs, clock: cfg.clock, runCtx: cfg.runCtx, steps: cfg.steps,
 		maxCalls: cfg.maxCalls, approvalWait: cfg.approvalWait, asked: map[string]bool{}, titles: map[string]string{}}
 }
 
@@ -85,6 +89,7 @@ func (g *gate) Serve(ctx context.Context, call protocol.ServiceCall) protocol.Se
 	if over {
 		return g.refuseOverLimit(r, call)
 	}
+	g.forgetPlan()
 	call, unprepared := r.prepared(g, call)
 	step := g.begin(r.label, r.describe(g, call))
 	if unprepared != nil {

@@ -24,7 +24,7 @@ const (
 
 // conversationProgramTools is run_program, the one tool through which a conversation reads and changes Nevermind's own
 // data. It runs the model's program in a throwaway child of the extension runtime, over the notes the notes extension
-// shows and the user's global shortcuts. Builder chats do not get it: they keep their own tools. Without an executable to start the child from, the
+// shows, the user's global shortcuts and aliases, and the background jobs. Builder chats do not get it: they keep their own tools. Without an executable to start the child from, the
 // conversation simply goes without it.
 func (p *App) conversationProgramTools() []agent.Tool {
 	exe, err := os.Executable()
@@ -49,6 +49,8 @@ func (p *App) conversationProgramTools() []agent.Tool {
 		Notes:          p.extensionNotes,
 		Shortcuts:      p.extensionShortcuts(),
 		ShortcutEditor: p.extensionShortcutEditor(),
+		AliasEditor:    p.extensionAliasEditor(),
+		Jobs:           jobsSurface{p: p},
 	})
 	return []agent.Tool{codemode.Tool(runner)}
 }

@@ -26,7 +26,7 @@ var Identity = api.Identity{ID: "nevermind.assistant.program", Title: "Assistant
 // capabilities are the areas of the extension api a program may reach. Everything else, including secrets, network,
 // files, apps, the shell, the clipboard and system settings, is absent: the services refuse it, and the gate has no rule
 // for it either.
-var capabilities = []api.Capability{api.CapabilityNotes, api.CapabilityShortcuts, api.CapabilityShortcutsWrite}
+var capabilities = []api.Capability{api.CapabilityNotes, api.CapabilityShortcuts, api.CapabilityShortcutsWrite, api.CapabilityJobs}
 
 // Options is what a Runner runs on.
 type Options struct {
@@ -38,9 +38,13 @@ type Options struct {
 	StageRoot string
 	// Notes is the user's notes, which the notes service answers from. It returns nil while they are not open.
 	Notes func() *notes.Store
-	// Shortcuts reads the user's shortcut table and ShortcutEditor changes it. Nil leaves shortcuts unavailable.
+	// Shortcuts reads the user's shortcut table, ShortcutEditor changes it and AliasEditor changes the aliases. Nil
+	// leaves them unavailable.
 	Shortcuts      services.ShortcutTable
 	ShortcutEditor services.ShortcutEditor
+	AliasEditor    services.AliasEditor
+	// Jobs lists the background jobs and runs or changes them. Nil leaves them unavailable.
+	Jobs services.JobsSurface
 	// MaxServiceCalls and ApprovalWait bound a run; zero selects DefaultMaxServiceCalls and DefaultApprovalWait.
 	MaxServiceCalls int
 	ApprovalWait    time.Duration
@@ -74,11 +78,12 @@ func (r *Runner) Run(ctx context.Context, body string) (agent.Result, error) {
 	}
 	defer staged.remove()
 	g := newGate(gateConfig{
-		rules: programRules(), notes: r.opts.Notes, shortcuts: r.opts.ShortcutEditor, clock: r.opts.Supervisor.Clock, runCtx: ctx, steps: agent.SubCallsFrom(ctx),
+		rules: programRules(), notes: r.opts.Notes, shortcuts: r.opts.ShortcutEditor, aliases: r.opts.AliasEditor, jobs: r.opts.Jobs,
+		clock: r.opts.Supervisor.Clock, runCtx: ctx, steps: agent.SubCallsFrom(ctx),
 		maxCalls: r.opts.MaxServiceCalls, approvalWait: r.opts.ApprovalWait,
 	})
 	handler := services.New(services.Deps{Clock: r.opts.Supervisor.Clock, Notes: r.opts.Notes, Confirm: g.confirm,
-		Shortcuts: r.opts.Shortcuts, ShortcutEditor: r.opts.ShortcutEditor},
+		Shortcuts: r.opts.Shortcuts, ShortcutEditor: r.opts.ShortcutEditor, AliasEditor: r.opts.AliasEditor, Jobs: r.opts.Jobs},
 		api.Manifest{Identity: Identity, Capabilities: capabilities})
 	defer func() { _ = handler.Close() }()
 	g.inner = handler

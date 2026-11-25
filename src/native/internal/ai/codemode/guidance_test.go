@@ -10,7 +10,7 @@ import (
 
 // A change to the api that go generate did not carry here fails this test, so the model never reads a stale call.
 func TestAPISubsetMatchesTheAPI(t *testing.T) {
-	want, err := apiref.RenderSubset(os.DirFS("../../ext/api"), []string{"Notes", "Shortcuts"})
+	want, err := apiref.RenderSubset(os.DirFS("../../ext/api"), []string{"Notes", "Shortcuts", "Jobs"})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -30,7 +30,7 @@ func TestGuidanceStaysWithinItsBudget(t *testing.T) {
 
 func TestGuidanceNamesWhatAProgramMayUseAndWhatItCannot(t *testing.T) {
 	contains(t, guidance(), "ctx.Notes() Notes", "Search(query string, limit int)", "CreateWith(markdown string)", "strings", "json",
-		"no files, network, os, goroutines, channels or generics", "asks the user before it deletes",
+		"no files, network, os, goroutines, channels or generics", "asks the user before a call deletes", "ctx.Jobs() Jobs",
 		"ctx.Shortcuts() Shortcuts", "Bindable() []ShortcutRecord", "Command+Alt+K")
 }
 
@@ -47,7 +47,7 @@ func exampleBodies() map[string]string {
 // Each example in the guidance runs against a real notes store and does what its title says.
 func TestGuidanceExamplesRun(t *testing.T) {
 	bodies := exampleBodies()
-	if len(bodies) != 4 {
+	if len(bodies) != 5 {
 		t.Fatalf("found %d examples", len(bodies))
 	}
 	t.Run("create", func(t *testing.T) {
