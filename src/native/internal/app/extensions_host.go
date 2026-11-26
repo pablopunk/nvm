@@ -116,6 +116,7 @@ func (p *App) newExtensionManager() (*manager.Manager, error) {
 		Shortcuts:       p.extensionShortcuts(),
 		ShortcutEditor:  p.extensionShortcutEditor(),
 		AliasEditor:     p.extensionAliasEditor(),
+		Preferences:     p.extensionPreferenceEditor(),
 		Permissions:     permissionSurface{p: p},
 		Updates:         updatesSurface{p: p},
 		Diagnostics:     diagnosticsSurface{p: p},

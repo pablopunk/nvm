@@ -4,10 +4,10 @@ import (
 	"context"
 	"errors"
 	"fmt"
-	"sync/atomic"
 
 	"github.com/pablopunk/nvm/native/internal/ext/api"
 	"github.com/pablopunk/nvm/native/internal/ext/protocol"
+	"github.com/pablopunk/nvm/native/internal/platform"
 )
 
 // errChangeNotStarted is the failure of a change whose caller gave up before the UI thread took it. Nothing was saved.
@@ -151,39 +151,20 @@ func (e ExtensionEditor) boundRecord(actionID string) api.ShortcutRecord {
 	return api.ShortcutRecord{ActionID: actionID}
 }
 
-// Phases of a change handed to the UI thread. Exactly one side wins the move out of changeQueued: the UI thread starts
-// the change, or the caller abandons it, and an abandoned change never runs.
-const (
-	changeQueued int32 = iota
-	changeStarted
-	changeAbandoned
-)
-
-// changeOnUI runs change on the UI thread, then afterChange when it succeeded, and waits for it. When ctx ends first,
-// a change that has not started is abandoned and never runs; one that started is waited for, so the caller reports
-// what really happened.
+// changeOnUI runs change on the UI thread, then afterChange when it succeeded, and waits for it, as platform.CallOnUI
+// does: a change that has not started when ctx ends never runs.
 func (e ExtensionEditor) changeOnUI(ctx context.Context, change func() error) error {
-	var phase atomic.Int32
-	done := make(chan error, 1)
-	e.onUI(func() {
-		if !phase.CompareAndSwap(changeQueued, changeStarted) {
-			return
-		}
+	err := platform.CallOnUI(ctx, e.onUI, func() error {
 		err := change()
 		if err == nil && e.afterChange != nil {
 			e.afterChange()
 		}
-		done <- err
-	})
-	select {
-	case err := <-done:
 		return err
-	case <-ctx.Done():
-		if phase.CompareAndSwap(changeQueued, changeAbandoned) {
-			return errChangeNotStarted
-		}
-		return <-done
+	})
+	if errors.Is(err, platform.ErrUICallAbandoned) {
+		return errChangeNotStarted
 	}
+	return err
 }
 
 // refusal marks the manager's refusal of a change as invalid input, so the caller reads its reason and not an internal

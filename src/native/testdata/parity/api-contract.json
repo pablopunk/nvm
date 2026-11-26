@@ -203,6 +203,7 @@
       "Notes",
       "OCR",
       "Ownership",
+      "Preferences",
       "Scheduler",
       "Secrets",
       "Self",
@@ -479,6 +480,16 @@
       "CanWrite",
       "FilesForChat",
       "OwnerOf"
+    ]
+  },
+  {
+    "interface": "Preferences",
+    "kind": "service",
+    "package": "child",
+    "implementation": "remotePreferences",
+    "methods": [
+      "List",
+      "Set"
     ]
   },
   {

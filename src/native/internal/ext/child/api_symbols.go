@@ -86,6 +86,8 @@ func init() {
 		"CapabilityNotes":               reflect.ValueOf(api.CapabilityNotes),
 		"CapabilityOCR":                 reflect.ValueOf(api.CapabilityOCR),
 		"CapabilityPlaces":              reflect.ValueOf(api.CapabilityPlaces),
+		"CapabilityPreferences":         reflect.ValueOf(api.CapabilityPreferences),
+		"CapabilityPreferencesWrite":    reflect.ValueOf(api.CapabilityPreferencesWrite),
 		"CapabilitySecrets":             reflect.ValueOf(api.CapabilitySecrets),
 		"CapabilitySettingsWrite":       reflect.ValueOf(api.CapabilitySettingsWrite),
 		"CapabilityShortcuts":           reflect.ValueOf(api.CapabilityShortcuts),
@@ -587,6 +589,8 @@ func init() {
 		"PlatformOperation":       reflect.ValueOf((*api.PlatformOperation)(nil)),
 		"Platforms":               reflect.ValueOf((*api.Platforms)(nil)),
 		"Popover":                 reflect.ValueOf((*api.Popover)(nil)),
+		"PreferenceRecord":        reflect.ValueOf((*api.PreferenceRecord)(nil)),
+		"Preferences":             reflect.ValueOf((*api.Preferences)(nil)),
 		"Presentation":            reflect.ValueOf((*api.Presentation)(nil)),
 		"PreviewSpec":             reflect.ValueOf((*api.PreviewSpec)(nil)),
 		"ProgressSpec":            reflect.ValueOf((*api.ProgressSpec)(nil)),
@@ -705,6 +709,7 @@ func init() {
 		"_Notes":             reflect.ValueOf((*_github_com_pablopunk_nvm_native_internal_ext_api_Notes)(nil)),
 		"_OCR":               reflect.ValueOf((*_github_com_pablopunk_nvm_native_internal_ext_api_OCR)(nil)),
 		"_Ownership":         reflect.ValueOf((*_github_com_pablopunk_nvm_native_internal_ext_api_Ownership)(nil)),
+		"_Preferences":       reflect.ValueOf((*_github_com_pablopunk_nvm_native_internal_ext_api_Preferences)(nil)),
 		"_RootProvider":      reflect.ValueOf((*_github_com_pablopunk_nvm_native_internal_ext_api_RootProvider)(nil)),
 		"_RowActionProvider": reflect.ValueOf((*_github_com_pablopunk_nvm_native_internal_ext_api_RowActionProvider)(nil)),
 		"_Scheduler":         reflect.ValueOf((*_github_com_pablopunk_nvm_native_internal_ext_api_Scheduler)(nil)),
@@ -1109,6 +1114,7 @@ type _github_com_pablopunk_nvm_native_internal_ext_api_Context struct {
 	WNotes       func() api.Notes
 	WOCR         func() api.OCR
 	WOwnership   func() api.Ownership
+	WPreferences func() api.Preferences
 	WScheduler   func() api.Scheduler
 	WSecrets     func() api.Secrets
 	WSelf        func() api.Self
@@ -1197,6 +1203,9 @@ func (W _github_com_pablopunk_nvm_native_internal_ext_api_Context) OCR() api.OCR
 }
 func (W _github_com_pablopunk_nvm_native_internal_ext_api_Context) Ownership() api.Ownership {
 	return W.WOwnership()
+}
+func (W _github_com_pablopunk_nvm_native_internal_ext_api_Context) Preferences() api.Preferences {
+	return W.WPreferences()
 }
 func (W _github_com_pablopunk_nvm_native_internal_ext_api_Context) Scheduler() api.Scheduler {
 	return W.WScheduler()
@@ -1749,6 +1758,20 @@ func (W _github_com_pablopunk_nvm_native_internal_ext_api_Ownership) FilesForCha
 }
 func (W _github_com_pablopunk_nvm_native_internal_ext_api_Ownership) OwnerOf(extensionFile string) (chatID string, found bool) {
 	return W.WOwnerOf(extensionFile)
+}
+
+// _github_com_pablopunk_nvm_native_internal_ext_api_Preferences is an interface wrapper for Preferences type
+type _github_com_pablopunk_nvm_native_internal_ext_api_Preferences struct {
+	IValue interface{}
+	WList  func(query string) []api.PreferenceRecord
+	WSet   func(extensionID string, settingID string, value any) (api.PreferenceRecord, error)
+}
+
+func (W _github_com_pablopunk_nvm_native_internal_ext_api_Preferences) List(query string) []api.PreferenceRecord {
+	return W.WList(query)
+}
+func (W _github_com_pablopunk_nvm_native_internal_ext_api_Preferences) Set(extensionID string, settingID string, value any) (api.PreferenceRecord, error) {
+	return W.WSet(extensionID, settingID, value)
 }
 
 // _github_com_pablopunk_nvm_native_internal_ext_api_RootProvider is an interface wrapper for RootProvider type

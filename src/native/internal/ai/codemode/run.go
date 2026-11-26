@@ -27,7 +27,8 @@ var Identity = api.Identity{ID: "nevermind.assistant.program", Title: "Assistant
 // files, apps, the shell, the clipboard and system settings, is absent: the services refuse it, and the gate has no rule
 // for it either.
 var capabilities = []api.Capability{api.CapabilityNotes, api.CapabilityShortcuts, api.CapabilityShortcutsWrite, api.CapabilityJobs,
-	api.CapabilityExtensions, api.CapabilityExtensionsWrite}
+	api.CapabilityExtensions, api.CapabilityExtensionsWrite,
+	api.CapabilityPreferences, api.CapabilityPreferencesWrite}
 
 // Options is what a Runner runs on.
 type Options struct {
@@ -48,6 +49,8 @@ type Options struct {
 	Jobs services.JobsSurface
 	// Extensions lists the extensions, turns them off and opens their review. Nil leaves them unavailable.
 	Extensions services.ExtensionsEditor
+	// Preferences reads and changes every extension's declared settings. Nil leaves them unavailable.
+	Preferences services.PreferenceEditor
 	// MaxServiceCalls and ApprovalWait bound a run; zero selects DefaultMaxServiceCalls and DefaultApprovalWait.
 	MaxServiceCalls int
 	ApprovalWait    time.Duration
@@ -84,9 +87,11 @@ func (r *Runner) Run(ctx context.Context, body string) (agent.Result, error) {
 		rules: programRules(), notes: r.opts.Notes, shortcuts: r.opts.ShortcutEditor, aliases: r.opts.AliasEditor, jobs: r.opts.Jobs, extensions: r.opts.Extensions,
 		clock: r.opts.Supervisor.Clock, runCtx: ctx, steps: agent.SubCallsFrom(ctx),
 		maxCalls: r.opts.MaxServiceCalls, approvalWait: r.opts.ApprovalWait,
+		preferences: r.opts.Preferences,
 	})
 	handler := services.New(services.Deps{Clock: r.opts.Supervisor.Clock, Notes: r.opts.Notes, Confirm: g.confirm,
-		Shortcuts: r.opts.Shortcuts, ShortcutEditor: r.opts.ShortcutEditor, AliasEditor: r.opts.AliasEditor, Jobs: r.opts.Jobs, Extensions: r.opts.Extensions},
+		Shortcuts: r.opts.Shortcuts, ShortcutEditor: r.opts.ShortcutEditor, AliasEditor: r.opts.AliasEditor, Jobs: r.opts.Jobs, Extensions: r.opts.Extensions,
+		Preferences: r.opts.Preferences},
 		api.Manifest{Identity: Identity, Capabilities: capabilities})
 	defer func() { _ = handler.Close() }()
 	g.inner = handler

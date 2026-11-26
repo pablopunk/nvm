@@ -33,6 +33,7 @@ var (
 	_ api.Network           = (*remoteNetwork)(nil)
 	_ api.Notes             = (*remoteNotes)(nil)
 	_ api.OCR               = (*remoteOCR)(nil)
+	_ api.Preferences       = (*remotePreferences)(nil)
 	_ api.Ownership         = (*remoteOwnership)(nil)
 	_ api.Scheduler         = (*remoteScheduler)(nil)
 	_ api.Secrets           = (*remoteSecrets)(nil)

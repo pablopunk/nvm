@@ -47,6 +47,8 @@ var rules = []Rule{
 	{Path: []string{"Shortcuts"}, Capability: api.CapabilityShortcuts},
 	{Path: []string{"Extensions", "List"}, Capability: api.CapabilityExtensions},
 	{Path: []string{"Extensions"}, Capability: api.CapabilityExtensionsWrite},
+	{Path: []string{"Preferences", "Set"}, Capability: api.CapabilityPreferencesWrite},
+	{Path: []string{"Preferences"}, Capability: api.CapabilityPreferences},
 }
 
 // Rules returns the capability rules, most specific first. The builder's prompt is written from this list.
