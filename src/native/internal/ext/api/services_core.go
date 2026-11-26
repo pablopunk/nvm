@@ -212,13 +212,16 @@ type ShortcutRecord struct {
 	Source string `json:"source"` // user or extension
 }
 
-// Shortcuts reads the shortcut table and changes the user's global shortcuts. Set and Remove need shortcuts.write.
+// Shortcuts reads the shortcut table and changes the user's global shortcuts and aliases; changes need shortcuts.write.
 type Shortcuts interface {
 	List() []ShortcutRecord
 	// Palette returns the app-wide shortcut that opens Nevermind.
 	Palette() ShortcutRecord
 	// Aliases returns the user's aliases for the action IDs that start with prefix.
 	Aliases(prefix string) map[string][]string
+	// AddAlias makes the phrase alias find actionID at the root; an alias has one action.
+	AddAlias(actionID, alias string) error
+	RemoveAlias(alias string) error
 	// Bindable lists every command that can take a shortcut, bound or not.
 	Bindable() []ShortcutRecord
 	// Set binds a canonical accelerator to actionID, or fails with the reason.

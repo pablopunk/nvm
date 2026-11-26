@@ -80,9 +80,11 @@ type Deps struct {
 	Jobs JobsSurface
 	// Notifier shows operating-system notifications. Nil answers unavailable.
 	Notifier platform.Notifier
-	// Shortcuts reads the shortcut table and ShortcutEditor changes it. Nil answers unavailable.
+	// Shortcuts reads the shortcut table, ShortcutEditor changes it and AliasEditor changes the aliases. Nil answers
+	// unavailable.
 	Shortcuts      ShortcutTable
 	ShortcutEditor ShortcutEditor
+	AliasEditor    AliasEditor
 	// Account reads the signed-in state of the palette's account. Nil answers unavailable.
 	Account AccountState
 	// Indicators draws the passive indicators. Nil answers unavailable.

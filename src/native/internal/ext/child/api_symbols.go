@@ -1880,15 +1880,20 @@ func (W _github_com_pablopunk_nvm_native_internal_ext_api_Shell) Which(command s
 
 // _github_com_pablopunk_nvm_native_internal_ext_api_Shortcuts is an interface wrapper for Shortcuts type
 type _github_com_pablopunk_nvm_native_internal_ext_api_Shortcuts struct {
-	IValue    interface{}
-	WAliases  func(prefix string) map[string][]string
-	WBindable func() []api.ShortcutRecord
-	WList     func() []api.ShortcutRecord
-	WPalette  func() api.ShortcutRecord
-	WRemove   func(actionID string) error
-	WSet      func(actionID string, accelerator string) (api.ShortcutRecord, error)
+	IValue       interface{}
+	WAddAlias    func(actionID string, alias string) error
+	WAliases     func(prefix string) map[string][]string
+	WBindable    func() []api.ShortcutRecord
+	WList        func() []api.ShortcutRecord
+	WPalette     func() api.ShortcutRecord
+	WRemove      func(actionID string) error
+	WRemoveAlias func(alias string) error
+	WSet         func(actionID string, accelerator string) (api.ShortcutRecord, error)
 }
 
+func (W _github_com_pablopunk_nvm_native_internal_ext_api_Shortcuts) AddAlias(actionID string, alias string) error {
+	return W.WAddAlias(actionID, alias)
+}
 func (W _github_com_pablopunk_nvm_native_internal_ext_api_Shortcuts) Aliases(prefix string) map[string][]string {
 	return W.WAliases(prefix)
 }
@@ -1903,6 +1908,9 @@ func (W _github_com_pablopunk_nvm_native_internal_ext_api_Shortcuts) Palette() a
 }
 func (W _github_com_pablopunk_nvm_native_internal_ext_api_Shortcuts) Remove(actionID string) error {
 	return W.WRemove(actionID)
+}
+func (W _github_com_pablopunk_nvm_native_internal_ext_api_Shortcuts) RemoveAlias(alias string) error {
+	return W.WRemoveAlias(alias)
 }
 func (W _github_com_pablopunk_nvm_native_internal_ext_api_Shortcuts) Set(actionID string, accelerator string) (api.ShortcutRecord, error) {
 	return W.WSet(actionID, accelerator)

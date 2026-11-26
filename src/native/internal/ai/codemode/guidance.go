@@ -11,16 +11,16 @@ import (
 const MaxGuidanceBytes = 4 << 10
 
 // contract is the part of the guidance that is not the api: what a program is, what it can use, and how it ends.
-const contract = `Runs a short Go program that reads or changes the user's notes or global keyboard shortcuts. Use it for any request about them.
+const contract = `Runs a short Go program that reads or changes the user's Nevermind data: notes, global shortcuts, aliases and background jobs. Use it for any request about them.
 
 Send only the statements of func Main(ctx api.Context) (any, error): no package line, imports or func. ctx is the API. ` +
 	`You may use these packages by name: PACKAGES. Nothing else exists: no files, network, os, goroutines, channels or generics. ` +
 	`End with return value, nil or return nil, err. The JSON of the value comes back to you, so return ids, counts and short excerpts, not every note. Printing is discarded. ` +
 	`Limits: 8 KiB, 50 calls, 20 s of computing.
 
-The host asks the user before it deletes a note or sets or removes a shortcut. If they decline, the call returns an error: stop and say so. Creating, editing and reading notes do not ask. ` +
+The host asks the user before a call deletes, changes a setting or runs a job. If they decline, the call returns an error: stop and say so. Reads and note edits do not ask. ` +
 	`The result lists what the host really did; report that, not what you meant to do. Update returns true when the note changed since you read it, and then saves nothing. ` +
-	`Shortcuts: find the ActionID in Bindable() by title; Set takes the canonical form, such as Command+Alt+K or Control+Shift+Space. ` +
+	`Find an ActionID in Shortcuts().Bindable() and a job id in Jobs().List() by title. Set takes the canonical form, such as Command+Alt+K. ` +
 	`The interpreter cannot return a computed bool directly: write ok := a < b, then return ok, nil.
 
 API:
@@ -54,6 +54,14 @@ for _, c := range ctx.Shortcuts().Bindable() {
 	}
 }
 return "no such command", nil
+
+Turn off a background job (asks the user):
+for _, j := range ctx.Jobs().List() {
+	if strings.Contains(strings.ToLower(j.Title), "index") {
+		return j.ID, ctx.Jobs().SetEnabled(j.ID, false)
+	}
+}
+return "no such job", nil
 `
 
 // guidance is the description of run_program.

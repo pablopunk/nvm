@@ -42,6 +42,8 @@ var rules = []Rule{
 	{Path: []string{"Settings", "Toggle"}, Capability: api.CapabilitySettingsWrite},
 	{Path: []string{"Shortcuts", "Set"}, Capability: api.CapabilityShortcutsWrite},
 	{Path: []string{"Shortcuts", "Remove"}, Capability: api.CapabilityShortcutsWrite},
+	{Path: []string{"Shortcuts", "AddAlias"}, Capability: api.CapabilityShortcutsWrite},
+	{Path: []string{"Shortcuts", "RemoveAlias"}, Capability: api.CapabilityShortcutsWrite},
 	{Path: []string{"Shortcuts"}, Capability: api.CapabilityShortcuts},
 }
 

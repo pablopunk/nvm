@@ -16,6 +16,8 @@ func (h *Handler) serveShortcuts(ctx context.Context, call protocol.ServiceCall)
 	switch call.Op {
 	case protocol.OpBindable, protocol.OpSet, protocol.OpRemove:
 		return h.editShortcuts(ctx, call)
+	case protocol.OpAddAlias, protocol.OpRemoveAlias:
+		return nil, h.editAliases(ctx, call)
 	}
 	if h.deps.Shortcuts == nil {
 		return nil, unavailable("shortcuts are not available in this build")

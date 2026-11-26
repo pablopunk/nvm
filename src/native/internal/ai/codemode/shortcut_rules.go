@@ -11,11 +11,16 @@ import (
 )
 
 // shortcutRules are the operations of the shortcuts service a program may use. Changing a global shortcut affects every
-// app, so each change asks the user. The host prepares the change first; the question describes that prepared change,
+// app and an alias changes what the root finds, so each change asks the user. The host prepares the change first; the question describes that prepared change,
 // and the change runs only if the table has not moved since.
 func shortcutRules() map[key]rule {
 	op := func(name string) key { return key{protocol.ServiceShortcuts, name} }
 	return map[key]rule{
+		op(protocol.OpAliases): {class: ClassRead, label: "Reading aliases", describe: describeNothing, journal: journalNone},
+		op(protocol.OpAddAlias): {class: ClassSetting, label: "Adding an alias", prepare: prepareAliasChange,
+			describe: describeAliasAdd, journal: journalAliasAdded},
+		op(protocol.OpRemoveAlias): {class: ClassSetting, label: "Removing an alias", prepare: prepareAliasChange,
+			describe: describeAliasRemove, journal: journalAliasRemoved},
 		op(protocol.OpList):     {class: ClassRead, label: "Listing shortcuts", describe: describeNothing, journal: journalNone},
 		op(protocol.OpPalette):  {class: ClassRead, label: "Reading the Nevermind shortcut", describe: describeNothing, journal: journalNone},
 		op(protocol.OpBindable): {class: ClassRead, label: "Listing commands", describe: describeNothing, journal: journalNone},
@@ -36,14 +41,14 @@ func prepareShortcutChange(g *gate, call protocol.ServiceCall) (protocol.Service
 		args.Accelerator = ""
 	}
 	if g.shortcuts == nil {
-		g.keepChange(protocol.ShortcutChange{ActionID: args.ActionID, Accelerator: args.Accelerator})
+		keepPlan(g, protocol.ShortcutChange{ActionID: args.ActionID, Accelerator: args.Accelerator})
 		return call, errShortcutsUnavailable
 	}
 	change, err := g.shortcuts.Plan(args.ActionID, args.Accelerator)
 	if change.ActionID == "" {
 		change.ActionID, change.Accelerator = args.ActionID, args.Accelerator
 	}
-	g.keepChange(change)
+	keepPlan(g, change)
 	if err != nil {
 		return call, err
 	}
@@ -56,7 +61,7 @@ func prepareShortcutChange(g *gate, call protocol.ServiceCall) (protocol.Service
 // describeShortcutSet is the question of a shortcut change, built from the host's plan: the command, the new shortcut,
 // the one it replaces and every command that loses its default shortcut to it.
 func describeShortcutSet(g *gate, _ protocol.ServiceCall) string {
-	change := g.keptChange()
+	change := keptPlan[protocol.ShortcutChange](g)
 	if change.Title == "" {
 		return fmt.Sprintf("Set %s for %s, which is not a command", clip(change.Accelerator, 40), clip(change.ActionID, 40))
 	}
@@ -71,7 +76,7 @@ func describeShortcutSet(g *gate, _ protocol.ServiceCall) string {
 }
 
 func describeShortcutRemove(g *gate, _ protocol.ServiceCall) string {
-	change := g.keptChange()
+	change := keptPlan[protocol.ShortcutChange](g)
 	if change.Title == "" {
 		return fmt.Sprintf("Remove the shortcut of %s, which is not a command", clip(change.ActionID, 40))
 	}
@@ -90,7 +95,7 @@ func journalShortcutSet(_ *gate, _ protocol.ServiceCall, reply protocol.ServiceR
 }
 
 func journalShortcutRemoved(g *gate, _ protocol.ServiceCall, _ protocol.ServiceReply) string {
-	return fmt.Sprintf("removed the shortcut of “%s” (the user allowed it)", g.keptChange().Title)
+	return fmt.Sprintf("removed the shortcut of “%s” (the user allowed it)", keptPlan[protocol.ShortcutChange](g).Title)
 }
 
 func shortcutArgsOf(call protocol.ServiceCall) protocol.ShortcutArgs {
@@ -113,16 +118,4 @@ func quotedTitles(titles []string) string {
 		quoted[i] = "“" + title + "”"
 	}
 	return strings.Join(quoted, ", ")
-}
-
-func (g *gate) keepChange(change protocol.ShortcutChange) {
-	g.mu.Lock()
-	defer g.mu.Unlock()
-	g.change = change
-}
-
-func (g *gate) keptChange() protocol.ShortcutChange {
-	g.mu.Lock()
-	defer g.mu.Unlock()
-	return g.change
 }

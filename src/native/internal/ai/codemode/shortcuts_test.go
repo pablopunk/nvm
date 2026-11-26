@@ -130,6 +130,7 @@ func TestShortcutOperationsAreClassifiedByEffect(t *testing.T) {
 	want := map[string]Class{
 		protocol.OpList: ClassRead, protocol.OpPalette: ClassRead, protocol.OpBindable: ClassRead,
 		protocol.OpSet: ClassSetting, protocol.OpRemove: ClassSetting,
+		protocol.OpAliases: ClassRead, protocol.OpAddAlias: ClassSetting, protocol.OpRemoveAlias: ClassSetting,
 	}
 	rules := shortcutRules()
 	if len(rules) != len(want) {

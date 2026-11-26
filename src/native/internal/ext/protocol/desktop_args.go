@@ -206,6 +206,21 @@ type ShortcutChange struct {
 	Revision    string
 }
 
+// AliasArgs names an alias and, for an add, the action it finds in the root search.
+type AliasArgs struct {
+	ActionID string `json:"actionId,omitempty"`
+	Alias    string `json:"alias"`
+}
+
+// AliasChange is an alias change the host prepared before anyone approves it: the alias as it will be saved, and the
+// action that gains it, or for a removal the action that has it now, with its title. Host-only; extensions never read
+// it.
+type AliasChange struct {
+	ActionID string
+	Title    string
+	Alias    string
+}
+
 // UninstallTrashArgs names a reviewed uninstall by its token and the items of it to move to the Trash.
 type UninstallTrashArgs struct {
 	Token string   `json:"token"`

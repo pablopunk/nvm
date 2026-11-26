@@ -68,8 +68,9 @@ type Ports struct {
 	// Jobs lists the background jobs and changes them for the jobs service. Nil lists none.
 	Jobs      services.JobsSurface
 	Shortcuts services.ShortcutTable
-	// ShortcutEditor changes the user's shortcuts for extensions that declare shortcuts.write.
+	// ShortcutEditor and AliasEditor change the user's shortcuts and aliases for extensions that declare shortcuts.write.
 	ShortcutEditor services.ShortcutEditor
+	AliasEditor    services.AliasEditor
 	Account        services.AccountState
 	Chats          services.ChatReader
 	Builder        services.BuilderPort
@@ -243,6 +244,7 @@ func New(ports Ports, root string, enabled *enablement.Set, opts Options) (*Mana
 			Jobs:            ports.Jobs,
 			Shortcuts:       ports.Shortcuts,
 			ShortcutEditor:  ports.ShortcutEditor,
+			AliasEditor:     ports.AliasEditor,
 			Account:         ports.Account,
 			OCR:             ports.OCR,
 			Indicators:      ports.Indicators,

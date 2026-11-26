@@ -577,11 +577,13 @@
     "package": "child",
     "implementation": "remoteShortcuts",
     "methods": [
+      "AddAlias",
       "Aliases",
       "Bindable",
       "List",
       "Palette",
       "Remove",
+      "RemoveAlias",
       "Set"
     ]
   },
