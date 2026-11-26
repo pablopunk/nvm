@@ -37,6 +37,7 @@ func programRules() map[key]rule {
 	rules := notesRules()
 	maps.Copy(rules, shortcutRules())
 	maps.Copy(rules, jobRules())
+	maps.Copy(rules, extensionRules())
 	return rules
 }
 

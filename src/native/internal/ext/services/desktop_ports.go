@@ -56,3 +56,14 @@ type AliasEditor interface {
 	AddAlias(actionID, alias string) error
 	RemoveAlias(alias string) error
 }
+
+// ExtensionsEditor lists the installed extensions and changes their state for the extensions service. Nothing on it
+// enables an extension: OpenReview shows the capability review of a disabled extension in the palette and returns at
+// once, and only the user enables it there. A refusal, such as a built-in or an unknown id, wraps api.ErrInvalidInput
+// and changes nothing.
+type ExtensionsEditor interface {
+	List() []api.ExtensionRecord
+	Disable(id string) error
+	OpenReview(id string) error
+	SetMenuBarItem(id string, shown bool) error
+}

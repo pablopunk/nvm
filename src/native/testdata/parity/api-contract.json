@@ -190,6 +190,7 @@
       "Diagnostics",
       "Dictation",
       "Drafts",
+      "Extensions",
       "Identity",
       "Indicators",
       "Input",
@@ -306,6 +307,18 @@
     "kind": "extension-callback",
     "methods": [
       "Manifest"
+    ]
+  },
+  {
+    "interface": "Extensions",
+    "kind": "service",
+    "package": "child",
+    "implementation": "remoteExtensions",
+    "methods": [
+      "Disable",
+      "List",
+      "OpenReview",
+      "SetMenuBarItem"
     ]
   },
   {

@@ -98,6 +98,17 @@ type JobEnabledArgs struct {
 	Enabled bool   `json:"enabled"`
 }
 
+// ExtensionArgs names the extension an extensions operation acts on.
+type ExtensionArgs struct {
+	ID string `json:"id"`
+}
+
+// ExtensionMenuBarArgs names the extension whose menu bar item is shown or hidden.
+type ExtensionMenuBarArgs struct {
+	ID    string `json:"id"`
+	Shown bool   `json:"shown"`
+}
+
 // ExportArgs names the record whose safe text is read.
 type ExportArgs struct {
 	Ref string `json:"ref"`

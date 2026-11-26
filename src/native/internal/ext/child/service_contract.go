@@ -22,6 +22,7 @@ var (
 	_ api.Diagnostics       = (*remoteDiagnostics)(nil)
 	_ api.Dictation         = (*remoteDictation)(nil)
 	_ api.Drafts            = (*remoteDrafts)(nil)
+	_ api.Extensions        = (*remoteExtensions)(nil)
 	_ api.Files             = (*remoteFiles)(nil)
 	_ api.Indicators        = (*remoteIndicators)(nil)
 	_ api.Jobs              = (*remoteJobs)(nil)

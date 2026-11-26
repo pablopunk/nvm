@@ -8,10 +8,11 @@ import (
 
 // MaxGuidanceBytes bounds the text the model reads about run_program in every request: the contract, the generated api
 // reference and the examples. It is the plan's estimate of about 900 tokens, with room for the next services.
-const MaxGuidanceBytes = 4 << 10
+// Raised from 4 KiB to 4.5 KiB when the extensions service joined notes, shortcuts and jobs.
+const MaxGuidanceBytes = 4608
 
 // contract is the part of the guidance that is not the api: what a program is, what it can use, and how it ends.
-const contract = `Runs a short Go program that reads or changes the user's Nevermind data: notes, global shortcuts, aliases and background jobs. Use it for any request about them.
+const contract = `Runs a short Go program that reads or changes the user's Nevermind data: notes, global shortcuts, aliases, background jobs and extensions. Use it for any request about them.
 
 Send only the statements of func Main(ctx api.Context) (any, error): no package line, imports or func. ctx is the API. ` +
 	`You may use these packages by name: PACKAGES. Nothing else exists: no files, network, os, goroutines, channels or generics. ` +
@@ -20,7 +21,8 @@ Send only the statements of func Main(ctx api.Context) (any, error): no package 
 
 The host asks the user before a call deletes, changes a setting or runs a job. If they decline, the call returns an error: stop and say so. Reads and note edits do not ask. ` +
 	`The result lists what the host really did; report that, not what you meant to do. Update returns true when the note changed since you read it, and then saves nothing. ` +
-	`Find an ActionID in Shortcuts().Bindable() and a job id in Jobs().List() by title. Set takes the canonical form, such as Command+Alt+K. ` +
+	`Find ids by title in Shortcuts().Bindable(), Jobs().List() and Extensions().List(). ` +
+	`Only the user enables an extension, in the review OpenReview shows. Set takes the canonical form, such as Command+Alt+K. ` +
 	`The interpreter cannot return a computed bool directly: write ok := a < b, then return ok, nil.
 
 API:

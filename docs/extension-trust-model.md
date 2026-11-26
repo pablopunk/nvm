@@ -4,6 +4,8 @@ Nevermind local extensions, including AI-generated extensions, are trusted code.
 
 `capabilities` are review metadata. They communicate intended behavior in the Extensions surface and generated-source review, but they are not a sandbox, permission prompt, or runtime access-control mechanism. Enabled extensions receive the complete host extension context whether their capability list is populated, empty, or omitted.
 
+No extension API enables an extension, and that includes the built-in AI. `Extensions().OpenReview` only opens the capability review in the palette, and the user enables the extension there. Any extension that declares `extensions.write` may open a review, because the review itself is the safeguard; an extension cannot review or turn off itself.
+
 The legacy `permissions` manifest field remains a read-only compatibility alias for existing local source. When `capabilities` is absent, Nevermind displays legacy values as declared capabilities. New built-in and generated extension source must use `capabilities`.
 
 The only permissions enforced by the host are genuine platform boundaries, such as Chromium webview allowlists and operating-system privacy grants for camera, microphone, screen recording, accessibility, and similar OS services. Those concepts must not be described as extension capability enforcement.
