@@ -8,7 +8,7 @@ import (
 )
 
 // extensionPreferenceEditor reads and changes every extension's declared settings for extensions and conversation
-// programs, on the UI thread, which owns the Settings page's values.
+// programs. Saves run on the UI thread, which owns the Settings page's values; reads never wait for it.
 func (p *App) extensionPreferenceEditor() services.PreferenceEditor {
 	return manager.NewPreferenceEditor(p.preferenceSource, p.onUI, p.preferenceChanged, settings.RecordedElsewhere())
 }

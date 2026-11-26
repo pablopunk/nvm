@@ -173,6 +173,23 @@ func TestSetSavesOnTheUIThreadAndRedraws(t *testing.T) {
 	}
 }
 
+// Reads never wait for the UI thread: a busy or blocked UI thread, or a caller on it, still gets the settings at once.
+func TestListAndPlanNeverWaitForTheUIThread(t *testing.T) {
+	queue := newUIQueue()
+	editor := editorOver(newFakePreferences(), queue.post, nil)
+	if records, err := editor.List(context.Background(), "weather"); err != nil || len(records) != 1 {
+		t.Fatalf("List = %+v, %v", records, err)
+	}
+	if _, err := editor.Plan(context.Background(), "acme.weather", "metric", json.RawMessage(`false`)); err != nil {
+		t.Fatalf("Plan: %v", err)
+	}
+	queue.mu.Lock()
+	defer queue.mu.Unlock()
+	if len(queue.posted) != 0 {
+		t.Fatalf("a read posted %d calls to the UI thread", len(queue.posted))
+	}
+}
+
 // A caller that gives up before the UI thread takes the save leaves the setting as it was, also when the thread runs
 // later.
 func TestSetCancelledBeforeItStartsSavesNothing(t *testing.T) {

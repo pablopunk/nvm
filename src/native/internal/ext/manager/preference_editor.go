@@ -26,8 +26,8 @@ var (
 )
 
 // PreferenceEditor reads and changes the declared settings of every extension for the user, as services.PreferenceEditor
-// says. Every read and write runs on the UI thread through onUI, because a built-in's host store, such as the Settings
-// page's, keeps its values in state only that thread touches.
+// says. Reads run on the caller's goroutine and never wait for the UI thread. A save runs on the UI thread through onUI,
+// because a built-in's host store, such as the Settings page's, changes state only that thread touches.
 type PreferenceEditor struct {
 	source      func() PreferenceSource
 	onUI        func(func())
@@ -46,30 +46,27 @@ func NewPreferenceEditor(source func() PreferenceSource, onUI func(func()), afte
 
 // List returns the settings that match every word of query, as they are now.
 func (e PreferenceEditor) List(ctx context.Context, query string) ([]api.PreferenceRecord, error) {
-	var records []api.PreferenceRecord
-	err := e.onUIThread(ctx, func(source PreferenceSource) error {
-		records = matchingRecords(e.records(source), query)
-		return nil
-	})
-	return records, err
+	source, err := e.startedSource(ctx)
+	if err != nil {
+		return nil, err
+	}
+	return matchingRecords(e.records(source), query), nil
 }
 
 // Plan prepares saving value as the setting, against its value now, and saves nothing.
 func (e PreferenceEditor) Plan(ctx context.Context, extensionID, settingID string, value json.RawMessage) (protocol.PreferenceChange, error) {
-	var change protocol.PreferenceChange
-	err := e.onUIThread(ctx, func(source PreferenceSource) error {
-		var planErr error
-		change, planErr = e.planOn(source, extensionID, settingID, value)
-		return planErr
-	})
-	return change, err
+	source, err := e.startedSource(ctx)
+	if err != nil {
+		return protocol.PreferenceChange{}, err
+	}
+	return e.planOn(source, extensionID, settingID, value)
 }
 
 // Set saves value as the setting and returns the setting as saved. A non-empty expect refuses the change when the value
 // moved since that revision.
 func (e PreferenceEditor) Set(ctx context.Context, extensionID, settingID string, value json.RawMessage, expect string) (api.PreferenceRecord, error) {
 	var saved api.PreferenceRecord
-	err := e.onUIThread(ctx, func(source PreferenceSource) error {
+	err := e.saveOnUIThread(ctx, func(source PreferenceSource) error {
 		change, err := e.planOn(source, extensionID, settingID, value)
 		if expect != "" && change.Revision != "" && change.Revision != expect {
 			return errPreferenceMoved
@@ -90,14 +87,27 @@ func (e PreferenceEditor) Set(ctx context.Context, extensionID, settingID string
 	return saved, err
 }
 
-// onUIThread runs read on the UI thread with the source, and waits for it; see platform.CallOnUI.
-func (e PreferenceEditor) onUIThread(ctx context.Context, read func(PreferenceSource) error) error {
+// startedSource is the source once the extensions started, unless ctx already ended.
+func (e PreferenceEditor) startedSource(ctx context.Context) (PreferenceSource, error) {
+	if err := ctx.Err(); err != nil {
+		return nil, err
+	}
+	source := e.source()
+	if source == nil {
+		return nil, errPreferencesUnavailable
+	}
+	return source, nil
+}
+
+// saveOnUIThread runs save on the UI thread with the source, and waits for it; see platform.CallOnUI. Its caller must
+// not be the UI thread, which would wait for itself: saves come only from extension and program service calls.
+func (e PreferenceEditor) saveOnUIThread(ctx context.Context, save func(PreferenceSource) error) error {
 	return platform.CallOnUI(ctx, e.onUI, func() error {
 		source := e.source()
 		if source == nil {
 			return errPreferencesUnavailable
 		}
-		return read(source)
+		return save(source)
 	})
 }
 

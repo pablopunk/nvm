@@ -70,9 +70,9 @@ type ExtensionsEditor interface {
 }
 
 // PreferenceEditor reads and changes the declared settings of every installed extension for the user, as their
-// settings pages do; secrets are never among them. Each call runs on the UI thread and waits for it; when ctx ends
-// before a call starts, it does nothing. A refused change, or one whose expect revision is stale, fails with
-// api.ErrInvalidInput and saves nothing.
+// settings pages do; secrets are never among them. List and Plan never wait for the UI thread. Set runs on the UI thread
+// and waits for it, so it must not be called there; when ctx ends before it starts, it saves nothing. A refused change,
+// or one whose expect revision is stale, fails with api.ErrInvalidInput and saves nothing.
 type PreferenceEditor interface {
 	List(ctx context.Context, query string) ([]api.PreferenceRecord, error)
 	// Plan prepares saving value as the setting without saving anything. It refuses an unknown setting, a value the
