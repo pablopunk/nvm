@@ -47,8 +47,8 @@ func TestReferenceNamesTheEntryPointsAndTheirContext(t *testing.T) {
 // shortcut writes (Shortcuts.Bindable, Set, Remove and shortcuts.write) and the call a chat tool row names took it
 // past 63 KB. The alias writes (Shortcuts.AddAlias, RemoveAlias) added about 60 bytes, and a setting's declared
 // Choices, Min and Max 64 more. The extensions service (Extensions, ExtensionRecord and two capabilities) added about 470,
-// and the Preferences service (List, Set, PreferenceRecord) about 480 more.
-const maxReferenceBytes = 63<<10 + 1504
+// and the Preferences service (List, Set, PreferenceRecord) about 480 more. UpdateState.ReleaseNotes added about 30.
+const maxReferenceBytes = 63<<10 + 1536
 
 func TestReferenceStaysWithinItsSizeBudget(t *testing.T) {
 	if len(apiReference) > maxReferenceBytes {
