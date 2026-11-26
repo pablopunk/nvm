@@ -61,7 +61,7 @@ func declaredSettings() []api.SettingDefinition {
 		{ID: SettingSearchEngine, Title: "Default Search Engine", Type: api.SettingString, Value: []byte(`"google"`), Choices: engineChoices()},
 		{ID: SettingClipboardHistory, Title: "Clipboard History", Type: api.SettingBoolean, Value: []byte(`true`)},
 		{ID: SettingClipboardLinkPreviews, Title: "Link Previews", Type: api.SettingBoolean, Value: []byte(`true`)},
-		{ID: SettingClipboardLimit, Title: "Clipboard History Size", Type: api.SettingString, Value: []byte(`"300"`), Choices: choicesOf(clipboardLimits)},
+		{ID: SettingClipboardLimit, Title: "Clipboard History Size", Type: api.SettingString, Value: []byte(`"300"`), Choices: clipboardLimits},
 		{ID: SettingClipboardRootList, Title: "Show Clipboard Items in Root List", Type: api.SettingBoolean, Value: []byte(`true`)},
 		{ID: SettingClipboardRootSearch, Title: "Show Clipboard Items in Root Search", Type: api.SettingBoolean, Value: []byte(`true`)},
 		{ID: SettingAIChatsRootList, Title: "Show AI Chats in Root List", Type: api.SettingBoolean, Value: []byte(`true`)},
