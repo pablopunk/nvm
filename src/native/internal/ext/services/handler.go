@@ -80,6 +80,8 @@ type Deps struct {
 	Jobs JobsSurface
 	// Extensions lists the installed extensions and turns them off or opens their review. Nil answers unavailable.
 	Extensions ExtensionsEditor
+	// Preferences reads and changes the declared settings of every extension. Nil answers unavailable.
+	Preferences PreferenceEditor
 	// Notifier shows operating-system notifications. Nil answers unavailable.
 	Notifier platform.Notifier
 	// Shortcuts reads the shortcut table, ShortcutEditor changes it and AliasEditor changes the aliases. Nil answers
@@ -299,6 +301,8 @@ func (h *Handler) dispatch(ctx context.Context, call protocol.ServiceCall) (any,
 		return h.serveJobs(call)
 	case protocol.ServiceExtensions:
 		return h.serveExtensions(ctx, call)
+	case protocol.ServicePreferences:
+		return h.servePreferences(ctx, call)
 	case protocol.ServiceViews:
 		return h.serveViews(call)
 	case protocol.ServiceIndicators:

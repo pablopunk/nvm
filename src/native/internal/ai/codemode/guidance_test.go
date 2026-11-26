@@ -10,7 +10,7 @@ import (
 
 // A change to the api that go generate did not carry here fails this test, so the model never reads a stale call.
 func TestAPISubsetMatchesTheAPI(t *testing.T) {
-	want, err := apiref.RenderSubset(os.DirFS("../../ext/api"), []string{"Notes", "Shortcuts", "Jobs", "Extensions"})
+	want, err := apiref.RenderSubset(os.DirFS("../../ext/api"), []string{"Notes", "Shortcuts", "Jobs", "Extensions", "Preferences"})
 	if err != nil {
 		t.Fatal(err)
 	}

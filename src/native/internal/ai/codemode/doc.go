@@ -5,7 +5,7 @@
 // whether the user must allow it first, and what the model is told about it. Nothing the program or the model says
 // changes that decision.
 //
-// Layer: ai. It imports the agent package, the extension runtime (supervisor, services, protocol) and the notes store. Shortcuts, jobs and extensions reach it through the services' ports.
+// Layer: ai. It imports the agent package, the extension runtime (supervisor, services, protocol) and the notes store. Shortcuts, jobs, extensions and preferences reach it through the services' ports.
 package codemode
 
-//go:generate go run ../builder/apiref/gen -api ../../ext/api -subset Notes,Shortcuts,Jobs,Extensions -package codemode -var apiSubset -out reference_gen.go
+//go:generate go run ../builder/apiref/gen -api ../../ext/api -subset Notes,Shortcuts,Jobs,Extensions,Preferences -package codemode -var apiSubset -out reference_gen.go

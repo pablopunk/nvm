@@ -35,6 +35,7 @@ type rule struct {
 // programRules are every operation a program may use, the allowlist of the gate.
 func programRules() map[key]rule {
 	rules := notesRules()
+	maps.Copy(rules, preferenceRules())
 	maps.Copy(rules, shortcutRules())
 	maps.Copy(rules, jobRules())
 	maps.Copy(rules, extensionRules())

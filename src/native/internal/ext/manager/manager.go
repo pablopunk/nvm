@@ -69,6 +69,8 @@ type Ports struct {
 	Jobs       services.JobsSurface
 	Extensions services.ExtensionsEditor
 	Shortcuts  services.ShortcutTable
+	// Preferences reads and changes every extension's declared settings for extensions that declare preferences.
+	Preferences services.PreferenceEditor
 	// ShortcutEditor and AliasEditor change the user's shortcuts and aliases for extensions that declare shortcuts.write.
 	ShortcutEditor services.ShortcutEditor
 	AliasEditor    services.AliasEditor
@@ -244,6 +246,7 @@ func New(ports Ports, root string, enabled *enablement.Set, opts Options) (*Mana
 			Diagnostics:     ports.Diagnostics,
 			Jobs:            ports.Jobs,
 			Extensions:      ports.Extensions,
+			Preferences:     ports.Preferences,
 			Shortcuts:       ports.Shortcuts,
 			ShortcutEditor:  ports.ShortcutEditor,
 			AliasEditor:     ports.AliasEditor,

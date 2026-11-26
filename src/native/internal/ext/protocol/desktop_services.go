@@ -18,6 +18,7 @@ const (
 	ServiceDiagnostics      = "diagnostics"
 	ServiceJobs             = "jobs"
 	ServiceExtensions       = "extensions"
+	ServicePreferences      = "preferences"
 	ServiceDesktopSelection = "desktop.selection"
 	ServiceDesktopKeyboard  = "desktop.keyboard"
 	ServiceDesktopPaste     = "desktop.paste"
