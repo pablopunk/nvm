@@ -8,9 +8,9 @@ import (
 
 // MaxGuidanceBytes bounds the text the model reads about run_program in every request: the contract, the generated api
 // reference and the examples. It is the plan's estimate of about 900 tokens, with room for the next services.
-// Raised from 4 KiB to 4.5 KiB when the extensions service joined notes, shortcuts and jobs, and by 512 more for
+// Raised from 4 KiB to 4.5 KiB when the extensions service joined notes, shortcuts and jobs, and by 320 more for
 // the Preferences service (every extension's settings).
-const MaxGuidanceBytes = 4608 + 512
+const MaxGuidanceBytes = 4608 + 320
 
 // contract is the part of the guidance that is not the api: what a program is, what it can use, and how it ends.
 const contract = `Runs a short Go program that reads or changes the user's Nevermind data: notes, global shortcuts, aliases, background jobs, extensions and settings. Use it for any request about them.
