@@ -30,7 +30,7 @@ func (s *Session) filePreviewPage() *palette.View {
 	return &palette.View{
 		Title: s.view.Title, HideInput: true,
 		Body: func(c *ui.Context, _ search.Host) {
-			ui.Scroll(c).Grow(1).Children(func() {
+			drawReadingBody(c, func() {
 				if bm := s.images[file.Path]; file.Kind == "image" && bm != nil {
 					ui.Image(c, bm).Grow(1)
 					return
