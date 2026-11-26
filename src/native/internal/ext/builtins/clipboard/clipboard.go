@@ -92,6 +92,7 @@ func (Extension) Manifest() api.Manifest {
 		Capabilities: []api.Capability{
 			api.CapabilityClipboardHistory, api.CapabilityDesktopClipboard, api.CapabilityDesktopKeyboard,
 		},
+		AITools: aiTools(),
 	}
 }
 
