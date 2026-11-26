@@ -7,25 +7,21 @@ import (
 	"sync"
 	"testing"
 
-	"github.com/pablopunk/nvm/native/internal/ext/api"
 	"github.com/pablopunk/nvm/native/internal/ext/builtins/settings"
 	"github.com/pablopunk/nvm/native/internal/ext/manager"
 	"github.com/pablopunk/nvm/native/internal/ext/protocol"
 )
 
 // fakeSettingsSource is the extension manager's side of the settings, under the host's real preference editor: the
-// Settings page's clipboard size and palette shortcut, and their saved values.
+// Settings built-in's own declarations, so the questions read its real choice titles, and the saved values.
 type fakeSettingsSource struct {
 	mu     sync.Mutex
 	values map[string]json.RawMessage
 }
 
 func (s *fakeSettingsSource) DeclaredPreferences() []manager.ExtensionPreferences {
-	sizes := []api.SettingChoice{{Value: "300", Title: "300 items"}, {Value: "500", Title: "500 items"}, {Value: "1000", Title: "1000 items"}}
-	return []manager.ExtensionPreferences{{ID: settings.ID, Title: "Settings", Settings: []api.SettingDefinition{
-		{ID: settings.SettingPaletteShortcut, Title: "Open Nevermind Shortcut", Type: api.SettingString, Value: json.RawMessage(`""`)},
-		{ID: settings.SettingClipboardLimit, Title: "Clipboard History Size", Type: api.SettingString, Value: json.RawMessage(`"300"`), Choices: sizes},
-	}}}
+	manifest := settings.New().Manifest()
+	return []manager.ExtensionPreferences{{ID: manifest.ID, Title: manifest.Title, Settings: manifest.Settings}}
 }
 
 func (s *fakeSettingsSource) SettingValue(id, key string) (json.RawMessage, error) {
@@ -34,8 +30,10 @@ func (s *fakeSettingsSource) SettingValue(id, key string) (json.RawMessage, erro
 	if value, ok := s.values[key]; ok {
 		return value, nil
 	}
-	if key == settings.SettingClipboardLimit {
-		return json.RawMessage(`"300"`), nil
+	for _, definition := range settings.New().Manifest().Settings {
+		if definition.ID == key {
+			return json.RawMessage(definition.Value), nil
+		}
 	}
 	return json.RawMessage(`""`), nil
 }

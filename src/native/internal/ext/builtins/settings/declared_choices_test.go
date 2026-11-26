@@ -35,3 +35,13 @@ func TestChoiceSettingsRefuseUnknownValues(t *testing.T) {
 		}
 	}
 }
+
+// TestClipboardHistorySizeChoicesNameTheirUnit checks the sizes read as "300 items" wherever a choice's title is shown:
+// the settings page and the question the built-in AI asks before it changes the size.
+func TestClipboardHistorySizeChoicesNameTheirUnit(t *testing.T) {
+	for _, choice := range declaredChoices(SettingClipboardLimit) {
+		if choice.Title != choice.Value+" items" {
+			t.Errorf("clipboard history size choice %q is titled %q; want %q", choice.Value, choice.Title, choice.Value+" items")
+		}
+	}
+}

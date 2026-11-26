@@ -35,18 +35,10 @@ func TestAnOperationOfAnotherOSFailsTypedAndQuiet(t *testing.T) {
 	if reply.Failure == nil || reply.Failure.Code != api.CodeUnsupported {
 		t.Fatalf("reply = %+v; want an unsupported failure", reply)
 	}
-	if !errors.Is(failureErrorOf(reply.Failure), api.ErrUnsupported) {
+	if !errors.Is(protocol.ErrorOf(reply.Failure), api.ErrUnsupported) {
 		t.Fatalf("failure %+v does not map back to ErrUnsupported", reply.Failure)
 	}
 	if len(commands.Calls()) != 0 || len(*shown) != 0 {
 		t.Fatalf("ran %d processes and showed %q; want nothing", len(commands.Calls()), *shown)
 	}
-}
-
-// failureErrorOf rebuilds the sentinel the child gives an extension for a failure code.
-func failureErrorOf(failure *api.Failure) error {
-	if failure.Code == api.CodeUnsupported {
-		return api.ErrUnsupported
-	}
-	return errors.New(failure.Message)
 }

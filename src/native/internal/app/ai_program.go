@@ -13,11 +13,11 @@ import (
 	"github.com/pablopunk/nvm/native/internal/platform/real"
 )
 
-// programMemoryLimit and programResidentLimit bound a conversation program's child. The address-space cap is the
-// runtime spike's floor and only Linux enforces it; the resident watch is the bound everywhere else. A program holds a
-// few notes, so the resident limit is far below an extension's.
+// programResidentLimit bounds a conversation program's child on every OS. A program holds a few notes, so the limit is
+// far below an extension's. Like extension children, the child gets no address-space cap: it is this whole app
+// binary, whose runtime and libraries reserve nearly all of a 2 GiB cap, so that cap killed it on Linux before the
+// program ran.
 const (
-	programMemoryLimit   = 2 << 30
 	programResidentLimit = 512 << 20
 	programStartTimeout  = 10 * time.Second
 )
@@ -39,7 +39,6 @@ func (p *App) conversationProgramTools() []agent.Tool {
 			Clock:         ports.Clock,
 			Processes:     ports.Processes,
 			Executable:    exe,
-			MemoryLimit:   programMemoryLimit,
 			ResidentLimit: programResidentLimit,
 			StartTimeout:  programStartTimeout,
 			Log:           logx.Default(),

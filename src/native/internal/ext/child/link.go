@@ -1,9 +1,7 @@
 package child
 
 import (
-	"context"
 	"encoding/json"
-	"errors"
 	"fmt"
 	"io"
 	"sync"
@@ -66,7 +64,8 @@ func (l *hostLink) sendResponse(response protocol.Response, method string) {
 }
 
 // Call runs one host operation and decodes its result into into, which may be nil. A host failure comes back as
-// an error that wraps the matching api sentinel, so extension code can classify it with errors.Is.
+// an error with the host's message that matches the api sentinel of its code, so extension code can classify it with
+// errors.Is.
 func (l *hostLink) Call(service, op string, args any, into any) error {
 	raw, err := marshalArgs(args)
 	if err != nil {
@@ -77,7 +76,7 @@ func (l *hostLink) Call(service, op string, args any, into any) error {
 		return err
 	}
 	if answer.Failure != nil {
-		return failureError(answer.Failure)
+		return protocol.ErrorOf(answer.Failure)
 	}
 	if into != nil && len(answer.Data) > 0 {
 		if err := json.Unmarshal(answer.Data, into); err != nil {
@@ -152,35 +151,4 @@ func (l *hostLink) close() {
 		close(waiting)
 		delete(l.pending, id)
 	}
-}
-
-// failureError turns a host failure into an error that wraps the api sentinel of its code.
-func failureError(failure *api.Failure) error {
-	sentinel := sentinelFor(failure.Code)
-	if sentinel == nil {
-		return errors.New(failure.Message)
-	}
-	return fmt.Errorf("%s: %w", failure.Message, sentinel)
-}
-
-func sentinelFor(code api.ErrorCode) error {
-	switch code {
-	case api.CodeCancelled:
-		return context.Canceled
-	case api.CodeTimeout:
-		return context.DeadlineExceeded
-	case api.CodeUnsupported:
-		return api.ErrUnsupported
-	case api.CodeUnavailable:
-		return api.ErrNotAvailable
-	case api.CodePermission:
-		return api.ErrPermission
-	case api.CodeInvalid:
-		return api.ErrInvalidInput
-	case api.CodeNotFound:
-		return api.ErrNotFound
-	case api.CodeQuota:
-		return api.ErrQuotaExceeded
-	}
-	return nil
 }

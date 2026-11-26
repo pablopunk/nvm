@@ -22,8 +22,11 @@ const (
 	opConfigFolder      = "config-folder"
 )
 
-// clipboardLimits are the sizes the clipboard history size setting accepts.
-var clipboardLimits = []string{"50", "300", "500", "1000"}
+// clipboardLimits are the sizes the clipboard history size setting accepts, titled with their unit so the page and an
+// approval question read "300 items", not a bare number.
+var clipboardLimits = []api.SettingChoice{
+	{Value: "50", Title: "50 items"}, {Value: "300", Title: "300 items"}, {Value: "500", Title: "500 items"}, {Value: "1000", Title: "1000 items"},
+}
 
 // updateChannels are the channels the update channel setting accepts.
 var updateChannels = []api.SettingChoice{{Value: "stable", Title: "Stable"}, {Value: "nightly", Title: "Nightly"}, {Value: "dev", Title: "Dev"}}
@@ -83,13 +86,4 @@ func sharedDictationDevice() *api.SettingRef {
 
 func hostAction(op, title string) *api.Action {
 	return &api.Action{Kind: api.ActionHost, Op: op, Title: title}
-}
-
-// choicesOf makes choices whose values and titles are the same strings.
-func choicesOf(values []string) []api.SettingChoice {
-	choices := make([]api.SettingChoice, 0, len(values))
-	for _, value := range values {
-		choices = append(choices, api.SettingChoice{Value: value, Title: value})
-	}
-	return choices
 }

@@ -73,20 +73,3 @@ func clipRunes(text string, limit int) string {
 	}
 	return text
 }
-
-// ToolFailure is a failure the extension's tool returned, as an error that keeps its code and message.
-type ToolFailure struct {
-	Failure api.Failure
-}
-
-func (e ToolFailure) Error() string { return e.Failure.Message }
-
-// Is lets api.FailureOf read the failure's code back.
-func (e ToolFailure) Is(target error) bool {
-	return target == failureSentinels[e.Failure.Code]
-}
-
-var failureSentinels = map[api.ErrorCode]error{
-	api.CodeUnavailable: api.ErrNotAvailable, api.CodeUnsupported: api.ErrNotAvailable, api.CodePermission: api.ErrPermission,
-	api.CodeInvalid: api.ErrInvalidInput, api.CodeNotFound: api.ErrNotFound, api.CodeQuota: api.ErrQuotaExceeded,
-}

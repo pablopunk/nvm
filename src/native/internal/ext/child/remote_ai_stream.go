@@ -83,8 +83,5 @@ func (s *remoteStream) finish(text string, err error) {
 
 // batchFailure is the error a finished batch carries, or nil when the reply finished.
 func batchFailure(batch protocol.AIStreamBatch) error {
-	if batch.Failure == nil {
-		return nil
-	}
-	return failureError(batch.Failure)
+	return protocol.ErrorOf(batch.Failure)
 }
