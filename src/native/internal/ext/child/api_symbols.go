@@ -22,6 +22,12 @@ func init() {
 		"AIEventStart":                  reflect.ValueOf(constant.MakeFromLiteral("\"start\"", token.STRING, 0)),
 		"AIEventToolEnd":                reflect.ValueOf(constant.MakeFromLiteral("\"tool_end\"", token.STRING, 0)),
 		"AIEventToolStart":              reflect.ValueOf(constant.MakeFromLiteral("\"tool_start\"", token.STRING, 0)),
+		"AIToolDestructive":             reflect.ValueOf(api.AIToolDestructive),
+		"AIToolExternal":                reflect.ValueOf(api.AIToolExternal),
+		"AIToolRead":                    reflect.ValueOf(api.AIToolRead),
+		"AIToolSensitiveRead":           reflect.ValueOf(api.AIToolSensitiveRead),
+		"AIToolSetting":                 reflect.ValueOf(api.AIToolSetting),
+		"AIToolWrite":                   reflect.ValueOf(api.AIToolWrite),
 		"AccountSignIn":                 reflect.ValueOf(constant.MakeFromLiteral("\"sign-in\"", token.STRING, 0)),
 		"ActionAccount":                 reflect.ValueOf(api.ActionAccount),
 		"ActionBuilder":                 reflect.ValueOf(api.ActionBuilder),
@@ -93,6 +99,7 @@ func init() {
 		"CapabilityShortcuts":           reflect.ValueOf(api.CapabilityShortcuts),
 		"CapabilityShortcutsWrite":      reflect.ValueOf(api.CapabilityShortcutsWrite),
 		"CapabilitySystem":              reflect.ValueOf(api.CapabilitySystem),
+		"CapabilityTools":               reflect.ValueOf(api.CapabilityTools),
 		"CapabilityUpdates":             reflect.ValueOf(api.CapabilityUpdates),
 		"CapabilityWindowManagement":    reflect.ValueOf(api.CapabilityWindowManagement),
 		"ChatAgain":                     reflect.ValueOf(constant.MakeFromLiteral("\"again\"", token.STRING, 0)),
@@ -423,6 +430,12 @@ func init() {
 		"AISession":               reflect.ValueOf((*api.AISession)(nil)),
 		"AIStream":                reflect.ValueOf((*api.AIStream)(nil)),
 		"AIStreamEvent":           reflect.ValueOf((*api.AIStreamEvent)(nil)),
+		"AITool":                  reflect.ValueOf((*api.AITool)(nil)),
+		"AIToolCall":              reflect.ValueOf((*api.AIToolCall)(nil)),
+		"AIToolClass":             reflect.ValueOf((*api.AIToolClass)(nil)),
+		"AIToolDescriber":         reflect.ValueOf((*api.AIToolDescriber)(nil)),
+		"AIToolHandler":           reflect.ValueOf((*api.AIToolHandler)(nil)),
+		"AIToolRecord":            reflect.ValueOf((*api.AIToolRecord)(nil)),
 		"Accessory":               reflect.ValueOf((*api.Accessory)(nil)),
 		"Account":                 reflect.ValueOf((*api.Account)(nil)),
 		"Action":                  reflect.ValueOf((*api.Action)(nil)),
@@ -638,6 +651,7 @@ func init() {
 		"Text":                    reflect.ValueOf((*api.Text)(nil)),
 		"Toast":                   reflect.ValueOf((*api.Toast)(nil)),
 		"Tone":                    reflect.ValueOf((*api.Tone)(nil)),
+		"Tools":                   reflect.ValueOf((*api.Tools)(nil)),
 		"Trigger":                 reflect.ValueOf((*api.Trigger)(nil)),
 		"TriggerType":             reflect.ValueOf((*api.TriggerType)(nil)),
 		"TweakRequest":            reflect.ValueOf((*api.TweakRequest)(nil)),
@@ -676,6 +690,8 @@ func init() {
 		"_AIChats":           reflect.ValueOf((*_github_com_pablopunk_nvm_native_internal_ext_api_AIChats)(nil)),
 		"_AISession":         reflect.ValueOf((*_github_com_pablopunk_nvm_native_internal_ext_api_AISession)(nil)),
 		"_AIStream":          reflect.ValueOf((*_github_com_pablopunk_nvm_native_internal_ext_api_AIStream)(nil)),
+		"_AIToolDescriber":   reflect.ValueOf((*_github_com_pablopunk_nvm_native_internal_ext_api_AIToolDescriber)(nil)),
+		"_AIToolHandler":     reflect.ValueOf((*_github_com_pablopunk_nvm_native_internal_ext_api_AIToolHandler)(nil)),
 		"_Account":           reflect.ValueOf((*_github_com_pablopunk_nvm_native_internal_ext_api_Account)(nil)),
 		"_ActionHandler":     reflect.ValueOf((*_github_com_pablopunk_nvm_native_internal_ext_api_ActionHandler)(nil)),
 		"_Apps":              reflect.ValueOf((*_github_com_pablopunk_nvm_native_internal_ext_api_Apps)(nil)),
@@ -724,6 +740,7 @@ func init() {
 		"_System":            reflect.ValueOf((*_github_com_pablopunk_nvm_native_internal_ext_api_System)(nil)),
 		"_SystemClipboard":   reflect.ValueOf((*_github_com_pablopunk_nvm_native_internal_ext_api_SystemClipboard)(nil)),
 		"_Text":              reflect.ValueOf((*_github_com_pablopunk_nvm_native_internal_ext_api_Text)(nil)),
+		"_Tools":             reflect.ValueOf((*_github_com_pablopunk_nvm_native_internal_ext_api_Tools)(nil)),
 		"_Updates":           reflect.ValueOf((*_github_com_pablopunk_nvm_native_internal_ext_api_Updates)(nil)),
 		"_Views":             reflect.ValueOf((*_github_com_pablopunk_nvm_native_internal_ext_api_Views)(nil)),
 		"_WindowManagement":  reflect.ValueOf((*_github_com_pablopunk_nvm_native_internal_ext_api_WindowManagement)(nil)),
@@ -888,6 +905,26 @@ func (W _github_com_pablopunk_nvm_native_internal_ext_api_AIStream) Events() <-c
 }
 func (W _github_com_pablopunk_nvm_native_internal_ext_api_AIStream) Result() (string, error) {
 	return W.WResult()
+}
+
+// _github_com_pablopunk_nvm_native_internal_ext_api_AIToolDescriber is an interface wrapper for AIToolDescriber type
+type _github_com_pablopunk_nvm_native_internal_ext_api_AIToolDescriber struct {
+	IValue          interface{}
+	WDescribeAITool func(ctx api.Context, call api.AIToolCall) (string, error)
+}
+
+func (W _github_com_pablopunk_nvm_native_internal_ext_api_AIToolDescriber) DescribeAITool(ctx api.Context, call api.AIToolCall) (string, error) {
+	return W.WDescribeAITool(ctx, call)
+}
+
+// _github_com_pablopunk_nvm_native_internal_ext_api_AIToolHandler is an interface wrapper for AIToolHandler type
+type _github_com_pablopunk_nvm_native_internal_ext_api_AIToolHandler struct {
+	IValue      interface{}
+	WCallAITool func(ctx api.Context, call api.AIToolCall) (any, error)
+}
+
+func (W _github_com_pablopunk_nvm_native_internal_ext_api_AIToolHandler) CallAITool(ctx api.Context, call api.AIToolCall) (any, error) {
+	return W.WCallAITool(ctx, call)
 }
 
 // _github_com_pablopunk_nvm_native_internal_ext_api_Account is an interface wrapper for Account type
@@ -1124,6 +1161,7 @@ type _github_com_pablopunk_nvm_native_internal_ext_api_Context struct {
 	WStorage     func() api.Storage
 	WSystem      func() api.System
 	WText        func() api.Text
+	WTools       func() api.Tools
 	WUpdates     func() api.Updates
 	WViews       func() api.Views
 	WWindows     func() api.Windows
@@ -1233,6 +1271,9 @@ func (W _github_com_pablopunk_nvm_native_internal_ext_api_Context) System() api.
 }
 func (W _github_com_pablopunk_nvm_native_internal_ext_api_Context) Text() api.Text {
 	return W.WText()
+}
+func (W _github_com_pablopunk_nvm_native_internal_ext_api_Context) Tools() api.Tools {
+	return W.WTools()
 }
 func (W _github_com_pablopunk_nvm_native_internal_ext_api_Context) Updates() api.Updates {
 	return W.WUpdates()
@@ -2108,6 +2149,20 @@ type _github_com_pablopunk_nvm_native_internal_ext_api_Text struct {
 
 func (W _github_com_pablopunk_nvm_native_internal_ext_api_Text) Template(input string, options api.TemplateOptions) (api.TemplateResult, error) {
 	return W.WTemplate(input, options)
+}
+
+// _github_com_pablopunk_nvm_native_internal_ext_api_Tools is an interface wrapper for Tools type
+type _github_com_pablopunk_nvm_native_internal_ext_api_Tools struct {
+	IValue interface{}
+	WCall  func(extensionID string, tool string, args any) (any, error)
+	WList  func(query string) []api.AIToolRecord
+}
+
+func (W _github_com_pablopunk_nvm_native_internal_ext_api_Tools) Call(extensionID string, tool string, args any) (any, error) {
+	return W.WCall(extensionID, tool, args)
+}
+func (W _github_com_pablopunk_nvm_native_internal_ext_api_Tools) List(query string) []api.AIToolRecord {
+	return W.WList(query)
 }
 
 // _github_com_pablopunk_nvm_native_internal_ext_api_Updates is an interface wrapper for Updates type

@@ -71,6 +71,8 @@ type Ports struct {
 	Shortcuts  services.ShortcutTable
 	// Preferences reads and changes every extension's declared settings for extensions that declare preferences.
 	Preferences services.PreferenceEditor
+	// Tools lists and runs the extensions' AI tools for extensions that declare tools.
+	Tools services.AIToolHost
 	// ShortcutEditor and AliasEditor change the user's shortcuts and aliases for extensions that declare shortcuts.write.
 	ShortcutEditor services.ShortcutEditor
 	AliasEditor    services.AliasEditor
@@ -247,6 +249,7 @@ func New(ports Ports, root string, enabled *enablement.Set, opts Options) (*Mana
 			Jobs:            ports.Jobs,
 			Extensions:      ports.Extensions,
 			Preferences:     ports.Preferences,
+			Tools:           ports.Tools,
 			Shortcuts:       ports.Shortcuts,
 			ShortcutEditor:  ports.ShortcutEditor,
 			AliasEditor:     ports.AliasEditor,

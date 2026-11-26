@@ -82,6 +82,8 @@ type Deps struct {
 	Extensions ExtensionsEditor
 	// Preferences reads and changes the declared settings of every extension. Nil answers unavailable.
 	Preferences PreferenceEditor
+	// Tools lists and runs the AI tools enabled extensions declare. Nil answers unavailable.
+	Tools AIToolHost
 	// Notifier shows operating-system notifications. Nil answers unavailable.
 	Notifier platform.Notifier
 	// Shortcuts reads the shortcut table, ShortcutEditor changes it and AliasEditor changes the aliases. Nil answers
@@ -303,6 +305,8 @@ func (h *Handler) dispatch(ctx context.Context, call protocol.ServiceCall) (any,
 		return h.serveExtensions(ctx, call)
 	case protocol.ServicePreferences:
 		return h.servePreferences(ctx, call)
+	case protocol.ServiceTools:
+		return h.serveTools(ctx, call)
 	case protocol.ServiceViews:
 		return h.serveViews(call)
 	case protocol.ServiceIndicators:

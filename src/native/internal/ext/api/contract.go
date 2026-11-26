@@ -125,6 +125,7 @@ type Context interface {
 	Jobs() Jobs
 	Extensions() Extensions
 	Preferences() Preferences
+	Tools() Tools
 	AI() AI
 	AIBuilder() AIBuilder
 	Learnings() Learnings

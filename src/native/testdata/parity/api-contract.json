@@ -72,6 +72,20 @@
     ]
   },
   {
+    "interface": "AIToolDescriber",
+    "kind": "extension-callback",
+    "methods": [
+      "DescribeAITool"
+    ]
+  },
+  {
+    "interface": "AIToolHandler",
+    "kind": "extension-callback",
+    "methods": [
+      "CallAITool"
+    ]
+  },
+  {
     "interface": "Account",
     "kind": "service",
     "package": "child",
@@ -213,6 +227,7 @@
       "Storage",
       "System",
       "Text",
+      "Tools",
       "Updates",
       "Views",
       "Windows"
@@ -670,6 +685,16 @@
     "implementation": "remoteText",
     "methods": [
       "Template"
+    ]
+  },
+  {
+    "interface": "Tools",
+    "kind": "service",
+    "package": "child",
+    "implementation": "remoteTools",
+    "methods": [
+      "Call",
+      "List"
     ]
   },
   {

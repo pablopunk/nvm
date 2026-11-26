@@ -73,6 +73,7 @@ func (Extension) Manifest() api.Manifest {
 		APIVersion:   "1.0",
 		Identity:     api.Identity{ID: ID, Title: listTitle},
 		Capabilities: []api.Capability{api.CapabilityDesktopClipboard},
+		AITools:      aiTools(),
 	}
 }
 

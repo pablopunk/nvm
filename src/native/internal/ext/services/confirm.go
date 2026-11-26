@@ -31,8 +31,9 @@ type waitMark struct {
 	waited bool
 }
 
-// confirmDestructive asks the user before a destructive call runs. It refuses when no confirmation port is wired,
-// and when the user does not confirm. The wait ends with the extension's lifetime, not the request budget, which is
+// confirmDestructive asks the user before a destructive call runs, unless the user already allowed the request it serves,
+// such as an AI tool call the chat asked about. It refuses when no confirmation port is wired, and when the user does
+// not confirm. The wait ends with the extension's lifetime, not the request budget, which is
 // far shorter than a person's answer.
 func (h *Handler) confirmDestructive(ctx context.Context, action string) error {
 	if h.closed.Load() {
@@ -40,6 +41,9 @@ func (h *Handler) confirmDestructive(ctx context.Context, action string) error {
 	}
 	if err := ctx.Err(); err != nil {
 		return err
+	}
+	if protocol.UserApproved(ctx) {
+		return nil
 	}
 	if h.deps.Confirm == nil {
 		return unavailable("this host cannot ask for confirmation, so %s did not run", action)

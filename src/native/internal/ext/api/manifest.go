@@ -49,6 +49,9 @@ type Manifest struct {
 	// built-ins only.
 	Publishes []string     `json:"publishes,omitempty"`
 	Reads     []SettingRef `json:"reads,omitempty"`
+	// AITools are the tools Nevermind's AI may call, which CallAITool runs; see AITool. Tools of a disabled extension are
+	// not offered.
+	AITools []AITool `json:"aiTools,omitempty"`
 }
 
 // Capability names an area of intended behaviour shown in the extension review screen.
@@ -82,6 +85,8 @@ const (
 	CapabilityExtensionsWrite     Capability = "extensions.write"
 	CapabilityPreferences         Capability = "preferences"
 	CapabilityPreferencesWrite    Capability = "preferences.write"
+	// CapabilityTools lets an extension list and call other extensions' AI tools. Declaring tools needs none.
+	CapabilityTools Capability = "tools"
 )
 
 // KnownCapabilities lists every capability this host version can review.
@@ -93,7 +98,7 @@ func KnownCapabilities() []Capability {
 		CapabilityShortcuts, CapabilityShortcutsWrite, CapabilitySystem, CapabilityPlaces, CapabilityUpdates,
 		CapabilitySettingsWrite, CapabilityDictation, CapabilityCamera, CapabilityOCR,
 		CapabilityNetwork, CapabilitySecrets, CapabilityJobs, CapabilityNotes, CapabilityExtensions, CapabilityExtensionsWrite,
-		CapabilityPreferences, CapabilityPreferencesWrite,
+		CapabilityPreferences, CapabilityPreferencesWrite, CapabilityTools,
 	}
 }
 
@@ -153,6 +158,9 @@ func (m Manifest) validateShape() error {
 		return err
 	}
 	if err := m.validateSharedDisplays(); err != nil {
+		return err
+	}
+	if err := validateAITools(m.AITools); err != nil {
 		return err
 	}
 	for id, title := range m.CommandTitles {

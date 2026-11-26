@@ -53,7 +53,7 @@ func New(legacy []Link) Extension {
 
 // Manifest identifies the built-in. Its rows are listed under the Commands section, as the native rows were.
 func (Extension) Manifest() api.Manifest {
-	return api.Manifest{APIVersion: "1.0", Identity: api.Identity{ID: ID, Title: "Quicklinks"}}
+	return api.Manifest{APIVersion: "1.0", Identity: api.Identity{ID: ID, Title: "Quicklinks"}, AITools: aiTools()}
 }
 
 // Commands lists Create Quicklink. It is placed in search only, so the empty root does not show it.

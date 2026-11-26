@@ -37,6 +37,7 @@ type gate struct {
 	aliases      services.AliasEditor
 	jobs         services.JobsSurface
 	extensions   services.ExtensionsEditor
+	tools        services.AIToolHost
 	clock        platform.Clock
 	runCtx       context.Context
 	steps        agent.SubCalls
@@ -64,6 +65,7 @@ type gateConfig struct {
 	aliases      services.AliasEditor
 	jobs         services.JobsSurface
 	extensions   services.ExtensionsEditor
+	tools        services.AIToolHost
 	clock        platform.Clock
 	runCtx       context.Context
 	steps        agent.SubCalls
@@ -79,7 +81,7 @@ func newGate(cfg gateConfig) *gate {
 		cfg.approvalWait = DefaultApprovalWait
 	}
 	return &gate{rules: cfg.rules, notes: cfg.notes, shortcuts: cfg.shortcuts, aliases: cfg.aliases, jobs: cfg.jobs, extensions: cfg.extensions, clock: cfg.clock, runCtx: cfg.runCtx, steps: cfg.steps,
-		maxCalls: cfg.maxCalls, approvalWait: cfg.approvalWait, asked: map[string]bool{}, titles: map[string]string{}, preferences: cfg.preferences}
+		maxCalls: cfg.maxCalls, approvalWait: cfg.approvalWait, asked: map[string]bool{}, titles: map[string]string{}, preferences: cfg.preferences, tools: cfg.tools}
 }
 
 // Serve is the supervisor's service handler for the program.
@@ -95,11 +97,12 @@ func (g *gate) Serve(ctx context.Context, call protocol.ServiceCall) protocol.Se
 	}
 	g.forgetPlan()
 	call, unprepared := r.prepared(g, call)
+	r, scope := r.classified(g, k)
 	step := g.begin(r.label, r.describe(g, call))
 	if unprepared != nil {
 		return g.finishRan(r, call, step, protocol.ServiceReply{Failure: &api.Failure{Code: api.CodeInvalid, Message: unprepared.Error()}})
 	}
-	if verdict := g.verdict(r, k, step); verdict != outcomeRan {
+	if verdict := g.verdict(r, scope, step); verdict != outcomeRan {
 		return g.finishWithoutRunning(r, call, step, verdict)
 	}
 	reply := g.execute(ctx, k, call)
@@ -107,17 +110,18 @@ func (g *gate) Serve(ctx context.Context, call protocol.ServiceCall) protocol.Se
 }
 
 // verdict decides whether the call may run: the run must still be live, and a class that asks needs the user's allow.
-func (g *gate) verdict(r rule, k key, step agent.SubCall) outcome {
+// A class that asks once asks once per scope: the service, or what the rule's classify names, such as one extension.
+func (g *gate) verdict(r rule, scope string, step agent.SubCall) outcome {
 	if g.runCtx.Err() != nil {
 		return outcomeCancelled
 	}
 	switch {
 	case r.class.asksEachTime():
 		return g.ask(step)
-	case r.class.asksOncePerService() && !g.wasAllowed(k.service):
+	case r.class.asksOncePerService() && !g.wasAllowed(scope):
 		answer := g.ask(step)
 		if answer == outcomeRan {
-			g.markAllowed(k.service)
+			g.markAllowed(scope)
 		}
 		return answer
 	}

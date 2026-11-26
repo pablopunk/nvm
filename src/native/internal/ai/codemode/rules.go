@@ -30,6 +30,9 @@ type rule struct {
 	// prepare, when set, has the host prepare the call before it is described or asked about, and returns the call to
 	// run: the one the user approves. An error fails the call without asking.
 	prepare func(g *gate, call protocol.ServiceCall) (protocol.ServiceCall, error)
+	// classify, when set, replaces class with the class of the call prepare planned, and names the scope a question
+	// asked once covers. The host decides both, as for an extension's AI tool; an unplanned call keeps class.
+	classify func(g *gate) (Class, string)
 }
 
 // programRules are every operation a program may use, the allowlist of the gate.
@@ -39,6 +42,7 @@ func programRules() map[key]rule {
 	maps.Copy(rules, shortcutRules())
 	maps.Copy(rules, jobRules())
 	maps.Copy(rules, extensionRules())
+	maps.Copy(rules, toolRules())
 	return rules
 }
 
@@ -64,6 +68,19 @@ func (r rule) prepared(g *gate, call protocol.ServiceCall) (protocol.ServiceCall
 		return call, nil
 	}
 	return r.prepare(g, call)
+}
+
+// classified is the rule with the class of this call, and the scope of a question asked once: the service by default.
+func (r rule) classified(g *gate, k key) (rule, string) {
+	if r.classify == nil {
+		return r, k.service
+	}
+	class, scope := r.classify(g)
+	if class == "" {
+		return r, k.service
+	}
+	r.class = class
+	return r, scope
 }
 
 func describeNothing(*gate, protocol.ServiceCall) string { return "" }
