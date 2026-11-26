@@ -35,4 +35,5 @@ if [ "${#tests[@]}" -eq 0 ]; then
 fi
 
 go build -tags automation -o "$NVM_RIG_BIN" ./cmd/nvm
-go test -count=1 -tags rig ./internal/rigtest/ "${tests[@]}"
+# The full journey suite runs longer than go test's default 10m; the CI job's own timeout stays the outer bound.
+go test -count=1 -timeout "${RIG_TEST_TIMEOUT:-25m}" -tags rig ./internal/rigtest/ "${tests[@]}"
