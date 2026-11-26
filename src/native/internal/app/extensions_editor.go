@@ -45,13 +45,13 @@ func (e extensionsEditor) List() []api.ExtensionRecord {
 	for _, l := range ctl.List() {
 		hasMenuBar := menuBars[l.ID]
 		delete(menuBars, l.ID)
-		records = append(records, api.ExtensionRecord{ID: l.ID, Title: extensionTitle(l), Subtitle: l.Subtitle, Enabled: l.Enabled,
-			MenuBar: hasMenuBar, MenuBarShown: hasMenuBar && e.visibility.shown(l.ID), Capabilities: l.Capabilities})
+		records = append(records, api.ExtensionRecord{ID: l.ID, Title: extensionTitle(l), Enabled: l.Enabled,
+			HasMenuBar: hasMenuBar, MenuBarShown: hasMenuBar && e.visibility.shown(l.ID), Capabilities: capabilityNames(l.Capabilities)})
 	}
 	for _, extension := range running {
 		if menuBars[extension.ID] {
 			records = append(records, api.ExtensionRecord{ID: extension.ID, Title: extension.Title, Enabled: true, BuiltIn: true,
-				MenuBar: true, MenuBarShown: e.visibility.shown(extension.ID)})
+				HasMenuBar: true, MenuBarShown: e.visibility.shown(extension.ID)})
 		}
 	}
 	return records
@@ -116,6 +116,14 @@ func (e extensionsEditor) folderExtension(id string) (extensionController, manag
 		return nil, manager.Listing{}, extensionRefusal("%s is built in and always on", id)
 	}
 	return nil, manager.Listing{}, extensionRefusal("no installed extension has the id %q", id)
+}
+
+func capabilityNames(capabilities []api.Capability) []string {
+	names := make([]string, 0, len(capabilities))
+	for _, capability := range capabilities {
+		names = append(names, string(capability))
+	}
+	return names
 }
 
 func extensionRefusal(format string, args ...any) error {

@@ -44,17 +44,17 @@ func TestTheExtensionsPortListsFolderExtensionsAndMenuBarBuiltIns(t *testing.T) 
 	u.editor.visibility.setShown("nevermind.dictation", false)
 	records := u.editor.List()
 	want := []api.ExtensionRecord{
-		{ID: "acme.clock", Title: "Clock", Enabled: true, MenuBar: true, MenuBarShown: true, Capabilities: []api.Capability{api.CapabilityNetwork}},
-		{ID: "acme.weather", Title: "Weather"},
-		{ID: "acme.broken", Title: "Broken"},
-		{ID: "nevermind.dictation", Title: "Dictation", Enabled: true, BuiltIn: true, MenuBar: true},
+		{ID: "acme.clock", Title: "Clock", Enabled: true, HasMenuBar: true, MenuBarShown: true, Capabilities: []string{"network"}},
+		{ID: "acme.weather", Title: "Weather", Capabilities: []string{}},
+		{ID: "acme.broken", Title: "Broken", Capabilities: []string{}},
+		{ID: "nevermind.dictation", Title: "Dictation", Enabled: true, BuiltIn: true, HasMenuBar: true},
 	}
 	if len(records) != len(want) {
 		t.Fatalf("records = %+v", records)
 	}
 	for i := range want {
 		if records[i].ID != want[i].ID || records[i].Enabled != want[i].Enabled || records[i].BuiltIn != want[i].BuiltIn ||
-			records[i].MenuBar != want[i].MenuBar || records[i].MenuBarShown != want[i].MenuBarShown || !slices.Equal(records[i].Capabilities, want[i].Capabilities) {
+			records[i].HasMenuBar != want[i].HasMenuBar || records[i].MenuBarShown != want[i].MenuBarShown || !slices.Equal(records[i].Capabilities, want[i].Capabilities) {
 			t.Fatalf("record %d = %+v; want %+v", i, records[i], want[i])
 		}
 	}

@@ -63,7 +63,7 @@ func prepareExtensionMenuBar(g *gate, call protocol.ServiceCall) (protocol.Servi
 	switch {
 	case err != nil:
 		return call, err
-	case !plan.extension.MenuBar:
+	case !plan.extension.HasMenuBar:
 		return call, fmt.Errorf("%s has no menu bar item while it runs", extensionName(plan.extension))
 	case plan.extension.MenuBarShown == args.Shown:
 		return call, fmt.Errorf("the menu bar item of %s is already %s; nothing changed", extensionName(plan.extension), shownOrHidden(args.Shown))

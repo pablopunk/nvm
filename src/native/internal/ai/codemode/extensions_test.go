@@ -20,9 +20,9 @@ type fakeExtensions struct {
 
 func newFakeExtensions() *fakeExtensions {
 	return &fakeExtensions{records: []api.ExtensionRecord{
-		{ID: "acme.clock", Title: "Clock", Enabled: true, MenuBar: true, MenuBarShown: true},
+		{ID: "acme.clock", Title: "Clock", Enabled: true, HasMenuBar: true, MenuBarShown: true},
 		{ID: "acme.weather", Title: "Weather"},
-		{ID: "nevermind.dictation", Title: "Dictation", Enabled: true, BuiltIn: true, MenuBar: true, MenuBarShown: true},
+		{ID: "nevermind.dictation", Title: "Dictation", Enabled: true, BuiltIn: true, HasMenuBar: true, MenuBarShown: true},
 	}}
 }
 
