@@ -65,7 +65,7 @@ func describePreferenceSet(g *gate, _ protocol.ServiceCall) string {
 	if setting.Title == "" {
 		return fmt.Sprintf("Change setting %s of %s, which is not a setting", clip(setting.ID, 40), clip(setting.ExtensionID, 40))
 	}
-	return fmt.Sprintf("Change “%s” in %s from %s to %s", setting.Title, setting.Extension,
+	return fmt.Sprintf("Change “%s” in %s from %s to %s", setting.Title, setting.ExtensionTitle,
 		preferenceValueText(setting, setting.Value), preferenceValueText(setting, change.Value))
 }
 
@@ -77,7 +77,7 @@ func journalPreferenceSet(g *gate, _ protocol.ServiceCall, reply protocol.Servic
 		saved = setting
 		saved.Value = change.Value
 	}
-	return fmt.Sprintf("changed “%s” in %s from %s to %s (the user allowed it)", saved.Title, saved.Extension,
+	return fmt.Sprintf("changed “%s” in %s from %s to %s (the user allowed it)", saved.Title, saved.ExtensionTitle,
 		preferenceValueText(setting, setting.Value), preferenceValueText(saved, saved.Value))
 }
 

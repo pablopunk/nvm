@@ -62,7 +62,7 @@ func recordOf(source PreferenceSource, extension ExtensionPreferences, definitio
 		return api.PreferenceRecord{}, err
 	}
 	return api.PreferenceRecord{
-		ExtensionID: extension.ID, Extension: extension.Title, ID: definition.ID, Title: definition.Title,
+		ExtensionID: extension.ID, ExtensionTitle: extension.Title, ID: definition.ID, Title: definition.Title,
 		Description: definition.Description, Type: definition.Type, Value: value, Choices: definition.Choices,
 		Min: definition.Min, Max: definition.Max,
 	}, nil
@@ -73,7 +73,7 @@ func matchingRecords(records []api.PreferenceRecord, query string) []api.Prefere
 	words := strings.Fields(strings.ToLower(query))
 	var out []api.PreferenceRecord
 	for _, record := range records {
-		text := strings.ToLower(strings.Join([]string{record.ExtensionID, record.Extension, record.ID, record.Title, record.Description}, " "))
+		text := strings.ToLower(strings.Join([]string{record.ExtensionID, record.ExtensionTitle, record.ID, record.Title, record.Description}, " "))
 		if holdsEveryWord(text, words) {
 			out = append(out, record)
 		}
