@@ -94,7 +94,7 @@ func (e Extension) cycleSetting(ctx api.Context, in api.Invocation) (api.Result,
 		return api.Result{}, fmt.Errorf("no setting %q: %w", in.Ref.Args["id"], api.ErrInvalidInput)
 	}
 	current := choiceValue(LoadSettings(ctx, e.start), field.id)
-	if err := ctx.Settings().Set(field.id, nextOption(field.options, current)); err != nil {
+	if err := ctx.Settings().Set(field.id, nextOption(field.choices, current)); err != nil {
 		return api.Result{}, err
 	}
 	return e.replaceWithSettings(ctx), nil
@@ -133,13 +133,13 @@ func choiceValue(s Settings, id string) string {
 }
 
 // nextOption is the choice after current, wrapping around. A value the list does not hold starts at the first.
-func nextOption(options []string, current string) string {
-	for i, option := range options {
-		if option == current {
-			return options[(i+1)%len(options)]
+func nextOption(choices []api.SettingChoice, current string) string {
+	for i, choice := range choices {
+		if choice.Value == current {
+			return choices[(i+1)%len(choices)].Value
 		}
 	}
-	return options[0]
+	return choices[0].Value
 }
 
 // bindingNamed finds a declared setting by its ID.

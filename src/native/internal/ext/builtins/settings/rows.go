@@ -22,10 +22,10 @@ const (
 	opConfigFolder      = "config-folder"
 )
 
-// clipboardLimits are the sizes the clipboard history size row steps through.
+// clipboardLimits are the sizes the clipboard history size setting accepts.
 var clipboardLimits = []string{"50", "300", "500", "1000"}
 
-// updateChannels are the channels the update channel row steps through.
+// updateChannels are the channels the update channel setting accepts.
 var updateChannels = []api.SettingChoice{{Value: "stable", Title: "Stable"}, {Value: "nightly", Title: "Nightly"}, {Value: "dev", Title: "Dev"}}
 
 // menuBarStyles are the menu bar icon styles, with their 1.x labels.
@@ -44,11 +44,11 @@ func pageRows(launchAtLoginSupported bool) []api.SettingRow {
 		{ID: SettingHyperKey, Kind: api.SettingRowRecorder, Setting: SettingHyperKey, Title: "Hyper Key",
 			Subtitle: "Key combination displayed as Hyper in shortcut labels", Icon: "command", ActionTitle: "Change…"},
 		{ID: SettingSearchEngine, Kind: api.SettingRowChoice, Setting: SettingSearchEngine, Title: "Default Search Engine", Icon: "search",
-			ActionTitle: "Next Engine", Choices: engineChoices()},
+			ActionTitle: "Next Engine", Choices: declaredChoices(SettingSearchEngine)},
 		{ID: SettingClipboardHistory, Kind: api.SettingRowToggle, Setting: SettingClipboardHistory, Title: "Clipboard History", Icon: "clipboard",
 			ActionTitle: "Toggle", Also: []api.SettingRow{{ID: SettingClipboardLinkPreviews, Kind: api.SettingRowToggle, Setting: SettingClipboardLinkPreviews, Title: "Link Previews", ActionTitle: "Link Previews"}}},
 		{ID: SettingClipboardLimit, Kind: api.SettingRowChoice, Setting: SettingClipboardLimit, Title: "Clipboard History Size", Icon: "clipboard",
-			ActionTitle: "Cycle", Choices: choicesOf(clipboardLimits)},
+			ActionTitle: "Cycle", Choices: declaredChoices(SettingClipboardLimit)},
 		{ID: SettingClipboardRootList, Kind: api.SettingRowToggle, Setting: SettingClipboardRootList, Title: "Show Clipboard Items in Root List",
 			Subtitle: "Show copied items inline in the root list", Icon: "clipboard", ActionTitle: "Toggle"},
 		{ID: SettingClipboardRootSearch, Kind: api.SettingRowToggle, Setting: SettingClipboardRootSearch, Title: "Show Clipboard Items in Root Search",
@@ -67,9 +67,9 @@ func pageRows(launchAtLoginSupported bool) []api.SettingRow {
 			Subtitle: "Errors, usage and performance, without prompts or clipboard content", Icon: "shield-check", ActionTitle: "Toggle"},
 		api.SettingRow{ID: RowUpdates, Kind: api.SettingRowAction, Title: "Updates", Icon: "rotate-ccw", Action: hostAction(opUpdates, "Open")},
 		api.SettingRow{ID: SettingUpdateChannel, Kind: api.SettingRowChoice, Setting: SettingUpdateChannel, Title: "Update Channel", Icon: "shield-check",
-			ActionTitle: "Switch", Choices: updateChannels},
+			ActionTitle: "Switch", Choices: declaredChoices(SettingUpdateChannel)},
 		api.SettingRow{ID: SettingMenuBarIconStyle, Kind: api.SettingRowChoice, Setting: SettingMenuBarIconStyle, Title: "Menu Bar Icon Style",
-			Subtitle: "How the Nevermind icon looks in the menu bar, or None to hide it", Icon: "zap", ActionTitle: "Next", Choices: menuBarStyles},
+			Subtitle: "How the Nevermind icon looks in the menu bar, or None to hide it", Icon: "zap", ActionTitle: "Next", Choices: declaredChoices(SettingMenuBarIconStyle)},
 		api.SettingRow{ID: RowAccount, Kind: api.SettingRowAction, Title: "Account", Icon: "user", Action: hostAction(opAccountPage, "Open")},
 		api.SettingRow{ID: RowConfigFolder, Kind: api.SettingRowAction, Title: "Open Config Folder", Icon: "folder", Action: hostAction(opConfigFolder, "Open")},
 	)

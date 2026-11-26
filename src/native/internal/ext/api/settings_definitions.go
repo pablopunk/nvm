@@ -16,8 +16,8 @@ const maxSettingIDLength = 64
 
 var settingIDPattern = regexp.MustCompile(`^[A-Za-z][A-Za-z0-9_.-]{0,63}$`)
 
-// validateSettingDefinitions checks the declared settings: ids are unique and well formed, and the type is one
-// the host knows (or empty).
+// validateSettingDefinitions checks the declared settings: ids are unique and well formed, the type is one the host
+// knows (or empty), and the declared values agree with it.
 func validateSettingDefinitions(definitions []SettingDefinition) error {
 	seen := map[string]bool{}
 	for _, definition := range definitions {
@@ -32,6 +32,9 @@ func validateSettingDefinitions(definitions []SettingDefinition) error {
 		case "", SettingBoolean, SettingString, SettingNumber:
 		default:
 			return fmt.Errorf("setting %q has unknown type %q; use boolean, string or number", definition.ID, definition.Type)
+		}
+		if err := validateDeclaredValues(definition); err != nil {
+			return err
 		}
 	}
 	return nil

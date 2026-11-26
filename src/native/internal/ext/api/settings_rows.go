@@ -141,13 +141,19 @@ func validateChoices(row SettingRow) error {
 	if len(row.Choices) < 2 {
 		return fmt.Errorf("settings row %q needs at least two choices", row.ID)
 	}
+	return validateChoiceList(fmt.Sprintf("settings row %q", row.ID), row.Choices)
+}
+
+// validateChoiceList checks that every choice has a value and a title and that no value repeats. owner names the row or
+// setting in the error.
+func validateChoiceList(owner string, choices []SettingChoice) error {
 	values := map[string]bool{}
-	for _, choice := range row.Choices {
+	for _, choice := range choices {
 		if choice.Value == "" || choice.Title == "" {
 			return errors.New("every setting choice needs a value and a title")
 		}
 		if values[choice.Value] {
-			return fmt.Errorf("settings row %q repeats choice %q", row.ID, choice.Value)
+			return fmt.Errorf("%s repeats choice %q", owner, choice.Value)
 		}
 		values[choice.Value] = true
 	}

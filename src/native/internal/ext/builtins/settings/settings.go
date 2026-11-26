@@ -58,17 +58,17 @@ func declaredSettings() []api.SettingDefinition {
 	return []api.SettingDefinition{
 		{ID: SettingPaletteShortcut, Title: "Open Nevermind Shortcut", Type: api.SettingString, Value: []byte(`""`)},
 		{ID: SettingHyperKey, Title: "Hyper Key", Type: api.SettingString, Value: []byte(`""`)},
-		{ID: SettingSearchEngine, Title: "Default Search Engine", Type: api.SettingString, Value: []byte(`"google"`)},
+		{ID: SettingSearchEngine, Title: "Default Search Engine", Type: api.SettingString, Value: []byte(`"google"`), Choices: engineChoices()},
 		{ID: SettingClipboardHistory, Title: "Clipboard History", Type: api.SettingBoolean, Value: []byte(`true`)},
 		{ID: SettingClipboardLinkPreviews, Title: "Link Previews", Type: api.SettingBoolean, Value: []byte(`true`)},
-		{ID: SettingClipboardLimit, Title: "Clipboard History Size", Type: api.SettingString, Value: []byte(`"300"`)},
+		{ID: SettingClipboardLimit, Title: "Clipboard History Size", Type: api.SettingString, Value: []byte(`"300"`), Choices: choicesOf(clipboardLimits)},
 		{ID: SettingClipboardRootList, Title: "Show Clipboard Items in Root List", Type: api.SettingBoolean, Value: []byte(`true`)},
 		{ID: SettingClipboardRootSearch, Title: "Show Clipboard Items in Root Search", Type: api.SettingBoolean, Value: []byte(`true`)},
 		{ID: SettingAIChatsRootList, Title: "Show AI Chats in Root List", Type: api.SettingBoolean, Value: []byte(`true`)},
 		{ID: SettingDiagnostics, Title: "Send Technical Diagnostics", Type: api.SettingBoolean, Value: []byte(`true`)},
-		{ID: SettingUpdateChannel, Title: "Update Channel", Type: api.SettingString, Value: []byte(`"stable"`)},
+		{ID: SettingUpdateChannel, Title: "Update Channel", Type: api.SettingString, Value: []byte(`"stable"`), Choices: updateChannels},
 		{ID: SettingLaunchAtLogin, Title: "Launch at Login", Type: api.SettingBoolean, Value: []byte(`false`)},
-		{ID: SettingMenuBarIconStyle, Title: "Menu Bar Icon Style", Type: api.SettingString, Value: []byte(`"bolt-filled"`)},
+		{ID: SettingMenuBarIconStyle, Title: "Menu Bar Icon Style", Type: api.SettingString, Value: []byte(`"bolt-filled"`), Choices: menuBarStyles},
 	}
 }
 
@@ -89,10 +89,15 @@ func (Extension) RunAction(ctx api.Context, in api.Invocation) (api.Result, erro
 
 // engineChoices are the default search engines, in the order their row steps through them.
 func engineChoices() []api.SettingChoice {
-	engines := websearch.Engines()
-	choices := make([]api.SettingChoice, 0, len(engines))
-	for _, engine := range engines {
-		choices = append(choices, api.SettingChoice{Value: engine.Key, Title: engine.Name})
+	return websearch.EngineChoices()
+}
+
+// declaredChoices are the choices the definition of setting id declares, which its choice row steps through.
+func declaredChoices(id string) []api.SettingChoice {
+	for _, definition := range declaredSettings() {
+		if definition.ID == id {
+			return definition.Choices
+		}
 	}
-	return choices
+	return nil
 }
