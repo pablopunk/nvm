@@ -224,5 +224,5 @@ func (s *Service) answerLocked(offer Offer, found bool, err error) (State, bool)
 	case !found || !IsNewer(offer.Version, current):
 		return State{Status: StatusCurrent, CurrentVersion: current}, false
 	}
-	return State{Status: StatusAvailable, CurrentVersion: current, LatestVersion: offer.Version}, true
+	return State{Status: StatusAvailable, CurrentVersion: current, LatestVersion: offer.Version, ReleaseNotes: offer.Notes}, true
 }

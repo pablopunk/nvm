@@ -8,16 +8,35 @@ import (
 
 // Ids of the page's rows.
 const (
-	rowStatus  = "update-status"
-	rowChannel = "update-channel"
+	rowStatus       = "update-status"
+	rowReleaseNotes = "update-release-notes"
+	rowChannel      = "update-channel"
 )
 
 // checksEvery is the schedule the status line states before the first check; the updater checks on it.
 const checksEvery = "Checks every 4 hours"
 
-// updateRows are the rows of the page: the status row, which is also the check and the restart, and the channel.
+// updateRows are the rows of the page: the status row, which is also the check and the restart, the release notes of
+// a newer version while it downloads or waits for its restart, and the channel.
 func updateRows(state api.UpdateState, now time.Time) []api.Item {
-	return []api.Item{statusRow(state, now), channelRow(state)}
+	rows := []api.Item{statusRow(state, now)}
+	if notes, ok := releaseNotesRow(state); ok {
+		rows = append(rows, notes)
+	}
+	return append(rows, channelRow(state))
+}
+
+// releaseNotesRow opens the notes of the version being installed. There is none without a newer version or without
+// notes for it.
+func releaseNotesRow(state api.UpdateState) (api.Item, bool) {
+	if state.AvailableVersion == "" || state.ReleaseNotes == "" {
+		return api.Item{}, false
+	}
+	title := "Nevermind " + state.AvailableVersion
+	return api.Item{
+		ID: rowReleaseNotes, Title: "Release Notes", Subtitle: "What's new in " + title, Icon: "file-text",
+		Actions: []api.Action{api.PushView("Read", api.PreviewView(title, state.ReleaseNotes))},
+	}, true
 }
 
 // statusRow says where the updater stands, and Enter on it does the next thing that state allows: check, try again or

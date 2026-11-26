@@ -50,6 +50,7 @@ func apiUpdateState(status updateStatus) api.UpdateState {
 		FailedStage:       failedStage(state),
 		Message:           update.Message(state),
 		CheckedAtMs:       epochMillis(status.CheckedAt),
+		ReleaseNotes:      availableReleaseNotes(state),
 	}
 }
 
@@ -68,6 +69,14 @@ func availableVersion(state update.State) string {
 		return state.LatestVersion
 	}
 	return ""
+}
+
+// availableReleaseNotes are the notes of the available version, for as long as that version is offered.
+func availableReleaseNotes(state update.State) string {
+	if availableVersion(state) == "" {
+		return ""
+	}
+	return state.ReleaseNotes
 }
 
 // downloadedVersion is the newer version that is downloaded and waits for its restart.

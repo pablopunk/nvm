@@ -31,12 +31,13 @@ const (
 	StageInstall Stage = "install"
 )
 
-// State is what an updater knows: its status, the running version, the newest version it has seen, the download
-// fraction while one runs, the failed step, and a message for the person when the status needs one.
+// State is what an updater knows: its status, the running version, the newest version it has seen and its release
+// notes, the download fraction while one runs, the failed step, and a message for the person when the status needs one.
 type State struct {
 	Status         Status
 	CurrentVersion string
 	LatestVersion  string
+	ReleaseNotes   string
 	Progress       float64
 	Stage          Stage
 	Message        string
