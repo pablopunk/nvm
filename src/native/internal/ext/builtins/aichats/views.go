@@ -94,13 +94,16 @@ func chatRef(handler, id string) *api.ActionRef {
 	return &api.ActionRef{ID: handler, Args: map[string]string{argChatID: id}}
 }
 
-// replyStreams reports whether the transcript still changes: its last reply is arriving, or its last tool call is running.
+// replyStreams reports whether the transcript still changes: a message of the latest reply is arriving, or one of its
+// tool rows runs or waits. The whole reply counts, not its last row: a program's nested steps come after its own row,
+// so a step that ended last must not hide the program that still runs above it.
 func replyStreams(messages []api.ChatMessage) bool {
-	if len(messages) == 0 {
-		return false
+	for index := len(messages) - 1; index >= 0 && messages[index].Role != "user"; index-- {
+		if messages[index].Streaming || toolInProgress(messages[index].Tool) {
+			return true
+		}
 	}
-	last := messages[len(messages)-1]
-	return last.Streaming || toolInProgress(last.Tool)
+	return false
 }
 
 // toolInProgress reports whether a tool row is running or waits for the user, so the transcript refreshes until it settles.
