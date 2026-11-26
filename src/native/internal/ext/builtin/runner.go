@@ -78,6 +78,12 @@ func (r *Runner) Provides(method string) bool {
 	case protocol.MethodRowActions:
 		_, ok := r.ext.(api.RowActionProvider)
 		return ok
+	case protocol.MethodAITool:
+		_, ok := r.ext.(api.AIToolHandler)
+		return ok
+	case protocol.MethodDescribeAITool:
+		_, ok := r.ext.(api.AIToolDescriber)
+		return ok
 	}
 	return false
 }

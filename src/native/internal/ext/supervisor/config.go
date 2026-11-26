@@ -46,6 +46,10 @@ var DefaultBudgets = map[string]Budget{
 	protocol.MethodMenuBarTriggers: {Soft: 20 * time.Millisecond, Hard: 500 * time.Millisecond},
 	protocol.MethodRestoreWindow:   {Hard: 10 * time.Second},
 
+	// An AI tool call may write the extension's data, as a palette run does; describing one only reads it.
+	protocol.MethodAITool:         {Hard: 10 * time.Second},
+	protocol.MethodDescribeAITool: {Hard: 2 * time.Second},
+
 	// MethodProgram counts the program's own computing: the time the host spends answering its service calls, such as
 	// waiting for the user to allow a delete, is added back.
 	protocol.MethodProgram: {Hard: 20 * time.Second},

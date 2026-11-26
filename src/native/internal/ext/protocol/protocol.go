@@ -24,6 +24,9 @@ const (
 	// MethodRestoreWindow asks for the fresh view of a persistent window, with Invocation.Ref.ID as the restore key.
 	MethodRestoreWindow = "restore-window" // WindowRestorer.RestoreWindow
 	MethodRowActions    = "row-actions"    // RowActionProvider.RowActions, with the row in Invocation.Ref.Args
+	// MethodAITool runs one AI tool call, MethodDescribeAITool says what it will do; see AIToolInvocation.
+	MethodAITool         = "ai-tool"          // AIToolHandler.CallAITool
+	MethodDescribeAITool = "describe-ai-tool" // AIToolDescriber.DescribeAITool
 	// MethodProgram runs the program of an AI conversation: the child was started in program mode and calls its Main.
 	MethodProgram = "program"
 )

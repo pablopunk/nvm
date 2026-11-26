@@ -30,6 +30,10 @@ func (r *Runner) dispatch(ctx context.Context, method, query string, invocation 
 		return r.restoreWindow(ctx, invocation)
 	case protocol.MethodRowActions:
 		return r.rowActions(ctx, invocation)
+	case protocol.MethodAITool:
+		return r.callAITool(ctx, invocation)
+	case protocol.MethodDescribeAITool:
+		return r.describeAITool(ctx, invocation)
 	}
 	return nil, fmt.Errorf("unknown method %q: %w", method, api.ErrInvalidInput)
 }
@@ -111,6 +115,24 @@ func (r *Runner) rowActions(ctx context.Context, invocation *api.Invocation) (js
 	}
 	out, err := provider.RowActions(r.context.For(ctx, api.LaunchContext{}), api.RowFromArgs(args))
 	return encode(protocol.MethodRowActions, out, err)
+}
+
+func (r *Runner) callAITool(ctx context.Context, invocation *api.Invocation) (json.RawMessage, error) {
+	handler, ok := r.ext.(api.AIToolHandler)
+	if !ok {
+		return nil, notImplemented(protocol.MethodAITool)
+	}
+	out, err := handler.CallAITool(r.context.For(ctx, api.LaunchContext{}), protocol.AIToolCallOf(invocation))
+	return encode(protocol.MethodAITool, out, err)
+}
+
+func (r *Runner) describeAITool(ctx context.Context, invocation *api.Invocation) (json.RawMessage, error) {
+	describer, ok := r.ext.(api.AIToolDescriber)
+	if !ok {
+		return nil, notImplemented(protocol.MethodDescribeAITool)
+	}
+	out, err := describer.DescribeAITool(r.context.For(ctx, api.LaunchContext{}), protocol.AIToolCallOf(invocation))
+	return encode(protocol.MethodDescribeAITool, out, err)
 }
 
 func (r *Runner) menuBarTriggers() (json.RawMessage, error) {

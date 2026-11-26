@@ -59,6 +59,9 @@ func (e *extension) dispatch(req protocol.Request) (json.RawMessage, error) {
 		return e.encode(protocol.MethodMenuBarTriggers)
 	case protocol.MethodRestoreWindow:
 		return e.restoreWindow(req.Invocation)
+	case protocol.MethodAITool, protocol.MethodDescribeAITool:
+		call := protocol.AIToolCallOf(req.Invocation)
+		return e.encode(req.Method, e.contextArgument(api.LaunchContext{}), reflect.ValueOf(call))
 	}
 	return nil, fmt.Errorf("unknown method %q: %w", req.Method, api.ErrInvalidInput)
 }

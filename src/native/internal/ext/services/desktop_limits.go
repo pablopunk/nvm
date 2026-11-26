@@ -20,11 +20,11 @@ const (
 	notificationsPerMinute  = budget.NotificationsPerMinute
 )
 
-// requireRun refuses a destructive call that does not run under a palette action, or under an AI conversation's
-// program, whose gate asks the user in the chat. A search or a root listing has no confirmation step, so it cannot
+// requireRun refuses a destructive call that does not run under a palette action, an AI conversation's program, whose
+// gate asks the user in the chat, or an AI tool call that gate let through. A search or a root listing has no confirmation step, so it cannot
 // remove the user's data.
 func requireRun(ctxMethod, what string) error {
-	if ctxMethod == protocol.MethodRun || ctxMethod == protocol.MethodProgram {
+	if ctxMethod == protocol.MethodRun || ctxMethod == protocol.MethodProgram || ctxMethod == protocol.MethodAITool {
 		return nil
 	}
 	return serviceError{

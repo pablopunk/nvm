@@ -11,4 +11,7 @@ var EntryPoints = map[string]string{
 	MethodMenuBars:        "MenuBars",
 	MethodMenuBarTriggers: "MenuBarTriggers",
 	MethodRestoreWindow:   "RestoreWindow",
+
+	MethodAITool:         "CallAITool",
+	MethodDescribeAITool: "DescribeAITool",
 }

@@ -177,6 +177,10 @@ func (c hostContext) Preferences() api.Preferences {
 	return remotePreferences{link: c.link}
 }
 
+func (c hostContext) Tools() api.Tools {
+	return remoteTools{link: c.link}
+}
+
 func (c hostContext) Windows() api.Windows {
 	return childWindows{}
 }
