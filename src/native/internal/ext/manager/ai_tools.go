@@ -68,8 +68,5 @@ func toolError(failure *api.Failure, err error) error {
 	if err != nil {
 		return err
 	}
-	if failure != nil {
-		return protocol.ToolFailure{Failure: *failure}
-	}
-	return nil
+	return protocol.ErrorOf(failure)
 }

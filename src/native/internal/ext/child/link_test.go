@@ -52,9 +52,9 @@ func TestCloseFailsCallsThatAreWaiting(t *testing.T) {
 	}
 }
 
-func TestFailureErrorKeepsItsMessageAndCode(t *testing.T) {
-	err := failureError(&api.Failure{Code: api.CodeQuota, Message: "too many keys"})
-	if !errors.Is(err, api.ErrQuotaExceeded) || err.Error() != "too many keys: "+api.ErrQuotaExceeded.Error() {
-		t.Fatalf("error = %v; want the quota sentinel with the message", err)
+func TestAHostFailureKeepsItsMessageAndCode(t *testing.T) {
+	err := protocol.ErrorOf(&api.Failure{Code: api.CodeQuota, Message: "too many keys"})
+	if !errors.Is(err, api.ErrQuotaExceeded) || err.Error() != "too many keys" {
+		t.Fatalf("error = %v; want the quota sentinel with the host's message", err)
 	}
 }
