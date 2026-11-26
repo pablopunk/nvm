@@ -23,7 +23,7 @@ func (s *Session) previewPage() *palette.View {
 
 func (s *Session) drawPreview(c *ui.Context) {
 	preview := s.view.Preview
-	ui.Scroll(c).Grow(1).Children(func() {
+	drawReadingBody(c, func() {
 		if preview != nil && preview.Image != nil {
 			s.drawPreviewImage(c, preview.Image)
 		}
@@ -35,6 +35,13 @@ func (s *Session) drawPreview(c *ui.Context) {
 		default:
 			drawPlainText(c, s.view.Subtitle)
 		}
+	})
+}
+
+// drawReadingBody scrolls the content of a page that is read, inset from the pane like the text of a control.
+func drawReadingBody(c *ui.Context, content func()) {
+	ui.Scroll(c).Grow(1).Children(func() {
+		ui.Column(c).Gap(design.Inset).Padding(design.Inset, design.ReadingInset).Children(content)
 	})
 }
 

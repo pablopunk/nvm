@@ -69,7 +69,7 @@ subtitles are single lines with an ellipsis (`SingleLine`); a glyph is never cut
 
 The target is a 4 px grid, with icon tiles at 32 (`TileSize`) and keycaps at 1 by 6 padding. `geometry.go` holds the
 control geometry: `Inset` 8, `ControlHeight` 32 and `ControlPad` 14, with concentric radii, so the pane radius
-(`PaneRadius`, 24) is a control's radius plus the inset. The window cut, the border and the clip share it. The palette does not yet keep every spacing on
+(`PaneRadius`, 24) is a control's radius plus the inset. Text on a page that is read rather than chosen from, such as a preview, sits `ReadingInset` (`Inset` + `ControlPad`, 22) from the pane edge, where the footer's leading content and an editor's text start. The window cut, the border and the clip share it. The palette does not yet keep every spacing on
 the grid: 5, 6, 10 and 14 px paddings remain. They are listed as debt below, not changed, because changing them moves
 the palette goldens.
 

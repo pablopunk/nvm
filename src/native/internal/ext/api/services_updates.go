@@ -18,6 +18,9 @@ type UpdateState struct {
 	Message     string `json:"message,omitempty"`
 	// CheckedAtMs is when the last check on this channel finished; 0 before the first.
 	CheckedAtMs int64 `json:"checkedAtMs,omitempty"`
+	// ReleaseNotes are the Markdown notes of AvailableVersion, from the check that found it until it is installed;
+	// empty when there is no newer version or its release has no notes.
+	ReleaseNotes string `json:"releaseNotes,omitempty"`
 }
 
 // Status values of UpdateState.Status, as the host's update manager reports them.

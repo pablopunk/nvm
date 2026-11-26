@@ -180,8 +180,8 @@ func toolCallReply(writer io.Writer, id, name string, args any) {
 // (DictationEngine, DeviceModel, InstallDeviceModel, RetryOn), and by 300 for the camera list, and by 250 for
 // Shortcuts.Bindable, Set and Remove, and by 60 for the call a chat tool row names, and by 200 for Shortcuts.AddAlias
 // and RemoveAlias, and by 60 for a setting's Choices, Min and Max, and by 470 for the extensions service, and by 560
-// for the Preferences service.
-const turnRequestBudgetBytes = 49677
+// for the Preferences service, and by 40 for UpdateState.ReleaseNotes.
+const turnRequestBudgetBytes = 49717
 
 // TestBuilderTurnWritesWithThePreloadedReferenceAndBindsTheChat runs one builder turn end to end on the fake backend:
 // the model writes the extension through write_extension from the terse reference it was given, and then answers in a

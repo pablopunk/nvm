@@ -87,6 +87,19 @@ func offering(version string) updatefake.Check {
 	return updatefake.Check{Offer: update.Offer{Version: version}, Found: true}
 }
 
+func TestReleaseNotesFollowTheOfferedVersionUntilItIsReady(t *testing.T) {
+	notes := "- Faster search"
+	e := updatefake.NewEngine([]updatefake.Check{{Offer: update.Offer{Version: "2.0.1", Notes: notes}, Found: true}}, installed(100))
+	svc, rec := newService(e, nil)
+
+	if found := svc.Check(context.Background()); found.ReleaseNotes != notes {
+		t.Fatalf("downloading = %+v, want the offer's notes", found)
+	}
+	if ready := rec.await(t, update.StatusDownloaded); ready.ReleaseNotes != notes {
+		t.Fatalf("ready = %+v, want the offer's notes", ready)
+	}
+}
+
 func installed(total int64) updatefake.Install {
 	return updatefake.Install{Progress: []int64{total / 2, total}, Total: total}
 }

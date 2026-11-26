@@ -109,6 +109,27 @@ func TestStatusRowRestartsIntoADownloadedUpdate(t *testing.T) {
 	}
 }
 
+func TestReleaseNotesRowOpensTheNotesOfTheVersionBeingInstalled(t *testing.T) {
+	for _, status := range []string{api.UpdateStatusDownloading, api.UpdateStatusDownloaded} {
+		rows := updateRows(api.UpdateState{Status: status, AvailableVersion: "2.0.1", ReleaseNotes: "- Faster search"}, now)
+		if len(rows) != 3 || rows[1].ID != rowReleaseNotes || rows[1].Title != "Release Notes" {
+			t.Fatalf("%s rows = %+v, want the notes between the status and the channel", status, rows)
+		}
+		view := rows[1].Actions[0].View
+		if view == nil || view.Title != "Nevermind 2.0.1" || view.Preview == nil || view.Preview.Markdown != "- Faster search" {
+			t.Fatalf("%s notes view = %+v", status, view)
+		}
+	}
+	for _, state := range []api.UpdateState{
+		{Status: api.UpdateStatusCurrent},
+		{Status: api.UpdateStatusDownloading, AvailableVersion: "2.0.1"},
+	} {
+		if rows := updateRows(state, now); len(rows) != 2 {
+			t.Fatalf("rows for %+v = %+v, want no notes row", state, rows)
+		}
+	}
+}
+
 func TestStatusRowNamesTheFailedStepAndTriesAgain(t *testing.T) {
 	row := statusRow(api.UpdateState{Status: api.UpdateStatusError, FailedStage: api.UpdateStageCheck, ErrorMessage: "no network connection"}, now)
 	if row.Title != "Could not check for updates" || row.Subtitle != "no network connection" || row.Icon != "circle-alert" {

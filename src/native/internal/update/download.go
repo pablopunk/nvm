@@ -10,7 +10,7 @@ func (s *Service) startDownloadLocked(ctx context.Context, epoch int, offer Offe
 	downloadCtx, cancel := context.WithCancel(context.WithoutCancel(ctx))
 	s.cancel = cancel
 	begin := func() { go s.runDownload(downloadCtx, epoch, offer) }
-	return State{Status: StatusDownloading, CurrentVersion: s.state.CurrentVersion, LatestVersion: offer.Version}, begin
+	return State{Status: StatusDownloading, CurrentVersion: s.state.CurrentVersion, LatestVersion: offer.Version, ReleaseNotes: offer.Notes}, begin
 }
 
 func (s *Service) cancelDownloadLocked() {
@@ -43,7 +43,7 @@ func (s *Service) reportProgress(epoch int, offer Offer, done, total int64) {
 		s.mu.Unlock()
 		return
 	}
-	s.state = State{Status: StatusDownloading, CurrentVersion: s.state.CurrentVersion, LatestVersion: offer.Version, Progress: fraction}
+	s.state = State{Status: StatusDownloading, CurrentVersion: s.state.CurrentVersion, LatestVersion: offer.Version, ReleaseNotes: offer.Notes, Progress: fraction}
 	state := s.state
 	s.mu.Unlock()
 	s.notify(state)
@@ -58,9 +58,9 @@ func (s *Service) finishDownload(ctx context.Context, epoch int, offer Offer, er
 		return
 	}
 	s.cancel = nil
-	state := State{Status: StatusDownloaded, CurrentVersion: s.state.CurrentVersion, LatestVersion: offer.Version}
+	state := State{Status: StatusDownloaded, CurrentVersion: s.state.CurrentVersion, LatestVersion: offer.Version, ReleaseNotes: offer.Notes}
 	if err != nil {
-		state = State{Status: StatusFailed, CurrentVersion: s.state.CurrentVersion, LatestVersion: offer.Version, Stage: StageInstall, Message: err.Error()}
+		state = State{Status: StatusFailed, CurrentVersion: s.state.CurrentVersion, LatestVersion: offer.Version, ReleaseNotes: offer.Notes, Stage: StageInstall, Message: err.Error()}
 	}
 	s.state = state
 	s.mu.Unlock()
