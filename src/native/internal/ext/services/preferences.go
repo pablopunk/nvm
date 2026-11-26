@@ -2,6 +2,7 @@ package services
 
 import (
 	"context"
+	"encoding/json"
 
 	"github.com/pablopunk/nvm/native/internal/ext/api"
 	"github.com/pablopunk/nvm/native/internal/ext/protocol"
@@ -40,8 +41,11 @@ func (h *Handler) setPreference(ctx context.Context, call protocol.ServiceCall) 
 	if err := decodeArgs(call.Args, &args); err != nil {
 		return api.PreferenceRecord{}, err
 	}
-	if args.ExtensionID == "" || args.SettingID == "" || len(args.Value) == 0 {
-		return api.PreferenceRecord{}, invalid("a preference change needs the extension id, the setting id and the value")
+	if args.ExtensionID == "" || args.SettingID == "" {
+		return api.PreferenceRecord{}, invalid("a preference change needs the extension id and the setting id")
+	}
+	if len(args.Value) == 0 {
+		args.Value = json.RawMessage("null")
 	}
 	return h.deps.Preferences.Set(ctx, args.ExtensionID, args.SettingID, args.Value, args.Expect)
 }
