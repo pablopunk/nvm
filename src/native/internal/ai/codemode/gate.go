@@ -35,6 +35,7 @@ type gate struct {
 	shortcuts    services.ShortcutEditor
 	aliases      services.AliasEditor
 	jobs         services.JobsSurface
+	extensions   services.ExtensionsEditor
 	clock        platform.Clock
 	runCtx       context.Context
 	steps        agent.SubCalls
@@ -60,6 +61,7 @@ type gateConfig struct {
 	shortcuts    services.ShortcutEditor
 	aliases      services.AliasEditor
 	jobs         services.JobsSurface
+	extensions   services.ExtensionsEditor
 	clock        platform.Clock
 	runCtx       context.Context
 	steps        agent.SubCalls
@@ -74,7 +76,7 @@ func newGate(cfg gateConfig) *gate {
 	if cfg.approvalWait <= 0 {
 		cfg.approvalWait = DefaultApprovalWait
 	}
-	return &gate{rules: cfg.rules, notes: cfg.notes, shortcuts: cfg.shortcuts, aliases: cfg.aliases, jobs: cfg.jobs, clock: cfg.clock, runCtx: cfg.runCtx, steps: cfg.steps,
+	return &gate{rules: cfg.rules, notes: cfg.notes, shortcuts: cfg.shortcuts, aliases: cfg.aliases, jobs: cfg.jobs, extensions: cfg.extensions, clock: cfg.clock, runCtx: cfg.runCtx, steps: cfg.steps,
 		maxCalls: cfg.maxCalls, approvalWait: cfg.approvalWait, asked: map[string]bool{}, titles: map[string]string{}}
 }
 

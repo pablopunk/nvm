@@ -45,6 +45,8 @@ var rules = []Rule{
 	{Path: []string{"Shortcuts", "AddAlias"}, Capability: api.CapabilityShortcutsWrite},
 	{Path: []string{"Shortcuts", "RemoveAlias"}, Capability: api.CapabilityShortcutsWrite},
 	{Path: []string{"Shortcuts"}, Capability: api.CapabilityShortcuts},
+	{Path: []string{"Extensions", "List"}, Capability: api.CapabilityExtensions},
+	{Path: []string{"Extensions"}, Capability: api.CapabilityExtensionsWrite},
 }
 
 // Rules returns the capability rules, most specific first. The builder's prompt is written from this list.

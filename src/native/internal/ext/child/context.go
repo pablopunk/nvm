@@ -169,6 +169,10 @@ func (c hostContext) Jobs() api.Jobs {
 	return remoteJobs{link: c.link}
 }
 
+func (c hostContext) Extensions() api.Extensions {
+	return remoteExtensions{link: c.link}
+}
+
 func (c hostContext) Windows() api.Windows {
 	return childWindows{}
 }

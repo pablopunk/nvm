@@ -123,6 +123,7 @@ type Context interface {
 	Updates() Updates
 	Diagnostics() Diagnostics
 	Jobs() Jobs
+	Extensions() Extensions
 	AI() AI
 	AIBuilder() AIBuilder
 	Learnings() Learnings

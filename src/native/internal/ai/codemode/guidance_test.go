@@ -10,7 +10,7 @@ import (
 
 // A change to the api that go generate did not carry here fails this test, so the model never reads a stale call.
 func TestAPISubsetMatchesTheAPI(t *testing.T) {
-	want, err := apiref.RenderSubset(os.DirFS("../../ext/api"), []string{"Notes", "Shortcuts", "Jobs"})
+	want, err := apiref.RenderSubset(os.DirFS("../../ext/api"), []string{"Notes", "Shortcuts", "Jobs", "Extensions"})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -31,7 +31,7 @@ func TestGuidanceStaysWithinItsBudget(t *testing.T) {
 func TestGuidanceNamesWhatAProgramMayUseAndWhatItCannot(t *testing.T) {
 	contains(t, guidance(), "ctx.Notes() Notes", "Search(query string, limit int)", "CreateWith(markdown string)", "strings", "json",
 		"no files, network, os, goroutines, channels or generics", "asks the user before a call deletes", "ctx.Jobs() Jobs",
-		"ctx.Shortcuts() Shortcuts", "Bindable() []ShortcutRecord", "Command+Alt+K")
+		"ctx.Shortcuts() Shortcuts", "ctx.Extensions() Extensions", "OpenReview(id string) error", "Bindable() []ShortcutRecord", "Command+Alt+K")
 }
 
 // exampleBodies splits the guidance's examples into title and program.

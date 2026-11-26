@@ -51,6 +51,7 @@ func (p *App) conversationProgramTools() []agent.Tool {
 		ShortcutEditor: p.extensionShortcutEditor(),
 		AliasEditor:    p.extensionAliasEditor(),
 		Jobs:           jobsSurface{p: p},
+		Extensions:     p.extensionsEditor(),
 	})
 	return []agent.Tool{codemode.Tool(runner)}
 }

@@ -120,6 +120,7 @@ func (p *App) newExtensionManager() (*manager.Manager, error) {
 		Updates:         updatesSurface{p: p},
 		Diagnostics:     diagnosticsSurface{p: p},
 		Jobs:            jobsSurface{p: p},
+		Extensions:      p.extensionsEditor(),
 		Account:         extensionAccount{p: p},
 		OCR:             textReader,
 		AI:              p.extensionAI(textReader),

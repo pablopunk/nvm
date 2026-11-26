@@ -78,6 +78,8 @@ type Deps struct {
 	Displays *SharedDisplays
 	// Jobs lists the background jobs and runs or changes them. Nil answers unavailable.
 	Jobs JobsSurface
+	// Extensions lists the installed extensions and turns them off or opens their review. Nil answers unavailable.
+	Extensions ExtensionsEditor
 	// Notifier shows operating-system notifications. Nil answers unavailable.
 	Notifier platform.Notifier
 	// Shortcuts reads the shortcut table, ShortcutEditor changes it and AliasEditor changes the aliases. Nil answers
@@ -295,6 +297,8 @@ func (h *Handler) dispatch(ctx context.Context, call protocol.ServiceCall) (any,
 		return h.serveDiagnostics(call)
 	case protocol.ServiceJobs:
 		return h.serveJobs(call)
+	case protocol.ServiceExtensions:
+		return h.serveExtensions(ctx, call)
 	case protocol.ServiceViews:
 		return h.serveViews(call)
 	case protocol.ServiceIndicators:

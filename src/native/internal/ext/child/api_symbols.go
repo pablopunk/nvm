@@ -78,7 +78,9 @@ func init() {
 		"CapabilityDesktopMenus":        reflect.ValueOf(api.CapabilityDesktopMenus),
 		"CapabilityDesktopSelection":    reflect.ValueOf(api.CapabilityDesktopSelection),
 		"CapabilityDictation":           reflect.ValueOf(api.CapabilityDictation),
+		"CapabilityExtensions":          reflect.ValueOf(api.CapabilityExtensions),
 		"CapabilityExtensionsOwnership": reflect.ValueOf(api.CapabilityExtensionsOwnership),
+		"CapabilityExtensionsWrite":     reflect.ValueOf(api.CapabilityExtensionsWrite),
 		"CapabilityJobs":                reflect.ValueOf(api.CapabilityJobs),
 		"CapabilityNetwork":             reflect.ValueOf(api.CapabilityNetwork),
 		"CapabilityNotes":               reflect.ValueOf(api.CapabilityNotes),
@@ -495,8 +497,10 @@ func init() {
 		"ErrorCode":               reflect.ValueOf((*api.ErrorCode)(nil)),
 		"ExactFrame":              reflect.ValueOf((*api.ExactFrame)(nil)),
 		"Extension":               reflect.ValueOf((*api.Extension)(nil)),
+		"ExtensionRecord":         reflect.ValueOf((*api.ExtensionRecord)(nil)),
 		"ExtensionRename":         reflect.ValueOf((*api.ExtensionRename)(nil)),
 		"ExtensionRow":            reflect.ValueOf((*api.ExtensionRow)(nil)),
+		"Extensions":              reflect.ValueOf((*api.Extensions)(nil)),
 		"Fact":                    reflect.ValueOf((*api.Fact)(nil)),
 		"Failure":                 reflect.ValueOf((*api.Failure)(nil)),
 		"FetchRequest":            reflect.ValueOf((*api.FetchRequest)(nil)),
@@ -686,6 +690,7 @@ func init() {
 		"_Dictation":         reflect.ValueOf((*_github_com_pablopunk_nvm_native_internal_ext_api_Dictation)(nil)),
 		"_Drafts":            reflect.ValueOf((*_github_com_pablopunk_nvm_native_internal_ext_api_Drafts)(nil)),
 		"_Extension":         reflect.ValueOf((*_github_com_pablopunk_nvm_native_internal_ext_api_Extension)(nil)),
+		"_Extensions":        reflect.ValueOf((*_github_com_pablopunk_nvm_native_internal_ext_api_Extensions)(nil)),
 		"_Files":             reflect.ValueOf((*_github_com_pablopunk_nvm_native_internal_ext_api_Files)(nil)),
 		"_Indicators":        reflect.ValueOf((*_github_com_pablopunk_nvm_native_internal_ext_api_Indicators)(nil)),
 		"_Input":             reflect.ValueOf((*_github_com_pablopunk_nvm_native_internal_ext_api_Input)(nil)),
@@ -1091,6 +1096,7 @@ type _github_com_pablopunk_nvm_native_internal_ext_api_Context struct {
 	WDiagnostics func() api.Diagnostics
 	WDictation   func() api.Dictation
 	WDrafts      func() api.Drafts
+	WExtensions  func() api.Extensions
 	WIdentity    func() api.Identity
 	WIndicators  func() api.Indicators
 	WInput       func() api.Input
@@ -1152,6 +1158,9 @@ func (W _github_com_pablopunk_nvm_native_internal_ext_api_Context) Dictation() a
 }
 func (W _github_com_pablopunk_nvm_native_internal_ext_api_Context) Drafts() api.Drafts {
 	return W.WDrafts()
+}
+func (W _github_com_pablopunk_nvm_native_internal_ext_api_Context) Extensions() api.Extensions {
+	return W.WExtensions()
 }
 func (W _github_com_pablopunk_nvm_native_internal_ext_api_Context) Identity() api.Identity {
 	return W.WIdentity()
@@ -1390,6 +1399,28 @@ type _github_com_pablopunk_nvm_native_internal_ext_api_Extension struct {
 
 func (W _github_com_pablopunk_nvm_native_internal_ext_api_Extension) Manifest() api.Manifest {
 	return W.WManifest()
+}
+
+// _github_com_pablopunk_nvm_native_internal_ext_api_Extensions is an interface wrapper for Extensions type
+type _github_com_pablopunk_nvm_native_internal_ext_api_Extensions struct {
+	IValue          interface{}
+	WDisable        func(id string) error
+	WList           func() []api.ExtensionRecord
+	WOpenReview     func(id string) error
+	WSetMenuBarItem func(id string, shown bool) error
+}
+
+func (W _github_com_pablopunk_nvm_native_internal_ext_api_Extensions) Disable(id string) error {
+	return W.WDisable(id)
+}
+func (W _github_com_pablopunk_nvm_native_internal_ext_api_Extensions) List() []api.ExtensionRecord {
+	return W.WList()
+}
+func (W _github_com_pablopunk_nvm_native_internal_ext_api_Extensions) OpenReview(id string) error {
+	return W.WOpenReview(id)
+}
+func (W _github_com_pablopunk_nvm_native_internal_ext_api_Extensions) SetMenuBarItem(id string, shown bool) error {
+	return W.WSetMenuBarItem(id, shown)
 }
 
 // _github_com_pablopunk_nvm_native_internal_ext_api_Files is an interface wrapper for Files type

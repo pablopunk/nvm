@@ -66,8 +66,9 @@ type Ports struct {
 	// Diagnostics reads the support records and files problem reports. Nil keeps none.
 	Diagnostics services.DiagnosticsSurface
 	// Jobs lists the background jobs and changes them for the jobs service. Nil lists none.
-	Jobs      services.JobsSurface
-	Shortcuts services.ShortcutTable
+	Jobs       services.JobsSurface
+	Extensions services.ExtensionsEditor
+	Shortcuts  services.ShortcutTable
 	// ShortcutEditor and AliasEditor change the user's shortcuts and aliases for extensions that declare shortcuts.write.
 	ShortcutEditor services.ShortcutEditor
 	AliasEditor    services.AliasEditor
@@ -242,6 +243,7 @@ func New(ports Ports, root string, enabled *enablement.Set, opts Options) (*Mana
 			Updates:         ports.Updates,
 			Diagnostics:     ports.Diagnostics,
 			Jobs:            ports.Jobs,
+			Extensions:      ports.Extensions,
 			Shortcuts:       ports.Shortcuts,
 			ShortcutEditor:  ports.ShortcutEditor,
 			AliasEditor:     ports.AliasEditor,
