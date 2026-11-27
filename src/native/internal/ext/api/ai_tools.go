@@ -12,11 +12,12 @@ const (
 	AIToolRead AIToolClass = "read"
 	// AIToolWrite adds or changes data and is easily undone. It runs without asking, and the chat shows a row.
 	AIToolWrite AIToolClass = "write"
-	// AIToolSensitiveRead reads data that may hold secrets. The user is asked once per chat run and extension.
+	// AIToolSensitiveRead reads data that may hold secrets. The user is asked once per chat run for each exact call.
 	AIToolSensitiveRead AIToolClass = "sensitive-read"
 	// AIToolDestructive removes data. The user is asked every time.
 	AIToolDestructive AIToolClass = "destructive"
-	// AIToolExternal acts outside Nevermind's data, such as running a command. The user is asked every time.
+	// AIToolExternal acts outside Nevermind's data, such as running a command or writing the clipboard. The user is asked
+	// every time.
 	AIToolExternal AIToolClass = "external"
 	// AIToolSetting changes how Nevermind behaves everywhere. The user is asked every time.
 	AIToolSetting AIToolClass = "setting"

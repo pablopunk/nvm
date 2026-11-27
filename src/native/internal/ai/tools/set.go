@@ -22,6 +22,7 @@ type Deps struct {
 type Set struct {
 	Tools  *agent.Registry
 	Policy agent.Policy
+	shell  platform.Shell
 }
 
 // Standard returns the conversation's tools over deps.
@@ -31,7 +32,7 @@ func Standard(deps Deps) (Set, error) {
 	if err != nil {
 		return Set{}, err
 	}
-	return Set{Tools: registry, Policy: pathPolicy{guard: pathGuard, home: deps.Home}}, nil
+	return Set{Tools: registry, Policy: pathPolicy{guard: pathGuard, home: deps.Home}, shell: deps.Shell}, nil
 }
 
 // allTools lists every tool the conversation offers, in the order the model sees them.

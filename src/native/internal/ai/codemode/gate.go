@@ -48,7 +48,8 @@ type gate struct {
 	inner   serviceHandler
 	count   int
 	allowed *key
-	asked   map[string]bool
+	// answers are the user's answers this run, by answerScope: a decline of any class and an allow of a sensitive read.
+	answers map[string]bool
 	entries []entry
 	// titles are the note titles the gate read from the store to describe a call, kept so the journal can name a note
 	// the call then removed.
@@ -81,7 +82,7 @@ func newGate(cfg gateConfig) *gate {
 		cfg.approvalWait = DefaultApprovalWait
 	}
 	return &gate{rules: cfg.rules, notes: cfg.notes, shortcuts: cfg.shortcuts, aliases: cfg.aliases, jobs: cfg.jobs, extensions: cfg.extensions, clock: cfg.clock, runCtx: cfg.runCtx, steps: cfg.steps,
-		maxCalls: cfg.maxCalls, approvalWait: cfg.approvalWait, asked: map[string]bool{}, titles: map[string]string{}, preferences: cfg.preferences, tools: cfg.tools}
+		maxCalls: cfg.maxCalls, approvalWait: cfg.approvalWait, answers: map[string]bool{}, titles: map[string]string{}, preferences: cfg.preferences, tools: cfg.tools}
 }
 
 // Serve is the supervisor's service handler for the program.
@@ -102,7 +103,7 @@ func (g *gate) Serve(ctx context.Context, call protocol.ServiceCall) protocol.Se
 	if unprepared != nil {
 		return g.finishRan(r, call, step, protocol.ServiceReply{Failure: &api.Failure{Code: api.CodeInvalid, Message: unprepared.Error()}})
 	}
-	if verdict := g.verdict(r, scope, step); verdict != outcomeRan {
+	if verdict := g.verdict(r, answerScope(k, scope, call), step); verdict != outcomeRan {
 		return g.finishWithoutRunning(r, call, step, verdict)
 	}
 	reply := g.execute(ctx, k, call)
@@ -110,36 +111,24 @@ func (g *gate) Serve(ctx context.Context, call protocol.ServiceCall) protocol.Se
 }
 
 // verdict decides whether the call may run: the run must still be live, and a class that asks needs the user's allow.
-// A class that asks once asks once per scope: the service, or what the rule's classify names, such as one extension.
+// An answer covers only the exact operation and resource of scope: a decline is final for the run, and the allow of a
+// sensitive read covers its exact repeats.
 func (g *gate) verdict(r rule, scope string, step agent.SubCall) outcome {
 	if g.runCtx.Err() != nil {
 		return outcomeCancelled
 	}
-	switch {
-	case r.class.asksEachTime():
-		return g.ask(step)
-	case r.class.asksOncePerService() && !g.wasAllowed(scope):
-		answer := g.ask(step)
-		if answer == outcomeRan {
-			g.markAllowed(scope)
-		}
-		return answer
+	if !r.class.asks() {
+		return outcomeRan
 	}
-	return outcomeRan
-}
-
-// wasAllowed reports whether the user already allowed reads of the service in this run. A decline is not remembered:
-// the next call asks again.
-func (g *gate) wasAllowed(service string) bool {
-	g.mu.Lock()
-	defer g.mu.Unlock()
-	return g.asked[service]
-}
-
-func (g *gate) markAllowed(service string) {
-	g.mu.Lock()
-	defer g.mu.Unlock()
-	g.asked[service] = true
+	if allowed, answered := g.earlierAnswer(scope); answered {
+		if !allowed {
+			return outcomeDeclinedEarlier
+		}
+		return outcomeRan
+	}
+	answer := g.ask(step)
+	g.keepAnswer(r.class, scope, answer)
+	return answer
 }
 
 // ask puts the call's question to the user and waits. A chat that cannot ask refuses: a destructive or external call
@@ -245,6 +234,10 @@ func (g *gate) finishWithoutRunning(r rule, call protocol.ServiceCall, step agen
 		step.End(agent.CallRefused, "Refused by you", "The user did not allow this.")
 		e = entry{r.class, why, fmt.Sprintf("%s: the user declined, so it was not done", lowerFirst(what))}
 		reply = failure(api.CodePermission, "the user declined this action, so it was not done; do not try it again")
+	case outcomeDeclinedEarlier:
+		step.End(agent.CallRefused, "Refused by you earlier", "The user already declined this exact action in this chat.")
+		e = entry{r.class, why, fmt.Sprintf("%s: the user declined it earlier in this chat, so it was not asked again or done", lowerFirst(what))}
+		reply = failure(api.CodePermission, "the user already declined this exact action in this chat, so it was not asked again and was not done; do not try it again")
 	case outcomeUnanswered:
 		step.End(agent.CallRefused, "No answer in time", "The user did not answer in time.")
 		e = entry{r.class, why, fmt.Sprintf("%s: the user did not answer in time, so it was not done", lowerFirst(what))}

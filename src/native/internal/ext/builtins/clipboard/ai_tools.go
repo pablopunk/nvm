@@ -24,13 +24,14 @@ const (
 )
 
 // aiTools are the clipboard tools. The history may hold passwords and private text, so the host asks before the AI
-// reads it, whatever class a tool declares; a delete asks every time.
+// reads it, whatever class a tool declares. A copy puts history on the clipboard, where any app can read it, so it
+// asks every time, as a delete does.
 func aiTools() []api.AITool {
 	return []api.AITool{
 		{Name: toolSearch, Class: api.AIToolSensitiveRead,
 			Description: "Lists the newest clipboard history items whose text holds query, newest first; an empty query lists the newest.",
 			InputSchema: json.RawMessage(`{"type":"object","properties":{"query":{"type":"string"},"limit":{"type":"integer"}},"additionalProperties":false}`)},
-		{Name: toolCopy, Class: api.AIToolWrite,
+		{Name: toolCopy, Class: api.AIToolExternal,
 			Description: "Puts the clipboard history item with id back on the clipboard, with its formats.",
 			InputSchema: json.RawMessage(`{"type":"object","properties":{"id":{"type":"string"}},"required":["id"],"additionalProperties":false}`)},
 		{Name: toolDelete, Class: api.AIToolDestructive,

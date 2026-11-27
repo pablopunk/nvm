@@ -14,7 +14,8 @@ import (
 // maxListedApps bounds the app list a result carries.
 const maxListedApps = 50
 
-// appTools is the app tools over the shell port.
+// appTools is the app tools over the shell port. Opening an app acts outside Nevermind, so the user allows each one
+// unless their current message asked for exactly it.
 type appTools struct {
 	deps Deps
 }
@@ -69,6 +70,7 @@ func (a appTools) open() agent.Tool {
 		Description: "Open an installed app by its name, or bring it forward when it is running.",
 		Label:       "Opening an app",
 		Schema:      json.RawMessage(schemaRequiredString("name", 1, 200)),
+		Confirm:     true,
 		Summarize: func(args json.RawMessage) string {
 			var in appName
 			_ = json.Unmarshal(args, &in)
