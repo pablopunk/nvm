@@ -40,14 +40,16 @@ func (c clipboardTools) runRead(context.Context, json.RawMessage) (agent.Result,
 	return agent.Result{Text: text, Outcome: fmt.Sprintf("Read %d characters", utf8.RuneCountInString(text))}, nil
 }
 
+// copy replaces the clipboard, which every app can read and the user may paste anywhere, so the user must allow each one.
 func (c clipboardTools) copy() agent.Tool {
 	return agent.Tool{
 		Name:        "copy_text",
-		Description: "Put text on the clipboard, replacing what is there.",
+		Description: "Put text on the clipboard, replacing what is there. The user must allow each copy.",
 		Label:       "Copying text",
 		Schema: json.RawMessage(fmt.Sprintf(`{"type":"object","properties":{`+
 			`"text":{"type":"string","minLength":1,"maxLength":%d}},`+
 			`"required":["text"],"additionalProperties":false}`, maxClipboardRunes)),
+		Confirm:     true,
 		Summarize: func(args json.RawMessage) string {
 			var in copyArgs
 			_ = json.Unmarshal(args, &in)

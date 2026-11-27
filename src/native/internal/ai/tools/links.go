@@ -9,7 +9,8 @@ import (
 	"github.com/pablopunk/nvm/native/internal/ai/agent"
 )
 
-// linkTools is the link tool over the shell port. It opens web addresses only.
+// linkTools is the link tool over the shell port. It opens web addresses only. A web address can carry data out of
+// the computer in its path or query, so the user allows each one unless their current message asked for exactly it.
 type linkTools struct {
 	deps Deps
 }
@@ -20,6 +21,7 @@ func (l linkTools) open() agent.Tool {
 		Description: "Open a web address (http or https) in the default browser.",
 		Label:       "Opening a link",
 		Schema:      json.RawMessage(schemaRequiredString("url", 1, 2048)),
+		Confirm:     true,
 		Summarize: func(args json.RawMessage) string {
 			var in linkArgs
 			_ = json.Unmarshal(args, &in)

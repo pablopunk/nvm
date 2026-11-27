@@ -106,16 +106,17 @@ func TestStandardRegistersEverySchemaAndWiresIt(t *testing.T) {
 	}
 }
 
-// TestDestructiveAndPrivateToolsAskFirst checks that only the tools that change or expose something are confirmed.
+// TestDestructiveAndPrivateToolsAskFirst checks that only the tools that change, expose or send something out are
+// confirmed: opening a link or an app and writing the clipboard act outside Nevermind.
 func TestDestructiveAndPrivateToolsAskFirst(t *testing.T) {
 	r := newRig(t)
-	for _, name := range []string{"trash_file", "read_clipboard"} {
+	for _, name := range []string{"trash_file", "read_clipboard", "open_app", "open_url", "copy_text"} {
 		tool, _ := r.set.Tools.Lookup(name)
 		if !tool.Confirm {
 			t.Fatalf("%s does not ask first", name)
 		}
 	}
-	for _, name := range []string{"search_files", "read_file", "list_folder", "list_apps", "open_app", "open_url", "copy_text"} {
+	for _, name := range []string{"search_files", "read_file", "list_folder", "list_apps"} {
 		tool, _ := r.set.Tools.Lookup(name)
 		if tool.Confirm {
 			t.Fatalf("%s asks first but should not", name)

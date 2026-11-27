@@ -56,14 +56,6 @@ type Options struct {
 	Engine func(chat Chat) agent.Engine
 }
 
-// Toolset is the tools a conversation may call and the policy each call passes before it runs.
-type Toolset struct {
-	Registry *agent.Registry
-	Policy   agent.Policy
-	// BuilderTurn binds builder callbacks to this toolset's turn, never a later turn of the same chat.
-	BuilderTurn *BuilderTurn
-}
-
 // Service runs the chats: it sends a message, streams the reply into the transcript, stops or repeats a turn,
 // and keeps the last model each tier resolved to. Its state is owned by the UI thread.
 type Service struct {

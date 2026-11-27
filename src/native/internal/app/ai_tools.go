@@ -29,5 +29,5 @@ func (p *App) chatToolset() chat.Toolset {
 		log.Println("chat tools: could not register them:", err)
 		return chat.Toolset{}
 	}
-	return chat.Toolset{Registry: set.Tools, Policy: set.Policy}
+	return chat.Toolset{Registry: set.Tools, Policy: set.Policy, Waiver: set.LaunchGrantFor}
 }
