@@ -12,6 +12,8 @@ const (
 	outcomeRan      outcome = "ran"
 	outcomeFailed   outcome = "failed"
 	outcomeDeclined outcome = "declined"
+	// outcomeDeclinedEarlier is a call the user declined earlier in the run. It is not asked again.
+	outcomeDeclinedEarlier outcome = "declined-earlier"
 	// outcomeUnanswered is a question the user did not answer in time. It is a refusal: nothing runs without an answer.
 	outcomeUnanswered outcome = "unanswered"
 	outcomeRefused    outcome = "refused"
@@ -55,7 +57,7 @@ func summary(entries []entry) string {
 		switch {
 		case e.outcome == outcomeRan && e.class.changesData():
 			changes++
-		case e.outcome == outcomeDeclined:
+		case e.outcome == outcomeDeclined || e.outcome == outcomeDeclinedEarlier:
 			declined++
 		case e.outcome == outcomeRefused || e.outcome == outcomeUnanswered:
 			refused++

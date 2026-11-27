@@ -58,7 +58,8 @@ func (r *turnRun) abandon(calls []backend.ToolCall) {
 }
 
 // decideAndRun checks a call in the order the host promises: the tool must exist, its arguments must match the schema,
-// the policy must allow it, the user must allow it when the tool asks, and only then does it run.
+// the policy must allow it, the user must allow it when the tool asks, unless the host waives the question for exactly
+// this call, and only then does it run.
 func (r *turnRun) decideAndRun(call backend.ToolCall, tool Tool, known bool, info CallInfo) callResult {
 	if !known {
 		return callResult{status: CallFailed, result: call.Function.Name + " is not a registered tool", outcome: "Unknown tool"}
@@ -74,14 +75,8 @@ func (r *turnRun) decideAndRun(call backend.ToolCall, tool Tool, known bool, inf
 		return callResult{status: CallRefused, result: "tool call refused: " + decision.Reason, outcome: "Refused: " + decision.Reason}
 	}
 	if tool.Confirm {
-		asked := r.setup.Clock.Now()
-		allowed, cancelled := r.await(r.ctx, call.ID, info)
-		r.waited.Add(int64(r.setup.Clock.Now().Sub(asked)))
-		switch {
-		case cancelled:
-			return callResult{status: CallCancelled, result: abandonedResult, outcome: "Stopped before it ran"}
-		case !allowed:
-			return callResult{status: CallRefused, result: "The user did not allow this tool call.", outcome: "Refused by you"}
+		if refusal, allowed := r.confirm(call, tool, info); !allowed {
+			return refusal
 		}
 	}
 	return r.run(tool, json.RawMessage(arguments), info)

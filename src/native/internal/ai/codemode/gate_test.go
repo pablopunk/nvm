@@ -31,13 +31,13 @@ func TestNotesOperationsAreClassifiedByEffect(t *testing.T) {
 	}
 }
 
-func TestOnlyDestructiveAndExternalAskEachTimeAndSensitiveReadsAskOnce(t *testing.T) {
-	cases := map[Class][3]bool{ // asksEachTime, asksOncePerService, changesData
+func TestOnlyDestructiveAndExternalAskEachTimeAndSensitiveReadAllowsCoverRepeats(t *testing.T) {
+	cases := map[Class][3]bool{ // asksEachTime, allowCoversRepeats, changesData
 		ClassRead: {false, false, false}, ClassWrite: {false, false, true}, ClassSensitiveRead: {false, true, false},
 		ClassDestructive: {true, false, true}, ClassExternal: {true, false, true}, ClassSetting: {true, false, true},
 	}
 	for class, want := range cases {
-		if got := [3]bool{class.asksEachTime(), class.asksOncePerService(), class.changesData()}; got != want {
+		if got := [3]bool{class.asksEachTime(), class.allowCoversRepeats(), class.changesData()}; got != want {
 			t.Errorf("%s = %v; want %v", class, got, want)
 		}
 	}
@@ -118,50 +118,28 @@ func (s *stubServices) count() int {
 	return len(s.calls)
 }
 
-// The classes the notes slice does not use still decide the same way: a sensitive read asks once per service and a
-// decline is not remembered, a command asks every time, a read never asks.
+// The classes the notes slice does not use still decide the same way: a sensitive read asks once per exact operation
+// and resource, a command asks every time, a read never asks.
 func TestGateAsksAccordingToTheClassOfTheRule(t *testing.T) {
-	text := func(string) func(*gate, protocol.ServiceCall) string {
-		return func(*gate, protocol.ServiceCall) string { return "the host's words" }
-	}
-	rules := map[key]rule{
-		{"fake", "look"}: {class: ClassRead, label: "Looking", describe: text("look"), journal: journalNone},
-		{"fake", "peek"}: {class: ClassSensitiveRead, label: "Reading private data", describe: text("peek"), journal: journalNone},
-		{"fake", "run"}:  {class: ClassExternal, label: "Running a command", describe: text("run"), journal: journalNone},
-	}
-	steps := &fakeSteps{}
-	inner := &stubServices{}
-	g := newGate(gateConfig{rules: rules, runCtx: context.Background(), steps: steps})
-	g.inner = inner
-	serve := func(op string) protocol.ServiceReply {
-		return g.Serve(context.Background(), protocol.ServiceCall{Service: "fake", Op: op})
-	}
-	asked := func() int {
-		n := 0
-		for _, row := range steps.snapshot() {
-			if row.asked {
-				n++
-			}
-		}
-		return n
-	}
-	steps.decide = decline
-	if reply := serve("peek"); reply.Failure == nil || inner.count() != 0 {
-		t.Fatal("a declined sensitive read ran")
-	}
+	g, steps, inner := answerFixture()
+	serve := serveOn(g)
 	steps.decide = allow
-	serve("peek")
-	serve("peek")
-	if asked() != 2 || inner.count() != 2 {
-		t.Fatalf("sensitive reads asked %d times for 2 allowed runs (inner %d); want a decline asked, then one allow covering the second", asked(), inner.count())
+	serve("peek", `{"id":"a"}`)
+	serve("peek", `{ "id": "a" }`)
+	if asked(steps) != 1 || inner.count() != 2 {
+		t.Fatalf("sensitive reads asked %d times for 2 runs of one resource (inner %d); want one allow covering the repeat", asked(steps), inner.count())
 	}
-	serve("look")
-	if asked() != 2 {
+	serve("peek", `{"id":"b"}`)
+	if asked(steps) != 2 {
+		t.Fatal("an allow for one resource covered another")
+	}
+	serve("look", "")
+	if asked(steps) != 2 {
 		t.Fatal("a read asked")
 	}
-	serve("run")
-	serve("run")
-	if asked() != 4 || inner.count() != 5 {
-		t.Fatalf("asked %d, ran %d; want every command asked", asked(), inner.count())
+	serve("run", `{"id":"a"}`)
+	serve("run", `{"id":"a"}`)
+	if asked(steps) != 4 || inner.count() != 6 {
+		t.Fatalf("asked %d, ran %d; want every command asked", asked(steps), inner.count())
 	}
 }

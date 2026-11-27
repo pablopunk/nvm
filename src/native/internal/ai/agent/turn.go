@@ -20,6 +20,8 @@ type Setup struct {
 	Model          Model
 	Tools          *Registry
 	Policy         Policy
+	// Waiver, when set, lets the host skip the question of one confirming call it already holds the user's word for.
+	Waiver         Waiver
 	Clock          platform.Clock
 	MaxSteps       int
 	ToolTimeout    time.Duration
@@ -97,6 +99,7 @@ type turnRun struct {
 	setup    Setup
 	messages []backend.Message
 	usage    Usage
+	declined declinedCalls
 	finished bool
 	started  time.Time
 	// waited is the time the turn spent waiting for the user's answers, in nanoseconds. A running tool adds to it from

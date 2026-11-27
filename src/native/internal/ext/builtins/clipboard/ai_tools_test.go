@@ -26,6 +26,16 @@ func TestClipboardToolsNeverRunUnasked(t *testing.T) {
 	}
 }
 
+// A copy puts history on the clipboard, where any app can read it, so the user is asked every time.
+func TestCopyingAClipboardItemAsksEveryTime(t *testing.T) {
+	manifest := New(nil).Manifest()
+	for _, tool := range manifest.AITools {
+		if tool.Name == toolCopy && manifest.EnforcedAIToolClass(tool) != api.AIToolExternal {
+			t.Fatalf("%s runs as %s; want external", tool.Name, manifest.EnforcedAIToolClass(tool))
+		}
+	}
+}
+
 func TestSearchClipboardReturnsMatchingTextNewestFirst(t *testing.T) {
 	ctx := newFakeContext(text("a", "meeting notes for monday", 1), text("b", "grocery list", 2), text("c", "monday standup", 3))
 	result, err := New(nil).CallAITool(ctx, clipboardToolCall(toolSearch, `{"query":"monday"}`))
