@@ -35,7 +35,6 @@ const (
 // Refs of the actions the views and the forms run. The args carry the saved dictation or transcript id.
 const (
 	RefOpenSettings     = "open-settings"
-	refSaveSettings     = "save-settings"
 	refRetry            = "retry-recording"
 	refDeleteRecording  = "delete-recording"
 	refDeleteTranscript = "delete-transcript"
@@ -44,16 +43,15 @@ const (
 )
 
 // Extension is the dictation built-in. Its session holds what one dictation needs while it runs, and legacy holds the
-// settings and transcripts the app kept before this built-in; they answer until the first save of each.
+// transcripts the app kept before this built-in; they answer until the first save.
 type Extension struct {
 	legacy  Legacy
 	session *session
 }
 
-// Legacy is the dictation state the app held in its own documents before this built-in.
+// Legacy is the dictation history the app held in its own document before this built-in.
 type Legacy struct {
-	Settings *Settings
-	History  []history.Entry
+	History []history.Entry
 }
 
 // session is the state of the dictation in progress. Actions run on their own goroutines, so it is guarded.
@@ -68,16 +66,17 @@ func New(legacy Legacy) Extension {
 	return Extension{legacy: legacy, session: &session{}}
 }
 
-// Manifest identifies the built-in and declares the capabilities its calls need, as a folder extension would.
+// Manifest identifies the built-in, declares the capabilities its calls need, as a folder extension would, and declares
+// its settings, so the host keeps them and the built-in AI can read and change them.
 func (Extension) Manifest() api.Manifest {
 	return api.Manifest{
 		APIVersion: "1.0",
 		Identity:   api.Identity{ID: ID, Title: "Dictation"},
 		Capabilities: []api.Capability{
 			api.CapabilityDictation, api.CapabilityAI, api.CapabilityOCR, api.CapabilityDesktopApps,
-			api.CapabilityDesktopClipboard, api.CapabilityDesktopKeyboard,
+			api.CapabilityDesktopClipboard, api.CapabilityDesktopKeyboard, api.CapabilitySettingsWrite,
 		},
-		Settings:  []api.SettingDefinition{{ID: SettingDevice, Title: "Microphone", Type: api.SettingString}},
+		Settings:  settingDefinitions(),
 		Publishes: []string{SettingDevice},
 	}
 }
@@ -86,7 +85,7 @@ func (Extension) Manifest() api.Manifest {
 // maps to the 1.x keys, so the shortcuts a user set in 1.x keep working. Loading them publishes the microphone's title
 // for the Settings page's Dictation row.
 func (e Extension) Commands(ctx api.Context) ([]api.Command, error) {
-	publishDeviceTitle(ctx, e.readSettings(ctx))
+	publishDeviceTitle(ctx, readSettings(ctx).DeviceID)
 	return []api.Command{dictateCommand(), historyCommand()}, nil
 }
 
@@ -110,7 +109,7 @@ func historyCommand() api.Command {
 	}
 }
 
-// RunAction runs the rows' actions, the views' actions and the settings form's save.
+// RunAction runs the rows' actions and the views' actions.
 func (e Extension) RunAction(ctx api.Context, in api.Invocation) (api.Result, error) {
 	args := in.Ref.Args
 	switch in.Ref.ID {
@@ -120,8 +119,12 @@ func (e Extension) RunAction(ctx api.Context, in api.Invocation) (api.Result, er
 		return e.openHistory(ctx)
 	case RefOpenSettings:
 		return e.openSettings(ctx)
-	case refSaveSettings:
-		return e.saveSettings(ctx, in.Form)
+	case refEditDictionary:
+		return editDictionary(ctx)
+	case refSaveDictionary:
+		return saveDictionary(ctx, in.EditorContent)
+	case refInstallModel:
+		return installDeviceModel(ctx)
 	case refRetry:
 		return e.retry(ctx, args[argID])
 	case refDeleteRecording:

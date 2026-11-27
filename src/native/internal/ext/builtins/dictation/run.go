@@ -29,7 +29,7 @@ func (e Extension) toggle(ctx api.Context) (api.Result, error) {
 // start opens the microphone with the chosen device, muting the output while it records. The indicator says so while
 // the microphone opens, and names the device once its title is known.
 func (e Extension) start(ctx api.Context) (api.Result, error) {
-	settings := e.readSettings(ctx)
+	settings := readSettings(ctx)
 	cleanWithAI := settings.CleanupWithAI && aiAvailable(ctx)
 	e.session.beginStart(frontmostAppID(ctx))
 	defer e.session.endStart()
@@ -71,7 +71,7 @@ func showFailure(ctx api.Context, err error) {
 // stop ends the recording, cleans the transcript when the settings ask, saves it to the history and pastes it into the
 // app that had focus when the dictation started. The screen words are read while the transcript is on its way.
 func (e Extension) stop(ctx api.Context) (api.Result, error) {
-	settings := e.readSettings(ctx)
+	settings := readSettings(ctx)
 	cleanWithAI := settings.CleanupWithAI && aiAvailable(ctx)
 	target := e.session.takeTarget()
 	showIndicator(ctx, transcribingIndicator())

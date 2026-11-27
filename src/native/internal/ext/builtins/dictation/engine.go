@@ -7,21 +7,6 @@ import (
 	"github.com/pablopunk/nvm/native/internal/ext/api"
 )
 
-// fieldEngine is the settings field that chooses where speech becomes text.
-const fieldEngine = "engine"
-
-// engineField offers the cloud and the on-device model, and says where the model's download stands.
-func engineField(selected api.DictationEngine, model api.DictationDeviceModel) api.Field {
-	field := api.FieldOf(fieldEngine, api.FieldDropdown, "Transcription")
-	field.Value = api.TextValue(string(engineOrCloud(selected)))
-	field.Options = []api.Option{
-		{Title: "Cloud", Value: string(api.DictationEngineCloud)},
-		{Title: "On this device (" + model.Title + ")", Value: string(api.DictationEngineDevice)},
-	}
-	field.Description = deviceModelDescription(model)
-	return field
-}
-
 // deviceModelDescription says what choosing the device means, and where its model stands now.
 func deviceModelDescription(model api.DictationDeviceModel) string {
 	about := "On this device is free, private and works offline, after a one-time " + sizeText(model.SizeBytes) +
@@ -32,7 +17,7 @@ func deviceModelDescription(model api.DictationDeviceModel) string {
 	case api.DictationModelDownloading:
 		return fmt.Sprintf("Downloading the on-device model: %d%%. ", percentOf(model.Progress)) + about
 	case api.DictationModelFailed:
-		return "The last download failed (" + model.Error + "); save again to resume it. " + about
+		return "The last download failed (" + model.Error + "); download it again to resume. " + about
 	}
 	return about
 }

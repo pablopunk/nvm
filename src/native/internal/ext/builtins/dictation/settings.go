@@ -1,67 +1,84 @@
 package dictation
 
 import (
+	"encoding/json"
+
 	"github.com/pablopunk/nvm/native/internal/ext/api"
 )
 
-// storageSettingsKey and storageHistoryKey name the built-in's documents in its storage.
-const (
-	storageSettingsKey = "settings"
-	storageHistoryKey  = "history"
-)
+// storageHistoryKey names the transcripts in the built-in's storage. The settings are declared, so the host keeps them.
+const storageHistoryKey = "history"
 
 // SettingDevice is the setting whose display text is the microphone's title. The Settings page shows it on its Dictation row.
 const SettingDevice = "device"
 
+// The declared settings, by the ids 1.x named them.
+const (
+	SettingDeviceID   = "deviceId"
+	SettingEngine     = "engine"
+	SettingCleanup    = "cleanupWithAi"
+	SettingDictionary = "dictionary"
+	SettingClipboard  = "copyToClipboard"
+	SettingScreen     = "useScreenContext"
+	defaultDeviceID   = "default"
+)
+
 // systemDefaultTitle names the system microphone when the host lists no title for it.
 const systemDefaultTitle = "System Default"
 
-// The settings form's fields, by id, as 1.x named them.
-const (
-	fieldDevice       = "deviceId"
-	fieldCleanup      = "cleanupWithAi"
-	fieldDictionary   = "dictionary"
-	fieldClipboard    = "copyToClipboard"
-	fieldScreen       = "useScreenContext"
-	defaultDeviceID   = "default"
-	settingsSave      = "Save"
-	dictionaryRows    = 8
-	dictionaryHint    = "One preferred term per line"
-	dictionaryDetails = "Preferred terms and spellings for AI cleanup."
-)
-
-// Settings are the choices the Dictation Settings form edits. DeviceID "default" is the system microphone.
+// Settings are the dictation choices, read from the declared settings. DeviceID "default" is the system microphone.
 type Settings struct {
-	DeviceID         string `json:"deviceId"`
-	CleanupWithAI    bool   `json:"cleanupWithAi"`
-	Dictionary       string `json:"dictionary"`
-	CopyToClipboard  bool   `json:"copyToClipboard"`
-	UseScreenContext bool   `json:"useScreenContext"`
-	// Engine is where speech becomes text; empty is the cloud.
-	Engine api.DictationEngine `json:"engine,omitempty"`
+	DeviceID         string
+	CleanupWithAI    bool
+	Dictionary       string
+	CopyToClipboard  bool
+	UseScreenContext bool
+	Engine           api.DictationEngine
 }
 
-// defaultSettings are the choices a new install starts with.
-func defaultSettings() Settings {
-	return Settings{DeviceID: defaultDeviceID}
+// engineChoices are where speech becomes text: the cloud, or the model on this device.
+var engineChoices = []api.SettingChoice{
+	{Value: string(api.DictationEngineCloud), Title: "Cloud"},
+	{Value: string(api.DictationEngineDevice), Title: "On This Device"},
 }
 
-// readSettings returns the saved choices, else the app's legacy choices, else the defaults. A value the storage cannot
-// read falls back to the defaults, as 1.x did.
-func (e Extension) readSettings(ctx api.Context) Settings {
-	settings := defaultSettings()
-	if e.legacy.Settings != nil {
-		settings = normalizedSettings(*e.legacy.Settings)
+// settingDefinitions declares the dictation settings with the values a new install starts with. The Dictionary is a
+// string with one term per line: no declared type holds a list, and the cleanup prompt reads the lines as they are.
+func settingDefinitions() []api.SettingDefinition {
+	return []api.SettingDefinition{
+		{ID: SettingDevice, Title: "Microphone", Type: api.SettingString},
+		{ID: SettingDeviceID, Title: "Microphone", Type: api.SettingString, Value: jsonOf(defaultDeviceID),
+			Description: `The id of the microphone dictation records from; "default" is the system microphone.`},
+		{ID: SettingEngine, Title: "Transcription", Type: api.SettingString, Value: jsonOf(string(api.DictationEngineCloud)),
+			Choices: engineChoices, Description: "Where speech becomes text: the cloud, or the free on-device model."},
+		{ID: SettingCleanup, Title: "Clean with AI", Type: api.SettingBoolean, Value: jsonOf(false),
+			Description: "Send the transcript to Fast AI to correct punctuation, grammar, and transcription errors before pasting."},
+		{ID: SettingDictionary, Title: "Custom Dictionary", Type: api.SettingString, Value: jsonOf(""),
+			Description: "Preferred terms and spellings for AI cleanup, one per line."},
+		{ID: SettingClipboard, Title: "Copy Transcription to Clipboard", Type: api.SettingBoolean, Value: jsonOf(false),
+			Description: "Keep the transcription on the clipboard after pasting."},
+		{ID: SettingScreen, Title: "Use Screen Text", Type: api.SettingBoolean, Value: jsonOf(false),
+			Description: "Read words from the screen to fix names and terms."},
 	}
-	var saved Settings
-	if found, err := ctx.Storage().Get(storageSettingsKey, &saved); err == nil && found {
-		settings = normalizedSettings(saved)
-	}
-	return settings
 }
 
-// normalizedSettings keeps the values the form can show: a device id.
-func normalizedSettings(settings Settings) Settings {
+func jsonOf(value any) json.RawMessage {
+	raw, _ := json.Marshal(value)
+	return raw
+}
+
+// readSettings reads each declared setting. A setting the host cannot read keeps its default.
+func readSettings(ctx api.Context) Settings {
+	settings := Settings{DeviceID: defaultDeviceID}
+	var engine string
+	store := ctx.Settings()
+	_ = store.Get(SettingDeviceID, &settings.DeviceID)
+	_ = store.Get(SettingEngine, &engine)
+	_ = store.Get(SettingCleanup, &settings.CleanupWithAI)
+	_ = store.Get(SettingDictionary, &settings.Dictionary)
+	_ = store.Get(SettingClipboard, &settings.CopyToClipboard)
+	_ = store.Get(SettingScreen, &settings.UseScreenContext)
+	settings.Engine = engineOrCloud(api.DictationEngine(engine))
 	if settings.DeviceID == "" {
 		settings.DeviceID = defaultDeviceID
 	}
@@ -74,103 +91,19 @@ func aiAvailable(ctx api.Context) bool {
 	return err == nil && available
 }
 
-// openSettings shows the settings form, with the microphones and the AI state read now.
-func (e Extension) openSettings(ctx api.Context) (api.Result, error) {
-	return pushView(ctx, e.settingsView(ctx)), nil
-}
-
-// settingsView is the Dictation Settings form. Each field is a palette row, saved as soon as it changes.
-func (e Extension) settingsView(ctx api.Context) api.View {
-	settings := e.readSettings(ctx)
-	available := aiAvailable(ctx)
-	model, _ := ctx.Dictation().DeviceModel()
-	fields := []api.Field{
-		deviceField(settings.DeviceID, devicesOf(ctx)),
-		engineField(settings.Engine, model),
-		cleanupField(settings.CleanupWithAI && available, available),
-		dictionaryField(settings.Dictionary),
-		checkboxField(fieldClipboard, "Copy transcription to clipboard", settings.CopyToClipboard,
-			"Keep the transcription on the clipboard after pasting."),
-		checkboxField(fieldScreen, "Use screen text", settings.UseScreenContext,
-			"Read words from the screen to fix names and terms. Off unless you turn it on."),
-	}
-	view := api.FormView(settingsTitle, fields, api.Run(refSaveSettings, settingsSave, nil))
-	view.Form.SaveOnChange = true
-	return view
-}
-
-// devicesOf lists the microphones the picker offers. The system default is always first.
+// devicesOf lists the microphones the host knows. A host that cannot list them lists none.
 func devicesOf(ctx api.Context) []api.DictationDevice {
 	devices, err := ctx.Dictation().Devices()
-	if err != nil || len(devices) == 0 {
-		return []api.DictationDevice{{ID: defaultDeviceID, Title: "Default", IsDefault: true}}
+	if err != nil {
+		return nil
 	}
 	return devices
 }
 
-func deviceField(selected string, devices []api.DictationDevice) api.Field {
-	field := api.FieldOf(fieldDevice, api.FieldDropdown, "Microphone")
-	field.Value = api.TextValue(selected)
-	for _, device := range devices {
-		id := device.ID
-		if device.IsDefault && (id == "" || id == defaultDeviceID) {
-			id = defaultDeviceID
-		}
-		field.Options = append(field.Options, api.Option{Title: device.Title, Value: id})
-	}
-	return field
-}
-
-// cleanupField is the AI cleaning switch. Without an account the switch is shown off and disabled.
-func cleanupField(enabled, available bool) api.Field {
-	field := api.FieldOf(fieldCleanup, api.FieldCheckbox, "Clean with AI")
-	field.Value = api.FlagValue(enabled)
-	field.Disabled = !available
-	field.Description = "Sign in to Nevermind to use AI cleaning."
-	if available {
-		field.Description = "Send the transcript to Fast AI to correct punctuation, grammar, and transcription errors before pasting."
-	}
-	return field
-}
-
-func dictionaryField(dictionary string) api.Field {
-	field := api.FieldOf(fieldDictionary, api.FieldTextarea, "Custom dictionary")
-	field.Value = api.TextValue(dictionary)
-	field.Rows = dictionaryRows
-	field.Placeholder = dictionaryHint
-	field.Description = dictionaryDetails
-	return field
-}
-
-func checkboxField(id, label string, value bool, description string) api.Field {
-	field := api.FieldOf(id, api.FieldCheckbox, label)
-	field.Value = api.FlagValue(value)
-	field.Description = description
-	return field
-}
-
-// saveSettings stores the form's choices each time one changes; the form stays open. Cleaning with AI stays off
-// when the account cannot use it, as 1.x stored it.
-func (e Extension) saveSettings(ctx api.Context, form api.FormValues) (api.Result, error) {
-	settings := normalizedSettings(Settings{
-		DeviceID:         form[fieldDevice].Text,
-		CleanupWithAI:    form[fieldCleanup].Flag && aiAvailable(ctx),
-		Dictionary:       form[fieldDictionary].Text,
-		CopyToClipboard:  form[fieldClipboard].Flag,
-		UseScreenContext: form[fieldScreen].Flag,
-		Engine:           engineOrCloud(api.DictationEngine(form[fieldEngine].Text)),
-	})
-	if err := ctx.Storage().Set(storageSettingsKey, settings); err != nil {
-		return api.Result{}, err
-	}
-	publishDeviceTitle(ctx, settings)
-	return api.Result{Toast: installNotice(ctx, settings.Engine)}, nil
-}
-
 // publishDeviceTitle publishes the title of the microphone the settings choose, for the Settings page's Dictation row.
 // A host that cannot list microphones leaves the row with its own text, so the error is not shown.
-func publishDeviceTitle(ctx api.Context, settings Settings) {
-	_ = ctx.Settings().PublishDisplay(SettingDevice, displayTitleOf(devicesOf(ctx), settings.DeviceID))
+func publishDeviceTitle(ctx api.Context, deviceID string) {
+	_ = ctx.Settings().PublishDisplay(SettingDevice, displayTitleOf(devicesOf(ctx), deviceID))
 }
 
 // displayTitleOf is the microphone's title for the Settings page: its listed title, else the system microphone's name

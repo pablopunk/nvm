@@ -193,7 +193,7 @@ func (p *App) dictationRecordingStore() *recordings.Store {
 	return recordings.New(p.ports.FS, dictationRecordingsDir(), p.ports.Clock.Now)
 }
 
-// dictationSettingsAction opens the Dictation Settings form of the dictation built-in, as the Dictate row's menu does.
+// dictationSettingsAction opens the Dictation settings page of the dictation built-in, as the Dictate row's menu does.
 func (p *App) dictationSettingsAction() search.Action {
 	open := api.Action{Kind: api.ActionRun, Title: "Open", Ref: &api.ActionRef{ID: dictbuiltin.RefOpenSettings}}
 	return extview.ActionFor(p.extensionViewDeps(p.extensionManager()), dictbuiltin.ID, open)

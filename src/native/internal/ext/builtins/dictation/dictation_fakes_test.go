@@ -254,18 +254,67 @@ type fakeContext struct {
 	logs       *fakeLogs
 	system     fakeSystem
 	frontmost  string
-	settings   *fakeDisplaySettings
+	settings   *fakeSettings
 }
 
-// fakeDisplaySettings records the display text the built-in publishes.
-type fakeDisplaySettings struct {
+// fakeSettings keeps the declared settings' values, refusing what the host refuses, and records the display text the
+// built-in publishes.
+type fakeSettings struct {
 	api.Settings
+	values   map[string]json.RawMessage
 	displays map[string]string
 }
 
-func (s *fakeDisplaySettings) PublishDisplay(id, text string) error {
+func (s *fakeSettings) Get(id string, into any) error {
+	definition, found := declared(id)
+	if !found {
+		return api.ErrNotFound
+	}
+	value, stored := s.values[id]
+	if !stored {
+		value = definition.Value
+	}
+	return json.Unmarshal(value, into)
+}
+
+func (s *fakeSettings) Set(id string, value any) error {
+	definition, found := declared(id)
+	if !found {
+		return api.ErrNotFound
+	}
+	raw, err := json.Marshal(value)
+	if err == nil {
+		err = definition.CheckValue(raw)
+	}
+	if err != nil {
+		return err
+	}
+	s.values[id] = raw
+	return nil
+}
+
+func (s *fakeSettings) PublishDisplay(id, text string) error {
 	s.displays[id] = text
 	return nil
+}
+
+// choose stores the values as if the user picked them on the settings page.
+func (s *fakeSettings) choose(t *testing.T, values map[string]any) {
+	t.Helper()
+	for id, value := range values {
+		if err := s.Set(id, value); err != nil {
+			t.Fatalf("choose %s: %v", id, err)
+		}
+	}
+}
+
+func declared(id string) (api.SettingDefinition, bool) {
+	for _, definition := range settingDefinitions() {
+		if definition.ID == id {
+			return definition, true
+		}
+	}
+	return api.SettingDefinition{}, false
 }
 
 func newContext() fakeContext {
@@ -277,7 +326,7 @@ func newContext() fakeContext {
 		logs:       &fakeLogs{},
 		system:     fakeSystem{capabilities: map[string]bool{"ocr": true}},
 		frontmost:  "com.apple.Notes",
-		settings:   &fakeDisplaySettings{displays: map[string]string{}},
+		settings:   &fakeSettings{values: map[string]json.RawMessage{}, displays: map[string]string{}},
 	}
 }
 
