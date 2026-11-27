@@ -8,8 +8,8 @@ import (
 
 func TestLoadingCommandsPublishesTheChosenMicrophoneTitle(t *testing.T) {
 	ctx := newContext()
-	ext := New(Legacy{Settings: &Settings{DeviceID: "mic-1"}})
-	if _, err := ext.Commands(ctx); err != nil {
+	ctx.settings.choose(t, map[string]any{SettingDeviceID: "mic-1"})
+	if _, err := New(Legacy{}).Commands(ctx); err != nil {
 		t.Fatal(err)
 	}
 	if got := ctx.settings.displays[SettingDevice]; got != "USB Mic" {
@@ -27,16 +27,13 @@ func TestTheSystemMicrophoneIsPublishedByItsTitle(t *testing.T) {
 	}
 }
 
-func TestSavingSettingsPublishesTheNewMicrophoneTitle(t *testing.T) {
+func TestOpeningSettingsPublishesTheChosenMicrophoneTitle(t *testing.T) {
 	ctx := newContext()
 	ctx.dictation.devices = append(ctx.dictation.devices, api.DictationDevice{ID: "mic-2", Title: "Desk Mic"})
-	ext := New(Legacy{})
-	form := api.FormValues{fieldDevice: api.TextValue("mic-2")}
-	if result := run(t, ext, ctx, refSaveSettings, nil, form); result.Navigation != "" {
-		t.Fatalf("navigation %q; want the settings form to stay open while it saves each change", result.Navigation)
-	}
+	ctx.settings.choose(t, map[string]any{SettingDeviceID: "mic-2"})
+	run(t, New(Legacy{}), ctx, RefOpenSettings, nil, nil)
 	if got := ctx.settings.displays[SettingDevice]; got != "Desk Mic" {
-		t.Fatalf("published %q after the save; want the saved microphone's title", got)
+		t.Fatalf("published %q on opening the settings; want the chosen microphone's title", got)
 	}
 }
 

@@ -11,7 +11,7 @@ func TestOnDeviceDictationStartsWithoutAnAccountOnceTheModelIsReady(t *testing.T
 	ctx := newContext()
 	ctx.dictation.available = false
 	ctx.dictation.model.Status = api.DictationModelReady
-	ctx.storage.values[storageSettingsKey] = []byte(`{"deviceId":"default","engine":"device"}`)
+	ctx.settings.choose(t, map[string]any{SettingDeviceID: "default", SettingEngine: "device"})
 	dictate(t, New(Legacy{}), ctx)
 	if len(ctx.dictation.starts) != 1 || ctx.dictation.starts[0].Engine != api.DictationEngineDevice {
 		t.Fatalf("starts = %+v; want one dictation on the device", ctx.dictation.starts)
@@ -20,7 +20,7 @@ func TestOnDeviceDictationStartsWithoutAnAccountOnceTheModelIsReady(t *testing.T
 
 func TestOnDeviceDictationWithoutItsModelStartsTheDownloadAndSaysSo(t *testing.T) {
 	ctx := newContext()
-	ctx.storage.values[storageSettingsKey] = []byte(`{"deviceId":"default","engine":"device"}`)
+	ctx.settings.choose(t, map[string]any{SettingDeviceID: "default", SettingEngine: "device"})
 	dictate(t, New(Legacy{}), ctx)
 	if len(ctx.dictation.starts) != 0 {
 		t.Fatal("a dictation started on a model that is not downloaded")
@@ -37,23 +37,25 @@ func TestOnDeviceDictationWithoutItsModelStartsTheDownloadAndSaysSo(t *testing.T
 	}
 }
 
-func TestChoosingTheDeviceInSettingsDownloadsTheModel(t *testing.T) {
+func TestTheSettingsPageOffersTheModelDownloadUntilItIsReady(t *testing.T) {
 	ctx := newContext()
-	result := run(t, New(Legacy{}), ctx, refSaveSettings, nil, api.FormValues{
-		fieldDevice: api.TextValue("default"), fieldEngine: api.TextValue(string(api.DictationEngineDevice)),
-	})
+	if row := engineRow(api.DictationDeviceModel{Status: api.DictationModelReady}); len(row.Also) != 0 {
+		t.Fatalf("engine row %+v offers a download of a ready model", row)
+	}
+	row := engineRow(api.DictationDeviceModel{})
+	if len(row.Also) != 1 || row.Also[0].Action == nil || row.Also[0].Action.Ref.ID != refInstallModel {
+		t.Fatalf("engine row %+v; want the download offered", row)
+	}
+	result := run(t, New(Legacy{}), ctx, refInstallModel, nil, nil)
 	if ctx.dictation.installs != 1 || result.Toast == nil || !strings.Contains(result.Toast.Message, "670 MB") {
 		t.Fatalf("installs = %d, toast = %+v; want the download started and announced with its size", ctx.dictation.installs, result.Toast)
-	}
-	if got := New(Legacy{}).readSettings(ctx).Engine; got != api.DictationEngineDevice {
-		t.Fatalf("saved engine = %q; want device", got)
 	}
 }
 
 func TestHistoryRetriesOnTheDeviceOnlyWhenItsModelIsReady(t *testing.T) {
 	ctx := newContext()
 	ctx.dictation.retryText = "recovered"
-	ctx.storage.values[storageSettingsKey] = []byte(`{"deviceId":"default","engine":"device"}`)
+	ctx.settings.choose(t, map[string]any{SettingDeviceID: "default", SettingEngine: "device"})
 	run(t, New(Legacy{}), ctx, refRetry, map[string]string{argID: "dictation-a"}, nil)
 	ctx.dictation.model.Status = api.DictationModelReady
 	run(t, New(Legacy{}), ctx, refRetry, map[string]string{argID: "dictation-b"}, nil)

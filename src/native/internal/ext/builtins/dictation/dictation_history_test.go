@@ -102,43 +102,11 @@ func TestHistoryNeverDropsASavedRecordingPastTheCap(t *testing.T) {
 	}
 }
 
-func TestSettingsFormSavesTheChoicesAndKeepsCleaningOffWithoutAnAccount(t *testing.T) {
+func TestLegacyHistoryAnswersUntilTheBuiltInSaves(t *testing.T) {
 	ctx := newContext()
-	ctx.ai.available = false
-	ext := New(Legacy{})
-	view := run(t, ext, ctx, RefOpenSettings, nil, nil).View
-	if view == nil || view.Form == nil || len(view.Form.Fields) != 6 || !view.Form.SaveOnChange {
-		t.Fatalf("settings view %+v; want the six fields, saved as they change", view)
-	}
-	form := api.FormValues{
-		fieldDevice:     api.TextValue("mic-1"),
-		fieldCleanup:    api.FlagValue(true),
-		fieldDictionary: api.TextValue("Kubernetes"),
-		fieldClipboard:  api.FlagValue(true),
-		fieldScreen:     api.FlagValue(true),
-	}
-	if result := run(t, ext, ctx, refSaveSettings, nil, form); result.Navigation != "" {
-		t.Fatalf("navigation %q; want the settings form to stay open while it saves each change", result.Navigation)
-	}
-	settings := ext.readSettings(ctx)
-	if settings.DeviceID != "mic-1" || settings.CleanupWithAI || settings.Dictionary != "Kubernetes" || !settings.CopyToClipboard || !settings.UseScreenContext {
-		t.Fatalf("settings %+v; want the saved choices, cleaning off without an account", settings)
-	}
-}
-
-func TestLegacyChoicesAnswerUntilTheBuiltInSaves(t *testing.T) {
-	ctx := newContext()
-	legacy := Settings{DeviceID: "legacy-mic"}
-	ext := New(Legacy{Settings: &legacy, History: []history.Entry{{ID: "old", Text: "kept", CreatedAt: 9}}})
-	if got := ext.readSettings(ctx); got.DeviceID != "legacy-mic" {
-		t.Fatalf("settings %+v; want the legacy choices", got)
-	}
+	ext := New(Legacy{History: []history.Entry{{ID: "old", Text: "kept", CreatedAt: 9}}})
 	if entries := ext.readHistory(ctx); len(entries) != 1 || entries[0].Text != "kept" {
 		t.Fatalf("history %+v; want the legacy transcript", entries)
-	}
-	ctx.storage.values[storageSettingsKey] = mustJSON(t, Settings{DeviceID: "saved"})
-	if got := ext.readSettings(ctx); got.DeviceID != "saved" {
-		t.Fatalf("settings %+v; want the saved choices to win", got)
 	}
 }
 

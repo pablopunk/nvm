@@ -160,7 +160,7 @@ func (e Extension) openHistory(ctx api.Context) (api.Result, error) {
 // retry transcribes a saved dictation again. The text takes the dictation's place in the history, with its id and time,
 // and the audio is dropped; a failed or empty retry keeps the audio and says why.
 func (e Extension) retry(ctx api.Context, id string) (api.Result, error) {
-	text, err := ctx.Dictation().RetryOn(id, retryEngine(ctx, e.readSettings(ctx).Engine))
+	text, err := ctx.Dictation().RetryOn(id, retryEngine(ctx, readSettings(ctx).Engine))
 	if err != nil {
 		return toast(err.Error(), "error"), nil
 	}

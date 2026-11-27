@@ -11,7 +11,7 @@ import (
 
 func TestDictateStartsWithTheChosenMicrophoneAndMutesTheOutput(t *testing.T) {
 	ctx := newContext()
-	ctx.storage.values[storageSettingsKey] = []byte(`{"deviceId":"mic-1"}`)
+	ctx.settings.choose(t, map[string]any{SettingDeviceID: "mic-1"})
 	dictate(t, New(Legacy{}), ctx)
 	if len(ctx.dictation.starts) != 1 {
 		t.Fatalf("starts = %d; want one", len(ctx.dictation.starts))
@@ -43,7 +43,7 @@ func TestDictateStopPastesTheTranscriptIntoTheAppThatHadFocus(t *testing.T) {
 
 func TestCopyToClipboardKeepsTheTranscriptOnTheClipboard(t *testing.T) {
 	ctx := newContext()
-	ctx.storage.values[storageSettingsKey] = []byte(`{"deviceId":"default","copyToClipboard":true}`)
+	ctx.settings.choose(t, map[string]any{SettingDeviceID: "default", SettingClipboard: true})
 	ext := New(Legacy{})
 	dictate(t, ext, ctx)
 	ctx.dictation.transcript = "keep me"
@@ -126,7 +126,7 @@ func TestAKeyPressedWhileTranscribingDoesNothing(t *testing.T) {
 
 func TestCleanupAsksTheFastModelAndPastesItsAnswer(t *testing.T) {
 	ctx := newContext()
-	ctx.storage.values[storageSettingsKey] = []byte(`{"cleanupWithAi":true,"dictionary":"Grafana"}`)
+	ctx.settings.choose(t, map[string]any{SettingCleanup: true, SettingDictionary: "Grafana"})
 	ext := New(Legacy{})
 	dictate(t, ext, ctx)
 	ctx.dictation.transcript = "the graphana dashboard"
@@ -145,7 +145,7 @@ func TestCleanupAsksTheFastModelAndPastesItsAnswer(t *testing.T) {
 
 func TestACleanupThatFailsPastesTheRawTranscript(t *testing.T) {
 	ctx := newContext()
-	ctx.storage.values[storageSettingsKey] = []byte(`{"cleanupWithAi":true}`)
+	ctx.settings.choose(t, map[string]any{SettingCleanup: true})
 	ctx.ai.err = errors.New("backend down")
 	ext := New(Legacy{})
 	dictate(t, ext, ctx)
@@ -161,7 +161,7 @@ func TestACleanupThatFailsPastesTheRawTranscript(t *testing.T) {
 func TestScreenWordsJoinTheCleanupPrompt(t *testing.T) {
 	ctx := newContext()
 	ctx.ocr = fakeOCR{text: "Kubernetes dashboard the Kubernetes"}
-	ctx.storage.values[storageSettingsKey] = []byte(`{"cleanupWithAi":true,"useScreenContext":true}`)
+	ctx.settings.choose(t, map[string]any{SettingCleanup: true, SettingScreen: true})
 	ext := New(Legacy{})
 	dictate(t, ext, ctx)
 	ctx.dictation.transcript = "open the dashboard"
@@ -175,7 +175,7 @@ func TestScreenWordsJoinTheCleanupPrompt(t *testing.T) {
 func TestScreenWordsAreNotReadUnlessTheSettingsAskForThem(t *testing.T) {
 	ctx := newContext()
 	ctx.ocr = fakeOCR{err: errors.New("screen is not available")}
-	ctx.storage.values[storageSettingsKey] = []byte(`{"cleanupWithAi":true}`)
+	ctx.settings.choose(t, map[string]any{SettingCleanup: true})
 	ext := New(Legacy{})
 	dictate(t, ext, ctx)
 	ctx.dictation.transcript = "words"
