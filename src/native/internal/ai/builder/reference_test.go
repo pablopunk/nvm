@@ -49,8 +49,9 @@ func TestReferenceNamesTheEntryPointsAndTheirContext(t *testing.T) {
 // Choices, Min and Max 64 more. The extensions service (Extensions, ExtensionRecord and two capabilities) added about 470,
 // and the Preferences service (List, Set, PreferenceRecord) about 480 more. UpdateState.ReleaseNotes added about 30.
 // Extension AI tools (Manifest.AITools, AITool, AIToolClass, AIToolCall, the CallAITool and DescribeAITool entry points,
-// the Tools service and the tools capability) added 1574.
-const maxReferenceBytes = 63<<10 + 1536 + 1574
+// the Tools service and the tools capability) added 1574. Naming the clipboard write as external and the exact-call
+// scope of a sensitive read's approval added 25.
+const maxReferenceBytes = 63<<10 + 1536 + 1574 + 25
 
 func TestReferenceStaysWithinItsSizeBudget(t *testing.T) {
 	if len(apiReference) > maxReferenceBytes {

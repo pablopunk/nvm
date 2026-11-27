@@ -49,7 +49,7 @@ func (c clipboardTools) copy() agent.Tool {
 		Schema: json.RawMessage(fmt.Sprintf(`{"type":"object","properties":{`+
 			`"text":{"type":"string","minLength":1,"maxLength":%d}},`+
 			`"required":["text"],"additionalProperties":false}`, maxClipboardRunes)),
-		Confirm:     true,
+		Confirm: true,
 		Summarize: func(args json.RawMessage) string {
 			var in copyArgs
 			_ = json.Unmarshal(args, &in)
